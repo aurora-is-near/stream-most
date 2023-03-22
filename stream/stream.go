@@ -36,7 +36,7 @@ func (opts Opts) FillMissingFields() *Opts {
 	return &opts
 }
 
-type StreamWrapperInterface interface {
+type Interface interface {
 	GetStream() *Stream
 	Disconnect() error
 	GetInfo(ttl time.Duration) (*nats.StreamInfo, time.Time, error)
@@ -46,12 +46,7 @@ type StreamWrapperInterface interface {
 	Stats() *nats.Statistics
 }
 
-// GetStream WTF BLYAT?
-func (s *Stream) GetStream() *Stream {
-	return s
-}
-
-func ConnectStream(opts *Opts) (StreamWrapperInterface, error) {
+func ConnectStream(opts *Opts) (Interface, error) {
 	opts = opts.FillMissingFields()
 	s := &Stream{
 		Opts:        opts,
@@ -111,6 +106,10 @@ func ConnectStream(opts *Opts) (StreamWrapperInterface, error) {
 	s.log("connected")
 
 	return s, nil
+}
+
+func (s *Stream) GetStream() *Stream {
+	return s
 }
 
 func (s *Stream) Disconnect() error {

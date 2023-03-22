@@ -1,4 +1,4 @@
-package service
+package block_guard
 
 import (
 	"github.com/aurora-is-near/stream-most/domain/blocks"
@@ -9,9 +9,8 @@ import (
 
 // TODO: finish
 
-// MultiMessageBlockGuard is a service that accumulates messages
-// and sends complete block to output stream only when a block is complete.
-type MultiMessageBlockGuard struct {
+// BlockGuard is a service that accumulates messages
+type BlockGuard struct {
 	// TODO: change mutex to proper maps
 	*sync.Mutex
 
@@ -32,16 +31,16 @@ type MultiMessageBlockGuard struct {
 	output chan blocks.ChunkedNearBlock
 }
 
-func (m *MultiMessageBlockGuard) Start() <-chan blocks.ChunkedNearBlock {
+func (m *BlockGuard) Start() <-chan blocks.ChunkedNearBlock {
 	m.output = make(chan blocks.ChunkedNearBlock)
 	return m.output
 }
 
-func (m *MultiMessageBlockGuard) Stop() {
+func (m *BlockGuard) Stop() {
 	close(m.output)
 }
 
-func (m *MultiMessageBlockGuard) ProcessBlockAnnouncement(message messages.BlockAnnouncement) error {
+func (m *BlockGuard) ProcessBlockAnnouncement(message messages.BlockAnnouncement) error {
 	m.Lock()
 	defer m.Unlock()
 
@@ -53,7 +52,7 @@ func (m *MultiMessageBlockGuard) ProcessBlockAnnouncement(message messages.Block
 	return nil
 }
 
-func (m *MultiMessageBlockGuard) ProcessBlockShard(message messages.BlockShard) error {
+func (m *BlockGuard) ProcessBlockShard(message messages.BlockShard) error {
 	m.Lock()
 	defer m.Unlock()
 
@@ -66,12 +65,12 @@ func (m *MultiMessageBlockGuard) ProcessBlockShard(message messages.BlockShard) 
 	return nil // TODO: let client code know about our fails
 }
 
-func (m *MultiMessageBlockGuard) isBlockKnown(hash string) bool {
+func (m *BlockGuard) isBlockKnown(hash string) bool {
 	_, ok := m.knownBlockAnnouncements[hash]
 	return ok
 }
 
-func (m *MultiMessageBlockGuard) acquaintBlock(message messages.BlockAnnouncement) {
+func (m *BlockGuard) acquaintBlock(message messages.BlockAnnouncement) {
 	blockHash := message.Block.Hash
 	if m.isBlockKnown(blockHash) {
 		return
@@ -80,7 +79,7 @@ func (m *MultiMessageBlockGuard) acquaintBlock(message messages.BlockAnnouncemen
 	m.knownBlockAnnouncements[blockHash] = message
 }
 
-func (m *MultiMessageBlockGuard) storeBlockShardChunk(message messages.BlockShard) {
+func (m *BlockGuard) storeBlockShardChunk(message messages.BlockShard) {
 	blockHash := message.Block.Hash
 
 	if m.accumulatedShardChunks[blockHash] == nil {
@@ -89,7 +88,7 @@ func (m *MultiMessageBlockGuard) storeBlockShardChunk(message messages.BlockShar
 	m.accumulatedShardChunks[blockHash][message.ShardID] = message
 }
 
-func (m *MultiMessageBlockGuard) isBlockComplete(hash string) bool {
+func (m *BlockGuard) isBlockComplete(hash string) bool {
 	if _, known := m.knownBlockAnnouncements[hash]; !known {
 		return false
 	}
@@ -103,7 +102,7 @@ func (m *MultiMessageBlockGuard) isBlockComplete(hash string) bool {
 	return true
 }
 
-func (m *MultiMessageBlockGuard) sendBlockToOutput(hash string) {
+func (m *BlockGuard) sendBlockToOutput(hash string) {
 	announce := m.knownBlockAnnouncements[hash]
 	block := blocks.ChunkedNearBlock{
 		Hash:     announce.Block.Hash,
@@ -124,8 +123,8 @@ func (m *MultiMessageBlockGuard) sendBlockToOutput(hash string) {
 	m.output <- block
 }
 
-func NewMultiMessageBlockGuard() *MultiMessageBlockGuard {
-	return &MultiMessageBlockGuard{
+func NewMultiMessageBlockGuard() *BlockGuard {
+	return &BlockGuard{
 		Mutex:                        &sync.Mutex{},
 		accumulatedShardChunks:       make(map[string]map[uint8]messages.BlockShard),
 		knownBlockAnnouncements:      make(map[string]messages.BlockAnnouncement),

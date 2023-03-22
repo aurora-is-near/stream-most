@@ -3,18 +3,14 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"github.com/aurora-is-near/stream-most/service/bridge"
 	"os"
 
-	"github.com/aurora-is-near/stream-bridge/blockwriter"
-	_metrics "github.com/aurora-is-near/stream-bridge/metrics"
-	"github.com/aurora-is-near/stream-bridge/stream"
-	"github.com/aurora-is-near/stream-bridge/streambridge"
-	"github.com/aurora-is-near/stream-bridge/streambridge/metrics"
-	"github.com/aurora-is-near/stream-bridge/transport"
+	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/aurora-is-near/stream-most/transport"
 )
 
-var config = &streambridge.StreamBridge{
+var config = &bridge.Bridge{
 	Mode: "aurora",
 	Input: &stream.Opts{
 		Nats: &transport.NatsConnectionConfig{
@@ -59,31 +55,19 @@ var config = &streambridge.StreamBridge{
 		StrictStart:                  false,
 		WrongSeqToleranceWindow:      50,
 	},
-	Writer: &blockwriter.Opts{
-		PublishAckWaitMs:     5000,
-		MaxWriteAttempts:     3,
-		WriteRetryWaitMs:     1000,
-		TipTtlSeconds:        60,
-		DisableExpectedCheck: 0,
-	},
+	/*
+		Writer: &blockwriter.Opts{
+			PublishAckWaitMs:     5000,
+			MaxWriteAttempts:     3,
+			WriteRetryWaitMs:     1000,
+			TipTtlSeconds:        60,
+			DisableExpectedCheck: 0,
+		},
+	*/
 	InputStartSequence: 0,
-	InputEndSequenece:  0,
+	InputEndSequence:   0,
 	RestartDelayMs:     2000,
 	ToleranceWindow:    1000,
-	Metrics: &metrics.Metrics{
-		Server: _metrics.Server{
-			ListenAddress: "localhost:9991",
-			Namespace:     "infra",
-			Subsystem:     "stream_bridge",
-		},
-		Labels: map[string]string{
-			"inputcluster":  "X",
-			"outputcluster": "Y",
-			"stream":        "myblocks",
-			"whatever":      "whatever",
-		},
-		StdoutIntervalSeconds: 10,
-	},
 }
 
 func main() {
@@ -92,18 +76,20 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stdout, "%s\n", string(d))
 		os.Exit(1)
 	}
-	d, err := ioutil.ReadFile(os.Args[1])
+	d, err := os.ReadFile(os.Args[1])
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "Error reading config file: %s\n", err)
 		os.Exit(1)
 	}
-	config = &streambridge.StreamBridge{}
+
+	// TODO: please, change it for the love of god
+	config = &bridge.Bridge{}
 	if err := json.Unmarshal(d, config); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "Error parsing config file: %s\n", err)
 		os.Exit(1)
 	}
-	config.Input.Nats.Name = "streambridge"
-	config.Output.Nats.Name = "streambridge"
+	config.Input.Nats.Name = "streammost"
+	config.Output.Nats.Name = "streammost"
 	if err := config.Run(); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		os.Exit(1)

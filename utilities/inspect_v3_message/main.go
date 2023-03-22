@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	borealisproto "github.com/aurora-is-near/borealis-prototypes/go"
 	_ "github.com/aurora-is-near/borealis-prototypes/go/payloads/near_block"
@@ -11,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"io"
 	"os"
+	"strconv"
 )
 
 func Decompress(in io.Reader, out io.Writer) error {
@@ -47,30 +49,44 @@ func ProtoDecode(d []byte) (*borealisproto.Message, error) {
 }
 
 func main() {
-	file := os.Args[1]
-	logrus.Info("Reading ", file)
-	fileReader, err := os.Open(file)
-	defer fileReader.Close()
+	startSeq := 2524980072
+	for i := 0; i < 100; i++ {
+		startSeq += 1
+		file := "./out/read_v3_message_" + strconv.Itoa(startSeq) + ".out"
+		logrus.Info("Reading ", file)
+		fileReader, err := os.Open(file)
+		defer fileReader.Close()
 
-	if err != nil {
-		panic(err)
-	}
+		if err != nil {
+			panic(err)
+		}
 
-	b, err := io.ReadAll(fileReader)
-	if err != nil {
-		panic(err)
-	}
+		b, err := io.ReadAll(fileReader)
+		if err != nil {
+			panic(err)
+		}
 
-	msg, err := ProtoDecode(b)
-	if err != nil {
-		panic(err)
-	}
+		msg, err := ProtoDecode(b)
+		if err != nil {
+			panic(err)
+		}
 
-	switch msgT := msg.Payload.(type) {
-	case *borealisproto.Message_NearBlockHeader:
-		fmt.Println("NearBlockHeader")
-		fmt.Printf("%v\n", msgT.NearBlockHeader.GetHeader().)
-	case *borealisproto.Message_NearBlockShard:
-		fmt.Println("NearBlockShard", msgT.NearBlockShard.String())
+		switch msgT := msg.Payload.(type) {
+		case *borealisproto.Message_NearBlockHeader:
+			fmt.Println("NearBlockHeader")
+			h := msgT.NearBlockHeader.GetHeader().H256Hash
+			h2 := make([]byte, len(h)*2)
+
+			_ = hex.Encode(h2, h)
+
+			fmt.Printf("block hash %s, chunks %v\n", string(h2), msgT.NearBlockHeader.Header.ChunkMask)
+		case *borealisproto.Message_NearBlockShard:
+			fmt.Println("NearBlockShard")
+			h := msgT.NearBlockShard.GetHeader().Header.H256Hash
+			h2 := make([]byte, len(h)*2)
+			_ = hex.Encode(h2, h)
+
+			fmt.Printf("block hash %s, shard id %v\n", string(h2), msgT.NearBlockShard.ShardId)
+		}
 	}
 }
