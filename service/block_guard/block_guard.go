@@ -4,12 +4,11 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/blocks"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"sync"
-	"time"
 )
 
 // TODO: finish
 
-// BlockGuard is a service that accumulates messages
+// BlockGuard is a service that accumulates messages and sends them out in a proper order
 type BlockGuard struct {
 	// TODO: change mutex to proper maps
 	*sync.Mutex
@@ -23,16 +22,13 @@ type BlockGuard struct {
 	// When header will come in, we'll pick up all the chunks from accumulatedShardChunks belonging to it.
 	headerlessBlockChunks map[string]struct{}
 
-	// If we've already sent block to output, we store its hash here for duration of processedBlocksSlidingWindow
-	// That is to not confuse processed block's chunks with headerless block chunks.
-	processedBlocks              map[string]struct{}
-	processedBlocksSlidingWindow time.Duration
-
-	output chan blocks.ChunkedNearBlock
+	output chan interface{}
 }
 
-func (m *BlockGuard) Start() <-chan blocks.ChunkedNearBlock {
-	m.output = make(chan blocks.ChunkedNearBlock)
+// Start starts the service and returns a channel that will receive all the processed messages.
+// Only messages.BlockAnnouncement and messages.BlockShard can be in the output stream
+func (m *BlockGuard) Start() <-chan interface{} {
+	m.output = make(chan interface{})
 	return m.output
 }
 
@@ -45,10 +41,12 @@ func (m *BlockGuard) ProcessBlockAnnouncement(message messages.BlockAnnouncement
 	defer m.Unlock()
 
 	if m.isBlockKnown(message.Block.Hash) {
-		return nil // todo: maybe let client code know?
+		return nil
 	}
 
 	m.acquaintBlock(message)
+	m.output <- message
+
 	return nil
 }
 
@@ -123,13 +121,11 @@ func (m *BlockGuard) sendBlockToOutput(hash string) {
 	m.output <- block
 }
 
-func NewMultiMessageBlockGuard() *BlockGuard {
+func NewBlockGuard() *BlockGuard {
 	return &BlockGuard{
-		Mutex:                        &sync.Mutex{},
-		accumulatedShardChunks:       make(map[string]map[uint8]messages.BlockShard),
-		knownBlockAnnouncements:      make(map[string]messages.BlockAnnouncement),
-		headerlessBlockChunks:        make(map[string]struct{}),
-		processedBlocks:              make(map[string]struct{}),
-		processedBlocksSlidingWindow: 10 * time.Minute,
+		Mutex:                   &sync.Mutex{},
+		accumulatedShardChunks:  make(map[string]map[uint8]messages.BlockShard),
+		knownBlockAnnouncements: make(map[string]messages.BlockAnnouncement),
+		headerlessBlockChunks:   make(map[string]struct{}),
 	}
 }

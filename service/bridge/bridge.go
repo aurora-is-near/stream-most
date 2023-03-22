@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"github.com/aurora-is-near/stream-bridge/blockwriter"
+	"github.com/aurora-is-near/stream-most/service/nats_block_processor"
 	"github.com/aurora-is-near/stream-most/service/stream_peek"
 	"github.com/aurora-is-near/stream-most/service/stream_seek"
 	"github.com/aurora-is-near/stream-most/stream"
@@ -40,12 +41,23 @@ func (b *Bridge) Run() error {
 	}
 
 	// Determine the best place to start reading from the input stream
+	// TODO: this looks for announcements, but we should also look for their left-most shards
 	startSequence, err := stream_seek.NewStreamSeek(inputStream).
 		SeekAnnouncementWithHeightBelow(height, b.InputStartSequence, b.InputEndSequence)
 	if err != nil {
 		return err
 	}
 
-	// Let's work!
+	reader, err := stream.StartReader(b.Reader, inputStream, startSequence, b.InputEndSequence)
+	if err != nil {
+		return err
+	}
+	defer reader.Stop()
 
+	// Let's make sure we order messages correctly:
+	processor := nats_block_processor.NewProcessorWithReader(reader.Output())
+
+	for results := range processor.Run() {
+
+	}
 }

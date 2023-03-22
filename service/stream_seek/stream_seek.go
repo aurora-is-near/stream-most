@@ -16,8 +16,8 @@ type StreamSeek struct {
 	stream stream.Interface
 }
 
-// SeekAnnouncementWithHeightBelow returns the sequence number of the latest block announcement which height is below a given one.
-// notBefore and notAfter are given in sequence numbers and are used to limit the search range.
+// SeekAnnouncementWithHeightBelow returns the sequence number of the latest block announcement which height
+// is below a given one. notBefore and notAfter are given in sequence numbers and are used to limit the search range.
 func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore uint64, notAfter uint64) (uint64, error) {
 	info, _, err := p.stream.GetInfo(0)
 	if err != nil {
