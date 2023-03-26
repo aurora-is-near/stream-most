@@ -1,0 +1,119 @@
+package support
+
+import (
+	borealisproto "github.com/aurora-is-near/borealis-prototypes/go"
+	near_block "github.com/aurora-is-near/borealis-prototypes/go/payloads/near_block"
+	"github.com/aurora-is-near/stream-most/domain/blocks"
+	"github.com/aurora-is-near/stream-most/domain/messages"
+	"github.com/aurora-is-near/stream-most/domain/new_format"
+	"github.com/nats-io/nats.go"
+	"time"
+)
+
+// Those functions are only used in tests.
+
+func ATN(sequence uint64, msg *messages.BlockAnnouncement) messages.NatsMessage {
+	return AnnouncementToNats(sequence, msg)
+}
+
+func AnnouncementToNats(sequence uint64, msg *messages.BlockAnnouncement) messages.NatsMessage {
+	return messages.NatsMessage{
+		Msg:          &nats.Msg{},
+		Announcement: msg,
+		Metadata: &nats.MsgMetadata{Sequence: nats.SequencePair{
+			Stream: sequence,
+		}},
+	}
+}
+
+func STN(sequence uint64, msg *messages.BlockShard) messages.NatsMessage {
+	return ShardToNats(sequence, msg)
+}
+
+func ShardToNats(sequence uint64, msg *messages.BlockShard) messages.NatsMessage {
+	return messages.NatsMessage{
+		Msg:   &nats.Msg{},
+		Shard: msg,
+		Metadata: &nats.MsgMetadata{Sequence: nats.SequencePair{
+			Stream: sequence,
+		}},
+	}
+}
+
+// BuildMessageToRawStreamMsg converts a message to a RawStreamMsg.
+// If message itself doesn't have Data []byte (most likely hand-crafted object),
+// then it will be created manually
+func BuildMessageToRawStreamMsg(message messages.NatsMessage) *nats.RawStreamMsg {
+	var err error
+	data := message.Msg.Data
+	if len(data) == 0 {
+		if message.IsShard() {
+			m := &borealisproto.Message{
+				Payload: message.GetShard().Parent,
+			}
+			data, err = new_format.ProtoEncode(m)
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			m := &borealisproto.Message{
+				Payload: message.GetAnnouncement().Parent,
+			}
+			data, err = new_format.ProtoEncode(m)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+	return &nats.RawStreamMsg{
+		Subject:  "",
+		Sequence: message.GetSequence(),
+		Header:   map[string][]string{},
+		Data:     data,
+		Time:     time.Time{},
+	}
+}
+
+func NewSimpleBlockAnnouncement(shardsMap []bool, height uint64, hash string, prevHash string) *messages.BlockAnnouncement {
+	return &messages.BlockAnnouncement{
+		Parent: &borealisproto.Message_NearBlockHeader{
+			NearBlockHeader: &near_block.BlockHeaderView{
+				Header: &near_block.IndexerBlockHeaderView{
+					Height:       height,
+					H256Hash:     []byte(hash),
+					H256PrevHash: []byte(prevHash),
+					ChunkMask:    shardsMap,
+				},
+			},
+		},
+		Block: blocks.NearBlock{
+			Hash:     hash,
+			PrevHash: prevHash,
+			Height:   height,
+		},
+		ParticipatingShardsMap: shardsMap,
+	}
+}
+
+func NewSimpleBlockShard(shardsMap []bool, height uint64, hash string, prevHash string, shardId uint64) *messages.BlockShard {
+	return &messages.BlockShard{
+		Parent: &borealisproto.Message_NearBlockShard{
+			NearBlockShard: &near_block.BlockShard{
+				Header: &near_block.PartialBlockHeaderView{
+					Header: &near_block.PartialIndexerBlockHeaderView{
+						Height:       height,
+						H256Hash:     []byte(hash),
+						H256PrevHash: []byte(prevHash),
+						ChunkMask:    shardsMap,
+					},
+				},
+				ShardId: shardId,
+			},
+		},
+		Block: blocks.NearBlock{
+			Hash:     hash,
+			PrevHash: prevHash,
+			Height:   height,
+		},
+	}
+}

@@ -65,7 +65,7 @@ func (b *Bridge) Run() error {
 	defer reader.Stop()
 
 	// Create a block writer
-	writer := block_writer.NewWriter()
+	writer := block_writer.NewWriter(outputStream, stream_peek.NewStreamPeek(outputStream))
 
 	// Pass messages through the block processor, and write them out
 	driver := near_v3.NewNearV3NoSorting(
@@ -73,6 +73,7 @@ func (b *Bridge) Run() error {
 	)
 
 	processor := block_processor.NewProcessorWithReader(reader.Output(), driver)
+
 	for results := range processor.Run() {
 		err := writer.Write(results)
 		if err != nil {

@@ -8,7 +8,7 @@ import (
 // BlockAnnouncement is a message that contains announcement of a new near block,
 // contains block header and info about amount of shards participating.
 type BlockAnnouncement struct {
-	parent *borealisproto.Message_NearBlockHeader
+	Parent *borealisproto.Message_NearBlockHeader
 	Block  blocks.NearBlock
 
 	// If ParticipatingShardsMap[i-1] is true, then shard with id i is participating in this block.
@@ -18,7 +18,7 @@ type BlockAnnouncement struct {
 func NewBlockAnnouncement(parent *borealisproto.Message_NearBlockHeader) *BlockAnnouncement {
 	header := parent.NearBlockHeader.GetHeader()
 	return &BlockAnnouncement{
-		parent: parent,
+		Parent: parent,
 		Block: blocks.NearBlock{
 			Hash:     string(header.H256Hash),
 			PrevHash: string(header.H256PrevHash),

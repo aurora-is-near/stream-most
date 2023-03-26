@@ -8,7 +8,7 @@ import (
 // BlockShard is a message that contains part of a near block that was previously announced.
 // Structurally it's just a wrapper around borealisproto.Message_NearBlockShard
 type BlockShard struct {
-	parent  *borealisproto.Message_NearBlockShard
+	Parent  *borealisproto.Message_NearBlockShard
 	ShardID uint8
 	Block   blocks.NearBlock
 }
@@ -16,7 +16,7 @@ type BlockShard struct {
 func NewBlockShard(parent *borealisproto.Message_NearBlockShard) *BlockShard {
 	header := parent.NearBlockShard.GetHeader()
 	return &BlockShard{
-		parent:  parent,
+		Parent:  parent,
 		ShardID: uint8(parent.NearBlockShard.ShardId),
 		Block: blocks.NearBlock{
 			Hash:     string(header.Header.H256Hash),

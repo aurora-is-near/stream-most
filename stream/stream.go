@@ -42,7 +42,6 @@ type Interface interface {
 	GetInfo(ttl time.Duration) (*nats.StreamInfo, time.Time, error)
 	Get(seq uint64) (*nats.RawStreamMsg, error)
 	Write(data []byte, header nats.Header, publishAckWait nats.AckWait) (*nats.PubAck, error)
-	log(format string, v ...any) // TODO: remove?
 	Stats() *nats.Statistics
 }
 
