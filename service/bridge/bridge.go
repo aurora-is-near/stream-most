@@ -2,10 +2,13 @@ package bridge
 
 import (
 	"github.com/aurora-is-near/stream-bridge/blockwriter"
-	"github.com/aurora-is-near/stream-most/service/nats_block_processor"
+	"github.com/aurora-is-near/stream-most/service/block_processor"
+	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/near_v3"
+	"github.com/aurora-is-near/stream-most/service/block_writer"
 	"github.com/aurora-is-near/stream-most/service/stream_peek"
 	"github.com/aurora-is-near/stream-most/service/stream_seek"
 	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/sirupsen/logrus"
 )
 
 type Bridge struct {
@@ -41,9 +44,16 @@ func (b *Bridge) Run() error {
 	}
 
 	// Determine the best place to start reading from the input stream
-	// TODO: this looks for announcements, but we should also look for their left-most shards
-	startSequence, err := stream_seek.NewStreamSeek(inputStream).
-		SeekAnnouncementWithHeightBelow(height, b.InputStartSequence, b.InputEndSequence)
+	var startSequence uint64
+
+	if height == 0 {
+		// Output stream is empty, we'll start at the first block announcement found starting from InputStartSequence
+		startSequence, err = stream_seek.NewStreamSeek(inputStream).
+			SeekFirstAnnouncementBetween(b.InputStartSequence, b.InputEndSequence)
+	} else {
+		startSequence, err = stream_seek.NewStreamSeek(inputStream).
+			SeekAnnouncementWithHeightBelow(height, b.InputStartSequence, b.InputEndSequence)
+	}
 	if err != nil {
 		return err
 	}
@@ -54,10 +64,22 @@ func (b *Bridge) Run() error {
 	}
 	defer reader.Stop()
 
-	// Let's make sure we order messages correctly:
-	processor := nats_block_processor.NewProcessorWithReader(reader.Output())
+	// Create a block writer
+	writer := block_writer.NewWriter()
 
+	// Pass messages through the block processor, and write them out
+	driver := near_v3.NewNearV3NoSorting(
+		stream_seek.NewStreamSeek(inputStream),
+	)
+
+	processor := block_processor.NewProcessorWithReader(reader.Output(), driver)
 	for results := range processor.Run() {
-
+		err := writer.Write(results)
+		if err != nil {
+			logrus.Error(err)
+		}
 	}
+
+	logrus.Info("Finished!")
+	return nil
 }

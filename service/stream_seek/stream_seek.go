@@ -5,6 +5,7 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/domain/new_format"
 	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/nats-io/nats.go"
 )
 
 var (
@@ -16,8 +17,46 @@ type StreamSeek struct {
 	stream stream.Interface
 }
 
+func (p *StreamSeek) SeekShards(from, to uint64, forBlock *string) ([]messages.AbstractNatsMessage, error) {
+	var shards []messages.AbstractNatsMessage
+
+	for seq := to; seq >= from; seq-- {
+		d, err := p.stream.Get(seq)
+		if err != nil {
+			return nil, err
+		}
+
+		message, err := new_format.ProtoToMessage(d.Data)
+		if err != nil {
+			return nil, err
+		}
+
+		switch msg := message.(type) {
+		case messages.BlockShard:
+			if forBlock == nil || (msg.Block.Hash == *forBlock) {
+				shards = append(shards, messages.NatsMessage{
+					Msg: &nats.Msg{
+						Subject: d.Subject,
+						Header:  d.Header,
+						Data:    d.Data,
+					},
+					Metadata: &nats.MsgMetadata{
+						Sequence: nats.SequencePair{
+							Stream: d.Sequence,
+						},
+					},
+					Shard: &msg,
+				})
+			}
+		}
+	}
+
+	return shards, nil
+}
+
 // SeekAnnouncementWithHeightBelow returns the sequence number of the latest block announcement which height
 // is below a given one. notBefore and notAfter are given in sequence numbers and are used to limit the search range.
+// Set notAfter to 0 to search until the end of the stream.
 func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore uint64, notAfter uint64) (uint64, error) {
 	info, _, err := p.stream.GetInfo(0)
 	if err != nil {
@@ -30,6 +69,16 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 
 	if notBefore > info.State.LastSeq {
 		return 0, ErrNotFound
+	}
+
+	// To not cross the stream's boundaries
+	if notAfter > info.State.LastSeq {
+		notAfter = info.State.LastSeq
+	}
+
+	// if notAfter is not specified, we go until the end of the stream
+	if notAfter == 0 {
+		notAfter = info.State.LastSeq
 	}
 
 	for seq := notAfter; seq >= notBefore; seq-- {
@@ -46,8 +95,57 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 		switch msg := message.(type) {
 		case messages.BlockAnnouncement:
 			if msg.Block.Height < height {
-				return msg.Block.Height, nil
+				return seq, nil
 			}
+		}
+	}
+
+	return 0, ErrNotFound
+}
+
+// SeekFirstAnnouncementBetween returns the sequence number of the first block announcement which sequence number
+// is between from and to. Both from and to are given in sequence numbers and are used to limit the search range.
+func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint64, error) {
+	if from > to {
+		return 0, ErrNotFound
+	}
+
+	info, _, err := p.stream.GetInfo(0)
+	if err != nil {
+		return 0, err
+	}
+
+	if info.State.LastSeq == 0 {
+		return 0, ErrNotFound
+	}
+
+	if from > info.State.LastSeq {
+		return 0, ErrNotFound
+	}
+
+	if to == 0 {
+		to = info.State.LastSeq
+	}
+
+	// To not cross the stream's boundaries
+	if to > info.State.LastSeq {
+		to = info.State.LastSeq
+	}
+
+	for seq := from; seq <= to; seq++ {
+		d, err := p.stream.Get(seq)
+		if err != nil {
+			return 0, err
+		}
+
+		message, err := new_format.ProtoToMessage(d.Data)
+		if err != nil {
+			return 0, err
+		}
+
+		switch message.(type) {
+		case messages.BlockAnnouncement:
+			return seq, nil
 		}
 	}
 
