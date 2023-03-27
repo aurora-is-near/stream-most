@@ -39,7 +39,7 @@ func (sw *AutoReader) run(nextSeq uint64) {
 
 	var err error
 	var s Interface
-	var r *Reader
+	var r IReader
 
 	disconnect := func() {
 		if r != nil {

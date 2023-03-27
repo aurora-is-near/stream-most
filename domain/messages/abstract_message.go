@@ -1,6 +1,9 @@
 package messages
 
-import "github.com/nats-io/nats.go"
+import (
+	"github.com/aurora-is-near/stream-most/domain/blocks"
+	"github.com/nats-io/nats.go"
+)
 
 type AbstractNatsMessage interface {
 	GetType() MessageType
@@ -9,6 +12,7 @@ type AbstractNatsMessage interface {
 	GetShard() *BlockShard
 	GetMsg() *nats.Msg
 	GetMetadata() *nats.MsgMetadata
+	GetBlock() *blocks.AbstractBlock
 	IsAnnouncement() bool
 	IsShard() bool
 }
@@ -23,7 +27,6 @@ type NatsMessage struct {
 }
 
 func (f NatsMessage) GetSequence() uint64 {
-	// TODO: make sure it's working properly in all cases
 	return f.Metadata.Sequence.Stream
 }
 
@@ -59,4 +62,14 @@ func (f NatsMessage) GetMsg() *nats.Msg {
 
 func (f NatsMessage) GetMetadata() *nats.MsgMetadata {
 	return f.Metadata
+}
+
+func (f NatsMessage) GetBlock() *blocks.AbstractBlock {
+	if f.Announcement != nil {
+		return f.GetAnnouncement().Block.ToAbstractBlock()
+	}
+	if f.Shard != nil {
+		return f.GetShard().Block.ToAbstractBlock()
+	}
+	panic("Invalid message")
 }

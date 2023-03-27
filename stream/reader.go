@@ -10,6 +10,12 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+type IReader interface {
+	Output() <-chan *ReaderOutput
+	Stop()
+	IsFake() bool
+}
+
 const readerMinRps = 0.001
 
 type ReaderOpts struct {
@@ -66,7 +72,11 @@ func (opts ReaderOpts) FillMissingFields() *ReaderOpts {
 	return &opts
 }
 
-func StartReader(opts *ReaderOpts, stream Interface, startSeq uint64, endSeq uint64) (*Reader, error) {
+func StartReader(opts *ReaderOpts, stream Interface, startSeq uint64, endSeq uint64) (IReader, error) {
+	if stream.IsFake() {
+		return StartFakeReader(opts, stream, startSeq, endSeq)
+	}
+
 	opts = opts.FillMissingFields()
 
 	if startSeq < 1 {
@@ -108,6 +118,10 @@ func StartReader(opts *ReaderOpts, stream Interface, startSeq uint64, endSeq uin
 	go r.run()
 
 	return r, nil
+}
+
+func (r *Reader) IsFake() bool {
+	return false
 }
 
 func (r *Reader) Output() <-chan *ReaderOutput {

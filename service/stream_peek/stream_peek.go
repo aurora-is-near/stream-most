@@ -5,6 +5,7 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/domain/new_format"
 	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/nats-io/nats.go"
 )
 
 var (
@@ -16,11 +17,66 @@ type StreamPeek struct {
 	stream stream.Interface
 }
 
-// PeekTip returns the last announced block's height.
+func (p *StreamPeek) GetTip() (messages.AbstractNatsMessage, error) {
+	info, _, err := p.stream.GetInfo(0)
+	if err != nil {
+		return nil, err
+	}
+
+	if info.State.LastSeq == 0 {
+		return nil, nil
+	}
+
+	msg, err := p.stream.Get(info.State.LastSeq)
+	if err != nil {
+		return nil, err
+	}
+
+	// We need to inspect the message to see its height
+	message, err := new_format.ProtoToMessage(msg.Data)
+	if err != nil {
+		return nil, err
+	}
+
+	switch m := message.(type) {
+	case *messages.BlockAnnouncement:
+		return messages.NatsMessage{
+			Msg: &nats.Msg{
+				Subject: msg.Subject,
+				Header:  msg.Header,
+				Data:    msg.Data,
+			},
+			Metadata: &nats.MsgMetadata{
+				Sequence: nats.SequencePair{
+					Stream: msg.Sequence,
+				},
+			},
+			Announcement: m,
+		}, nil
+	case *messages.BlockShard:
+		return messages.NatsMessage{
+			Msg: &nats.Msg{
+				Subject: msg.Subject,
+				Header:  msg.Header,
+				Data:    msg.Data,
+			},
+			Metadata: &nats.MsgMetadata{
+				Sequence: nats.SequencePair{
+					Stream: msg.Sequence,
+				},
+			},
+			Shard: m,
+		}, nil
+	}
+
+	return nil, ErrCorruptedTip
+}
+
+// GetTipHeight returns the last announced block's height.
 // Unlike the old-format stream-bridge's peeking, this one doesn't return height
 // of a last fully written block, but the height of the last block announcement.
 // Hence, it can still miss some shard-blocks yet.
-func (p *StreamPeek) PeekTip() (uint64, error) {
+func (p *StreamPeek) GetTipHeight() (uint64, error) {
 	info, _, err := p.stream.GetInfo(0)
 	if err != nil {
 		return 0, err

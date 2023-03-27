@@ -33,7 +33,6 @@ func NewProcessorWithReader(input <-chan *stream.ReaderOutput, driver drivers.Dr
 					Metadata: k.Metadata,
 					Shard:    messages.NewBlockShard(msgT),
 				}
-
 			}
 		}
 		close(in)

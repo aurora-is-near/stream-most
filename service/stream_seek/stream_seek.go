@@ -20,19 +20,23 @@ type StreamSeek struct {
 func (p *StreamSeek) SeekShards(from, to uint64, forBlock *string) ([]messages.AbstractNatsMessage, error) {
 	var shards []messages.AbstractNatsMessage
 
+	if from == 0 {
+		from = 1
+	}
+
 	for seq := to; seq >= from; seq-- {
 		d, err := p.stream.Get(seq)
 		if err != nil {
-			return nil, err
+			continue
 		}
 
 		message, err := new_format.ProtoToMessage(d.Data)
 		if err != nil {
-			return nil, err
+			return shards, err
 		}
 
 		switch msg := message.(type) {
-		case messages.BlockShard:
+		case *messages.BlockShard:
 			if forBlock == nil || (msg.Block.Hash == *forBlock) {
 				shards = append(shards, messages.NatsMessage{
 					Msg: &nats.Msg{
@@ -45,7 +49,7 @@ func (p *StreamSeek) SeekShards(from, to uint64, forBlock *string) ([]messages.A
 							Stream: d.Sequence,
 						},
 					},
-					Shard: &msg,
+					Shard: msg,
 				})
 			}
 		}
@@ -93,7 +97,7 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 		}
 
 		switch msg := message.(type) {
-		case messages.BlockAnnouncement:
+		case *messages.BlockAnnouncement:
 			if msg.Block.Height < height {
 				return seq, nil
 			}
@@ -106,13 +110,17 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 // SeekFirstAnnouncementBetween returns the sequence number of the first block announcement which sequence number
 // is between from and to. Both from and to are given in sequence numbers and are used to limit the search range.
 func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint64, error) {
-	if from > to {
-		return 0, ErrNotFound
-	}
-
 	info, _, err := p.stream.GetInfo(0)
 	if err != nil {
 		return 0, err
+	}
+
+	if to == 0 {
+		to = info.State.LastSeq
+	}
+
+	if from > to {
+		return 0, ErrNotFound
 	}
 
 	if info.State.LastSeq == 0 {
@@ -121,10 +129,6 @@ func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint6
 
 	if from > info.State.LastSeq {
 		return 0, ErrNotFound
-	}
-
-	if to == 0 {
-		to = info.State.LastSeq
 	}
 
 	// To not cross the stream's boundaries
@@ -144,7 +148,7 @@ func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint6
 		}
 
 		switch message.(type) {
-		case messages.BlockAnnouncement:
+		case *messages.BlockAnnouncement:
 			return seq, nil
 		}
 	}

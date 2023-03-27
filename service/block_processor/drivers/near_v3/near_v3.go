@@ -2,6 +2,7 @@ package near_v3
 
 import (
 	"github.com/aurora-is-near/stream-most/domain/messages"
+	"github.com/sirupsen/logrus"
 )
 
 type Seeker interface {
@@ -30,22 +31,24 @@ type NearV3NoSorting struct {
 func (n *NearV3NoSorting) Run() {
 	for msg := range n.input {
 		if msg.IsAnnouncement() {
+			logrus.Debugf("Met announcement, hash %s", msg.GetAnnouncement().Block.Hash[:3])
 			if !n.isPreviousBlockComplete() {
 				// If we receive new announcement before previous block is complete,
 				// we need to find its shards somewhere
 				n.rescueBlock()
 			}
 
-			n.processAnnouncement(msg.GetAnnouncement())
 			n.output <- msg
+			n.processAnnouncement(msg.GetAnnouncement())
 		}
 
 		if msg.IsShard() {
-			if n.isPreviousBlockComplete() {
-				n.stashShard(msg)
-			} else {
+			logrus.Debugf("Met shard, hash %s", msg.GetShard().Block.Hash[:3])
+			if msg.GetShard().Block.Hash == n.currentAnnouncement.Block.Hash {
 				n.processShard(msg)
 				n.output <- msg
+			} else {
+				n.stashShard(msg)
 			}
 		}
 	}
@@ -57,11 +60,20 @@ func (n *NearV3NoSorting) Bind(input chan messages.AbstractNatsMessage, output c
 }
 
 func (n *NearV3NoSorting) rescueBlock() {
+	logrus.Debug("Attempting rescue...")
+
+	var seekFrom, seekTo uint64
+	if n.currentAnnouncementSequence > n.seekLeftParam {
+		seekFrom = n.currentAnnouncementSequence - n.seekLeftParam
+	}
+	seekTo = n.currentAnnouncementSequence + n.seekRightParam
+
 	shards, err := n.seeker.SeekShards(
-		n.currentAnnouncementSequence-n.seekLeftParam,
-		n.currentAnnouncementSequence+n.seekRightParam,
+		seekFrom,
+		seekTo,
 		&n.currentAnnouncement.Block.Hash,
 	)
+	logrus.Debugf("Found %d shards", len(shards))
 	if err != nil {
 		panic(err)
 	}
@@ -72,6 +84,10 @@ func (n *NearV3NoSorting) rescueBlock() {
 			n.output <- shard
 		}
 	}
+
+	if !n.isPreviousBlockComplete() {
+		panic("Rescue failed!")
+	}
 }
 
 func (n *NearV3NoSorting) isPreviousBlockComplete() bool {
@@ -79,15 +95,24 @@ func (n *NearV3NoSorting) isPreviousBlockComplete() bool {
 		return true
 	}
 
-	return len(n.shardsCompleteForCurrentBlock) == len(n.currentAnnouncement.ParticipatingShardsMap)
+	participatingShards := 0
+	for _, x := range n.currentAnnouncement.ParticipatingShardsMap {
+		if x {
+			participatingShards += 1
+		}
+	}
+	logrus.Debugf("Shards complete: %d, shards participating: %d", len(n.shardsCompleteForCurrentBlock), participatingShards)
+	return len(n.shardsCompleteForCurrentBlock) == participatingShards
 }
 
 func (n *NearV3NoSorting) processAnnouncement(announcement *messages.BlockAnnouncement) {
-	if n.currentAnnouncement.Block.Height > announcement.Block.Height {
-		panic("We have already processed a block with a higher height!")
-	}
-	if n.currentAnnouncement.Block.Hash != announcement.Block.PrevHash {
-		panic("PrevHash of the new announcement's block doesn't match current block's hash!")
+	if n.currentAnnouncement != nil {
+		if n.currentAnnouncement.Block.Height > announcement.Block.Height {
+			panic("We have already processed a block with a higher height!")
+		}
+		if n.currentAnnouncement.Block.Hash != announcement.Block.PrevHash {
+			panic("PrevHash of the new announcement's block doesn't match current block's hash!")
+		}
 	}
 
 	n.currentAnnouncement = announcement
@@ -112,5 +137,6 @@ func NewNearV3NoSorting(seeker Seeker) *NearV3NoSorting {
 		seeker:         seeker,
 		seekLeftParam:  10,
 		seekRightParam: 10,
+		shardsStash:    map[string][]messages.AbstractNatsMessage{},
 	}
 }

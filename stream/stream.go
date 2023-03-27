@@ -15,6 +15,9 @@ type Opts struct {
 	Stream        string
 	Subject       string `json:",omitempty"`
 	RequestWaitMs uint
+
+	ShouldFake bool
+	FakeStream Interface
 }
 
 type Stream struct {
@@ -43,9 +46,18 @@ type Interface interface {
 	Get(seq uint64) (*nats.RawStreamMsg, error)
 	Write(data []byte, header nats.Header, publishAckWait nats.AckWait) (*nats.PubAck, error)
 	Stats() *nats.Statistics
+	IsFake() bool
 }
 
 func ConnectStream(opts *Opts) (Interface, error) {
+	if opts.ShouldFake {
+		if opts.FakeStream != nil {
+			return opts.FakeStream, nil
+		} else {
+			return &FakeNearV3Stream{}, nil
+		}
+	}
+
 	opts = opts.FillMissingFields()
 	s := &Stream{
 		Opts:        opts,
@@ -105,6 +117,10 @@ func ConnectStream(opts *Opts) (Interface, error) {
 	s.log("connected")
 
 	return s, nil
+}
+
+func (s *Stream) IsFake() bool {
+	return false
 }
 
 func (s *Stream) GetStream() *Stream {

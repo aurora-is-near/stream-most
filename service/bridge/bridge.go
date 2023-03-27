@@ -1,7 +1,7 @@
 package bridge
 
 import (
-	"github.com/aurora-is-near/stream-bridge/blockwriter"
+	"context"
 	"github.com/aurora-is-near/stream-most/service/block_processor"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/near_v3"
 	"github.com/aurora-is-near/stream-most/service/block_writer"
@@ -12,17 +12,14 @@ import (
 )
 
 type Bridge struct {
-	Mode               string
-	Input              *stream.Opts
-	Output             *stream.Opts
-	Reader             *stream.ReaderOpts
-	Writer             *blockwriter.Opts
+	Input  *stream.Opts
+	Output *stream.Opts
+	Reader *stream.ReaderOpts
+
 	InputStartSequence uint64
 	InputEndSequence   uint64
-	RestartDelayMs     uint
-	ToleranceWindow    uint
-
-	unverified bool
+	/*RestartDelayMs     uint
+	ToleranceWindow    uint*/
 }
 
 func (b *Bridge) Run() error {
@@ -38,7 +35,7 @@ func (b *Bridge) Run() error {
 	}
 
 	// Determine height on the output stream
-	height, err := stream_peek.NewStreamPeek(outputStream).PeekTip()
+	height, err := stream_peek.NewStreamPeek(outputStream).GetTipHeight()
 	if err != nil {
 		return err
 	}
@@ -65,7 +62,11 @@ func (b *Bridge) Run() error {
 	defer reader.Stop()
 
 	// Create a block writer
-	writer := block_writer.NewWriter(outputStream, stream_peek.NewStreamPeek(outputStream))
+	writer := block_writer.NewWriter(
+		block_writer.NewOptions().WithDefaults().Validated(),
+		outputStream,
+		stream_peek.NewStreamPeek(outputStream),
+	)
 
 	// Pass messages through the block processor, and write them out
 	driver := near_v3.NewNearV3NoSorting(
@@ -75,7 +76,7 @@ func (b *Bridge) Run() error {
 	processor := block_processor.NewProcessorWithReader(reader.Output(), driver)
 
 	for results := range processor.Run() {
-		err := writer.Write(results)
+		err := writer.Write(context.Background(), results)
 		if err != nil {
 			logrus.Error(err)
 		}
@@ -83,4 +84,14 @@ func (b *Bridge) Run() error {
 
 	logrus.Info("Finished!")
 	return nil
+}
+
+func NewBridge(inputOpts, outputOpts *stream.Opts, readerOpts *stream.ReaderOpts, from, to uint64) *Bridge {
+	return &Bridge{
+		Input:              inputOpts,
+		Output:             outputOpts,
+		Reader:             readerOpts,
+		InputStartSequence: from,
+		InputEndSequence:   to,
+	}
 }

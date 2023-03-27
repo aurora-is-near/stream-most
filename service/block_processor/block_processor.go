@@ -6,7 +6,7 @@ import (
 )
 
 // Processor receives messages from the NATS stream,
-// reorders them, drops out empty ones, and returns them
+// processed them using a given driver, monitors them and outputs
 type Processor struct {
 	input  chan messages.AbstractNatsMessage
 	output chan messages.AbstractNatsMessage

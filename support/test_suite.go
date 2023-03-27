@@ -10,15 +10,29 @@ import (
 	"time"
 )
 
-// Those functions are only used in tests.
+/*
+	Those functions are only used in tests.
+	Removing this file will not affect anything but tests
+*/
 
 func ATN(sequence uint64, msg *messages.BlockAnnouncement) messages.NatsMessage {
 	return AnnouncementToNats(sequence, msg)
 }
 
 func AnnouncementToNats(sequence uint64, msg *messages.BlockAnnouncement) messages.NatsMessage {
+	m := &borealisproto.Message{
+		Payload: msg.Parent,
+	}
+	data, err := new_format.ProtoEncode(m)
+	if err != nil {
+		panic(err)
+	}
+
 	return messages.NatsMessage{
-		Msg:          &nats.Msg{},
+		Msg: &nats.Msg{
+			Header: map[string][]string{},
+			Data:   data,
+		},
 		Announcement: msg,
 		Metadata: &nats.MsgMetadata{Sequence: nats.SequencePair{
 			Stream: sequence,
@@ -31,8 +45,19 @@ func STN(sequence uint64, msg *messages.BlockShard) messages.NatsMessage {
 }
 
 func ShardToNats(sequence uint64, msg *messages.BlockShard) messages.NatsMessage {
+	m := &borealisproto.Message{
+		Payload: msg.Parent,
+	}
+	data, err := new_format.ProtoEncode(m)
+	if err != nil {
+		panic(err)
+	}
+
 	return messages.NatsMessage{
-		Msg:   &nats.Msg{},
+		Msg: &nats.Msg{
+			Header: map[string][]string{},
+			Data:   data,
+		},
 		Shard: msg,
 		Metadata: &nats.MsgMetadata{Sequence: nats.SequencePair{
 			Stream: sequence,
