@@ -2,6 +2,7 @@ package near_v3
 
 import (
 	"github.com/aurora-is-near/stream-most/domain/messages"
+	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
 	"github.com/sirupsen/logrus"
 )
 
@@ -13,6 +14,8 @@ type Seeker interface {
 
 // NearV3NoSorting this driver is the same as NearV3, but it does not sort the shards.
 type NearV3NoSorting struct {
+	observer *observer.Observer
+
 	seeker         Seeker
 	seekLeftParam  uint64
 	seekRightParam uint64
@@ -26,6 +29,10 @@ type NearV3NoSorting struct {
 	currentAnnouncement           *messages.BlockAnnouncement
 	currentAnnouncementSequence   uint64
 	shardsCompleteForCurrentBlock map[uint8]bool
+}
+
+func (n *NearV3NoSorting) BindObserver(obs *observer.Observer) {
+	n.observer = obs
 }
 
 func (n *NearV3NoSorting) Run() {
@@ -61,6 +68,7 @@ func (n *NearV3NoSorting) Bind(input chan messages.AbstractNatsMessage, output c
 
 func (n *NearV3NoSorting) rescueBlock() {
 	logrus.Debug("Attempting rescue...")
+	n.observer.Emit(observer.RescueNeeded, n.currentAnnouncement)
 
 	var seekFrom, seekTo uint64
 	if n.currentAnnouncementSequence > n.seekLeftParam {

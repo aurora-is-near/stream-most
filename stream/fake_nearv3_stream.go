@@ -178,6 +178,10 @@ func (s *FakeNearV3Stream) DisplayWithHeaders() {
 	}
 }
 
+func NewFakeStream() *FakeNearV3Stream {
+	return NewFakeNearV3Stream()
+}
+
 func NewFakeNearV3Stream() *FakeNearV3Stream {
 	return &FakeNearV3Stream{
 		stream: make([]messages.AbstractNatsMessage, 0),
