@@ -8,7 +8,7 @@ import (
 
 func TestBridge(t *testing.T) {
 	inputStream := stream.NewFakeNearV3Stream()
-	outputStream := stream.NewFakeNearV3Stream()
+	outputStream := stream.NewFakeNearV3Stream().WithDeduplication()
 
 	inputStream.Add(
 		u.Announcement(1, []bool{true, true, true}, 1, "AAA", "000"),
@@ -38,5 +38,5 @@ func TestBridge(t *testing.T) {
 		panic(err)
 	}
 
-	outputStream.DisplayRows() // or DisplayWithHeaders()
+	outputStream.DisplayWithHeaders() // or DisplayWithHeaders()
 }

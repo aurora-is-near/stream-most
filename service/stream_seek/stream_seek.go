@@ -132,7 +132,7 @@ func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint6
 		return 0, ErrNotFound
 	}
 
-	// To not cross the stream'u boundaries
+	// To not cross the stream's boundaries
 	if to > info.State.LastSeq {
 		to = info.State.LastSeq
 	}

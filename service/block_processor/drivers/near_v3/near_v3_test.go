@@ -2,6 +2,7 @@ package near_v3
 
 import (
 	"github.com/aurora-is-near/stream-most/domain/messages"
+	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
 	"github.com/aurora-is-near/stream-most/service/stream_seek"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/adapters"
@@ -18,9 +19,9 @@ func TestNearV3_Basic(t *testing.T) {
 		u.Shard(2, 1, "AAA", "000", 1),
 		u.Shard(3, 1, "AAA", "000", 2),
 		u.Shard(4, 1, "AAA", "000", 3),
-		u.Shard(5, 2, "BBB", "AAA", 1),
-		u.Shard(6, 2, "BBB", "AAA", 2),
-		u.Shard(7, 2, "BBB", "AAA", 3),
+		u.Shard(5, 5, "BBB", "AAA", 1),
+		u.Shard(6, 5, "BBB", "AAA", 2),
+		u.Shard(7, 5, "BBB", "AAA", 3),
 		u.Announcement(8, []bool{true, true, true}, 2, "BBB", "AAA"),
 	)
 
@@ -81,6 +82,7 @@ func TestNearV3_Rescue(t *testing.T) {
 	input := adapters.ReaderOutputToNatsMessages(reader.Output())
 	output := make(chan messages.AbstractNatsMessage, 100)
 	driver.Bind(input, output)
+	driver.BindObserver(observer.NewObserver())
 
 	go func() {
 		driver.Run()
@@ -91,5 +93,6 @@ func TestNearV3_Rescue(t *testing.T) {
 		fakeOutput.Add(x.(messages.NatsMessage))
 	}
 
-	fakeOutput.Display()
+	println()
+	fakeOutput.DisplayRows()
 }
