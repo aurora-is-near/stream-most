@@ -1,11 +1,11 @@
-package support
+package u
 
 import (
 	borealisproto "github.com/aurora-is-near/borealis-prototypes/go"
 	near_block "github.com/aurora-is-near/borealis-prototypes/go/payloads/near_block"
 	"github.com/aurora-is-near/stream-most/domain/blocks"
+	"github.com/aurora-is-near/stream-most/domain/formats/v3"
 	"github.com/aurora-is-near/stream-most/domain/messages"
-	"github.com/aurora-is-near/stream-most/domain/new_format"
 	"github.com/nats-io/nats.go"
 	"time"
 )
@@ -15,6 +15,14 @@ import (
 	Removing this file will not affect anything but tests
 */
 
+func Announcement(sequence uint64, shardsMap []bool, height uint64, hash string, prevHash string) messages.NatsMessage {
+	return ATN(sequence, NewSimpleBlockAnnouncement(shardsMap, height, hash, prevHash))
+}
+
+func Shard(sequence uint64, height uint64, hash string, prevHash string, shardId uint64) messages.NatsMessage {
+	return STN(sequence, NewSimpleBlockShard([]bool{}, height, hash, prevHash, shardId))
+}
+
 func ATN(sequence uint64, msg *messages.BlockAnnouncement) messages.NatsMessage {
 	return AnnouncementToNats(sequence, msg)
 }
@@ -23,7 +31,7 @@ func AnnouncementToNats(sequence uint64, msg *messages.BlockAnnouncement) messag
 	m := &borealisproto.Message{
 		Payload: msg.Parent,
 	}
-	data, err := new_format.ProtoEncode(m)
+	data, err := v3.ProtoEncode(m)
 	if err != nil {
 		panic(err)
 	}
@@ -48,7 +56,7 @@ func ShardToNats(sequence uint64, msg *messages.BlockShard) messages.NatsMessage
 	m := &borealisproto.Message{
 		Payload: msg.Parent,
 	}
-	data, err := new_format.ProtoEncode(m)
+	data, err := v3.ProtoEncode(m)
 	if err != nil {
 		panic(err)
 	}
@@ -76,7 +84,7 @@ func BuildMessageToRawStreamMsg(message messages.NatsMessage) *nats.RawStreamMsg
 			m := &borealisproto.Message{
 				Payload: message.GetShard().Parent,
 			}
-			data, err = new_format.ProtoEncode(m)
+			data, err = v3.ProtoEncode(m)
 			if err != nil {
 				panic(err)
 			}
@@ -84,7 +92,7 @@ func BuildMessageToRawStreamMsg(message messages.NatsMessage) *nats.RawStreamMsg
 			m := &borealisproto.Message{
 				Payload: message.GetAnnouncement().Parent,
 			}
-			data, err = new_format.ProtoEncode(m)
+			data, err = v3.ProtoEncode(m)
 			if err != nil {
 				panic(err)
 			}

@@ -78,7 +78,8 @@ func (n *NearV3NoSorting) rescueBlock() {
 		panic(err)
 	}
 
-	for _, shard := range shards {
+	for i := len(shards) - 1; i >= 0; i-- {
+		shard := shards[i]
 		if !n.shardsCompleteForCurrentBlock[shard.GetShard().ShardID] {
 			n.processShard(shard)
 			n.output <- shard
@@ -111,7 +112,7 @@ func (n *NearV3NoSorting) processAnnouncement(announcement *messages.BlockAnnoun
 			panic("We have already processed a block with a higher height!")
 		}
 		if n.currentAnnouncement.Block.Hash != announcement.Block.PrevHash {
-			panic("PrevHash of the new announcement's block doesn't match current block's hash!")
+			panic("PrevHash of the new announcement's block doesn't match current block'u hash!")
 		}
 	}
 

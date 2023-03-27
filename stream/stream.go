@@ -162,7 +162,7 @@ func (s *Stream) Write(data []byte, header nats.Header, publishAckWait nats.AckW
 }
 
 func (s *Stream) log(format string, v ...any) {
-	log.Printf(fmt.Sprintf("Stream [%s / %s]: ", s.Opts.Nats.LogTag, s.Opts.Stream)+format, v...)
+	log.Printf(fmt.Sprintf("Stream [ss / %s]: ", s.Opts.Nats.LogTag, s.Opts.Stream)+format, v...)
 }
 
 func (s *Stream) Stats() *nats.Statistics {

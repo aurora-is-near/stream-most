@@ -2,17 +2,17 @@ package stream_seek
 
 import (
 	"github.com/aurora-is-near/stream-most/stream"
-	"github.com/aurora-is-near/stream-most/support"
+	"github.com/aurora-is-near/stream-most/u"
 	"testing"
 )
 
 func TestStreamSeek_SeekShards(t *testing.T) {
 	testInput := stream.NewFakeNearV3Stream()
 	testInput.Add(
-		support.ATN(1, support.NewSimpleBlockAnnouncement([]bool{true, true, true}, 1, "AAA", "000")),
-		support.STN(2, support.NewSimpleBlockShard([]bool{true, true, true}, 1, "AAA", "000", 1)),
-		support.STN(3, support.NewSimpleBlockShard([]bool{true, true, true}, 1, "AAA", "000", 2)),
-		support.STN(4, support.NewSimpleBlockShard([]bool{true, true, true}, 1, "AAA", "000", 2)),
+		u.ATN(1, u.NewSimpleBlockAnnouncement([]bool{true, true, true}, 1, "AAA", "000")),
+		u.STN(2, u.NewSimpleBlockShard([]bool{true, true, true}, 1, "AAA", "000", 1)),
+		u.STN(3, u.NewSimpleBlockShard([]bool{true, true, true}, 1, "AAA", "000", 2)),
+		u.STN(4, u.NewSimpleBlockShard([]bool{true, true, true}, 1, "AAA", "000", 2)),
 	)
 
 	seeker := NewStreamSeek(testInput)

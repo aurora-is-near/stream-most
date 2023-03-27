@@ -5,9 +5,9 @@ type MessageType uint64
 func (t MessageType) String() interface{} {
 	switch t {
 	case Announcement:
-		return "[A]"
+		return "[H]"
 	case Shard:
-		return "[S]"
+		return "[B]"
 	}
 	return "[Unknown]"
 }

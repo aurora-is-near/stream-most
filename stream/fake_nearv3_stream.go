@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 	borealisproto "github.com/aurora-is-near/borealis-prototypes/go"
+	"github.com/aurora-is-near/stream-most/domain/formats/v3"
 	"github.com/aurora-is-near/stream-most/domain/messages"
-	"github.com/aurora-is-near/stream-most/domain/new_format"
-	"github.com/aurora-is-near/stream-most/support"
+	"github.com/aurora-is-near/stream-most/u"
 	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 	"time"
@@ -72,7 +72,7 @@ func (s *FakeNearV3Stream) Get(seq uint64) (*nats.RawStreamMsg, error) {
 
 func (s *FakeNearV3Stream) Add(msgs ...messages.NatsMessage) {
 	for _, msg := range msgs {
-		data := support.BuildMessageToRawStreamMsg(msg)
+		data := u.BuildMessageToRawStreamMsg(msg)
 		_, err := s.Write(data.Data, data.Header, nats.AckWait(0))
 		if err != nil {
 			logrus.Error(err)
@@ -106,7 +106,7 @@ func (s *FakeNearV3Stream) Write(data []byte, header nats.Header, publishAckWait
 		Shard:        nil,
 	}
 
-	message, err := new_format.ProtoDecode(data)
+	message, err := v3.ProtoDecode(data)
 	if err != nil {
 		logrus.Error("cannot decode proto")
 		return nil, err
@@ -145,6 +145,16 @@ func (s *FakeNearV3Stream) Display() {
 		}
 	}
 	fmt.Println()
+}
+
+func (s *FakeNearV3Stream) DisplayRows() {
+	for _, msg := range s.stream {
+		if msg.IsAnnouncement() {
+			fmt.Printf("%s:%s\n", msg.GetType().String(), msg.GetAnnouncement().Block.Hash[:3])
+		} else {
+			fmt.Printf("%s:%s:%d\n", msg.GetType().String(), msg.GetShard().Block.Hash[:3], msg.GetShard().ShardID)
+		}
+	}
 }
 
 func (s *FakeNearV3Stream) DisplayWithHeaders() {

@@ -1,9 +1,9 @@
-package support
+package u
 
 import (
 	borealisproto "github.com/aurora-is-near/borealis-prototypes/go"
+	"github.com/aurora-is-near/stream-most/domain/formats/v3"
 	"github.com/aurora-is-near/stream-most/domain/messages"
-	"github.com/aurora-is-near/stream-most/domain/new_format"
 	"testing"
 )
 
@@ -38,7 +38,7 @@ func TestBuildMessageToRawStreamMsg(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := BuildMessageToRawStreamMsg(tt.args.message)
 
-			decode, err := new_format.ProtoDecode(got.Data)
+			decode, err := v3.ProtoDecode(got.Data)
 			if err != nil {
 				panic(err)
 			}

@@ -18,8 +18,6 @@ type Bridge struct {
 
 	InputStartSequence uint64
 	InputEndSequence   uint64
-	/*RestartDelayMs     uint
-	ToleranceWindow    uint*/
 }
 
 func (b *Bridge) Run() error {

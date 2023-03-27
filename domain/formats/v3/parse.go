@@ -1,4 +1,4 @@
-package new_format
+package v3
 
 import (
 	"bytes"

@@ -1,18 +1,18 @@
 package stream
 
 import (
-	"github.com/aurora-is-near/stream-most/support"
+	"github.com/aurora-is-near/stream-most/u"
 	"testing"
 )
 
 func TestFakeReader(t *testing.T) {
 	fakeInput := &FakeNearV3Stream{}
 	fakeInput.Add(
-		support.ATN(1, support.NewSimpleBlockAnnouncement([]bool{true, true, true}, 1, "hash", "prev_hash")),
-		support.ATN(2, support.NewSimpleBlockAnnouncement([]bool{true, true, true}, 2, "hash", "prev_hash")),
-		support.ATN(3, support.NewSimpleBlockAnnouncement([]bool{true, true, true}, 3, "hash", "prev_hash")),
-		support.ATN(4, support.NewSimpleBlockAnnouncement([]bool{true, true, true}, 4, "hash", "prev_hash")),
-		support.ATN(5, support.NewSimpleBlockAnnouncement([]bool{true, true, true}, 5, "hash", "prev_hash")),
+		u.ATN(1, u.NewSimpleBlockAnnouncement([]bool{true, true, true}, 1, "hash", "prev_hash")),
+		u.ATN(2, u.NewSimpleBlockAnnouncement([]bool{true, true, true}, 2, "hash", "prev_hash")),
+		u.ATN(3, u.NewSimpleBlockAnnouncement([]bool{true, true, true}, 3, "hash", "prev_hash")),
+		u.ATN(4, u.NewSimpleBlockAnnouncement([]bool{true, true, true}, 4, "hash", "prev_hash")),
+		u.ATN(5, u.NewSimpleBlockAnnouncement([]bool{true, true, true}, 5, "hash", "prev_hash")),
 	)
 
 	reader, err := StartReader(&ReaderOpts{}, fakeInput, 2, 3)

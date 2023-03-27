@@ -11,7 +11,6 @@ import (
 )
 
 var config = &bridge.Bridge{
-	Mode: "aurora",
 	Input: &stream.Opts{
 		Nats: &transport.NatsConnectionConfig{
 			Endpoints: []string{
@@ -55,19 +54,8 @@ var config = &bridge.Bridge{
 		StrictStart:                  false,
 		WrongSeqToleranceWindow:      50,
 	},
-	/*
-		Writer: &blockwriter.Opts{
-			PublishAckWaitMs:     5000,
-			MaxWriteAttempts:     3,
-			WriteRetryWaitMs:     1000,
-			TipTtlSeconds:        60,
-			DisableExpectedCheck: 0,
-		},
-	*/
 	InputStartSequence: 0,
 	InputEndSequence:   0,
-	RestartDelayMs:     2000,
-	ToleranceWindow:    1000,
 }
 
 func main() {

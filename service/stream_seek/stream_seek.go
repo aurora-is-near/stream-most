@@ -2,8 +2,8 @@ package stream_seek
 
 import (
 	"errors"
+	"github.com/aurora-is-near/stream-most/domain/formats/v3"
 	"github.com/aurora-is-near/stream-most/domain/messages"
-	"github.com/aurora-is-near/stream-most/domain/new_format"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/nats-io/nats.go"
 )
@@ -17,6 +17,7 @@ type StreamSeek struct {
 	stream stream.Interface
 }
 
+// SeekShards TODO: fetch multiple messages at once instead
 func (p *StreamSeek) SeekShards(from, to uint64, forBlock *string) ([]messages.AbstractNatsMessage, error) {
 	var shards []messages.AbstractNatsMessage
 
@@ -30,7 +31,7 @@ func (p *StreamSeek) SeekShards(from, to uint64, forBlock *string) ([]messages.A
 			continue
 		}
 
-		message, err := new_format.ProtoToMessage(d.Data)
+		message, err := v3.ProtoToMessage(d.Data)
 		if err != nil {
 			return shards, err
 		}
@@ -75,7 +76,7 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 		return 0, ErrNotFound
 	}
 
-	// To not cross the stream's boundaries
+	// To not cross the stream'u boundaries
 	if notAfter > info.State.LastSeq {
 		notAfter = info.State.LastSeq
 	}
@@ -91,7 +92,7 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 			return 0, err
 		}
 
-		message, err := new_format.ProtoToMessage(d.Data)
+		message, err := v3.ProtoToMessage(d.Data)
 		if err != nil {
 			return 0, err
 		}
@@ -131,7 +132,7 @@ func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint6
 		return 0, ErrNotFound
 	}
 
-	// To not cross the stream's boundaries
+	// To not cross the stream'u boundaries
 	if to > info.State.LastSeq {
 		to = info.State.LastSeq
 	}
@@ -142,7 +143,7 @@ func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint6
 			return 0, err
 		}
 
-		message, err := new_format.ProtoToMessage(d.Data)
+		message, err := v3.ProtoToMessage(d.Data)
 		if err != nil {
 			return 0, err
 		}

@@ -5,7 +5,7 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/stream_peek"
 	"github.com/aurora-is-near/stream-most/stream"
-	"github.com/aurora-is-near/stream-most/support"
+	"github.com/aurora-is-near/stream-most/u"
 	"testing"
 )
 
@@ -16,13 +16,13 @@ func TestWriter(t *testing.T) {
 	writer := NewWriter(NewOptions().WithDefaults().Validated(), outputStream, peeker)
 
 	msgs := []messages.AbstractNatsMessage{
-		support.ATN(1, support.NewSimpleBlockAnnouncement([]bool{true, true, true}, 1, "AAA", "000")),
-		support.STN(2, support.NewSimpleBlockShard([]bool{true, true, true}, 1, "AAA", "000", 1)),
-		support.STN(3, support.NewSimpleBlockShard([]bool{true, true, true}, 1, "AAA", "000", 2)),
-		support.STN(4, support.NewSimpleBlockShard([]bool{true, true, true}, 1, "AAA", "000", 3)),
-		support.ATN(5, support.NewSimpleBlockAnnouncement([]bool{}, 2, "BBB", "AAA")),
-		support.ATN(6, support.NewSimpleBlockAnnouncement([]bool{}, 3, "CCC", "BBB")),
-		support.ATN(7, support.NewSimpleBlockAnnouncement([]bool{}, 8, "DDD", "CCC")),
+		u.ATN(1, u.NewSimpleBlockAnnouncement([]bool{true, true, true}, 1, "AAA", "000")),
+		u.STN(2, u.NewSimpleBlockShard([]bool{true, true, true}, 1, "AAA", "000", 1)),
+		u.STN(3, u.NewSimpleBlockShard([]bool{true, true, true}, 1, "AAA", "000", 2)),
+		u.STN(4, u.NewSimpleBlockShard([]bool{true, true, true}, 1, "AAA", "000", 3)),
+		u.ATN(5, u.NewSimpleBlockAnnouncement([]bool{}, 2, "BBB", "AAA")),
+		u.ATN(6, u.NewSimpleBlockAnnouncement([]bool{}, 3, "CCC", "BBB")),
+		u.ATN(7, u.NewSimpleBlockAnnouncement([]bool{}, 8, "DDD", "CCC")),
 	}
 
 	for _, m := range msgs {
