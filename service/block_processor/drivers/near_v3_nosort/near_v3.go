@@ -1,4 +1,4 @@
-package near_v3
+package near_v3_nosort
 
 import (
 	"github.com/aurora-is-near/stream-most/domain/messages"

@@ -2,7 +2,6 @@ package block_processor
 
 import (
 	"github.com/aurora-is-near/stream-most/domain/messages"
-	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/near_v3"
 	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
 	"github.com/aurora-is-near/stream-most/service/fakes"
 	"github.com/aurora-is-near/stream-most/service/stream_seek"
@@ -34,7 +33,7 @@ func TestBlockProcessor(t *testing.T) {
 
 	inputStream := adapters.ReaderOutputToNatsMessages(reader.Output())
 
-	processor := NewProcessor(inputStream, near_v3.NewNearV3NoSorting(stream_seek.NewStreamSeek(input)))
+	processor := NewProcessor(inputStream, near_v3_nosort.NewNearV3NoSorting(stream_seek.NewStreamSeek(input)))
 	processor.On(observer.RescueNeeded, func(currentAnnouncement interface{}) {
 		logrus.Warnf(
 			"We had a need for a rescue operation on the block %s",

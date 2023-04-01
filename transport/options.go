@@ -1,4 +1,4 @@
-package nats
+package transport
 
 type Options struct {
 	Endpoints           []string

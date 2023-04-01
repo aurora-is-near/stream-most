@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"github.com/aurora-is-near/stream-most/nats"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/stream"
 	"github.com/sirupsen/logrus"
@@ -12,7 +11,7 @@ import (
 )
 
 func main() {
-	config := &nats.Options{
+	config := &transport.Options{
 		Endpoints: []string{
 			"tls://developer.nats.backend.aurora.dev:4222/",
 		},

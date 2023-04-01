@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/aurora-is-near/stream-most/stream"
-	"log"
+	"github.com/sirupsen/logrus"
 	"sort"
 	"time"
 
@@ -24,6 +24,8 @@ type Output struct {
 }
 
 type Reader struct {
+	*logrus.Entry
+
 	opts     *Options
 	stream   stream.Interface
 	startSeq uint64
@@ -44,6 +46,11 @@ func Start(opts *Options, input stream.Interface, startSeq uint64, endSeq uint64
 		startSeq = 1
 	}
 	r := &Reader{
+		Entry: logrus.New().
+			WithField("component", "reader").
+			WithField("stream", input.Options().Stream).
+			WithField("log_tag", input.Options().Nats.LogTag),
+
 		opts:     opts,
 		stream:   input,
 		startSeq: startSeq,
@@ -53,32 +60,39 @@ func Start(opts *Options, input stream.Interface, startSeq uint64, endSeq uint64
 		output:   make(chan *Output, opts.BufferSize),
 	}
 
-	log.Printf("Stream Reader [%v]: making sure that previous consumer is deleted...", input.Options().Nats.LogTag)
-	err := input.Js().DeleteConsumer(input.Options().Stream, opts.Durable)
-	if err != nil && err != nats.ErrConsumerNotFound {
-		log.Printf("Stream Reader [%v]: can't delete previous consumer: %v", input.Options().Nats.LogTag, err)
-	}
-
-	log.Printf("Stream Reader [%v]: subscribing...", input.Options().Nats.LogTag)
-	r.sub, err = input.Js().PullSubscribe(
-		input.Options().Subject,
-		opts.Durable,
-		nats.BindStream(input.Options().Stream),
-		//nats.OrderedConsumer(),
-		nats.StartSequence(startSeq),
-		nats.InactiveThreshold(time.Second*time.Duration(opts.InactiveThresholdSeconds)),
-	)
+	err := r.startConsumer()
 	if err != nil {
-		log.Printf("Stream Reader [%v]: unable to subscribe: %v", input.Options().Nats.LogTag, err)
 		return nil, err
 	}
 
-	log.Printf("Stream Reader [%v]: subscribed", input.Options().Nats.LogTag)
-
-	log.Printf("Stream Reader [%v]: running...", input.Options().Nats.LogTag)
 	go r.run()
 
 	return r, nil
+}
+
+func (r *Reader) startConsumer() error {
+	r.Info("Making sure that previous consumer is deleted...")
+	err := r.stream.Js().DeleteConsumer(r.stream.Options().Stream, r.opts.Durable)
+	if err != nil && err != nats.ErrConsumerNotFound {
+		r.Infof("Can't delete previous consumer: %v", err)
+	}
+
+	r.Info("Subscribing...")
+	r.sub, err = r.stream.Js().PullSubscribe(
+		r.stream.Options().Subject,
+		r.opts.Durable,
+		nats.BindStream(r.stream.Options().Stream),
+		//nats.OrderedConsumer(),
+		nats.StartSequence(r.startSeq),
+		nats.InactiveThreshold(time.Second*time.Duration(r.opts.InactiveThresholdSeconds)),
+	)
+	if err != nil {
+		r.Errorf("Unable to subscribe: %v", err)
+		return err
+	}
+
+	r.Info("Subscribed!")
+	return nil
 }
 
 func (r *Reader) IsFake() bool {
@@ -90,7 +104,7 @@ func (r *Reader) Output() <-chan *Output {
 }
 
 func (r *Reader) Stop() {
-	log.Printf("Stream Reader [%v]: stopping...", r.stream.Options().Nats.LogTag)
+	r.Info("Stopping...")
 	for {
 		select {
 		case r.stop <- true:
@@ -101,6 +115,7 @@ func (r *Reader) Stop() {
 }
 
 func (r *Reader) run() {
+	r.Info("Running...")
 	if r.endSeq > 0 && r.startSeq >= r.endSeq {
 		r.finish("finished (r.startSeq >= r.endSeq)", nil)
 		return
@@ -121,7 +136,6 @@ func (r *Reader) run() {
 	first := true
 	consecutiveWrongSeqCount := 0
 	for {
-		// Prioritized stop check
 		select {
 		case <-r.stop:
 			r.finish("stopped", nil)
@@ -149,14 +163,18 @@ func (r *Reader) run() {
 				if curSeq >= lastSeq {
 					continue
 				}
-				r.finish(fmt.Sprintf("unable to fetch messages (batchSize=%d)", batchSize), err)
+
+				r.finish(fmt.Sprintf(
+					"unable to fetch messages (batchSize=%d)",
+					batchSize,
+				), err)
 				return
 			}
 
 			result := make([]*Output, 0, len(messages))
 			for _, msg := range messages {
 				if err := msg.Ack(); err != nil {
-					log.Printf("Stream Reader [%v]: can't ack message: %v", r.stream.Options().Nats.LogTag, err)
+					r.Warnf("Can't ack message: %v", err)
 				}
 				meta, err := msg.Metadata()
 				if err != nil {
@@ -177,9 +195,8 @@ func (r *Reader) run() {
 
 			for _, res := range result {
 				if (!first || r.opts.StrictStart) && res.Metadata.Sequence.Stream != curSeq+1 {
-					log.Printf(
-						"Stream Reader [%v]: wrong sequence detected: %v, expected %v",
-						r.stream.Options().Nats.LogTag,
+					r.Warnf(
+						"Wrong sequence detected: %v, expected %v",
 						res.Metadata.Sequence.Stream,
 						curSeq+1,
 					)
@@ -247,7 +264,7 @@ func (r *Reader) getLastSeq() (uint64, error) {
 }
 
 func (r *Reader) finish(logMsg string, err error) {
-	log.Printf("Stream Reader [%v]: %v: %v", r.stream.Options().Nats.LogTag, logMsg, err)
+	r.Infof("Finishing. %v: %v", logMsg, err)
 	if err != nil {
 		out := &Output{
 			Error: err,
@@ -258,6 +275,6 @@ func (r *Reader) finish(logMsg string, err error) {
 		}
 	}
 	close(r.output)
-	r.sub.Unsubscribe()
+	_ = r.sub.Unsubscribe()
 	close(r.stopped)
 }

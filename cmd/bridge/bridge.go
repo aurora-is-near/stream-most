@@ -7,13 +7,11 @@ import (
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/reader"
 	"os"
-
-	"github.com/aurora-is-near/stream-most/nats"
 )
 
 var config = &bridge.Bridge{
 	Input: &stream.Options{
-		Nats: &nats.Options{
+		Nats: &transport.Options{
 			Endpoints: []string{
 				"",
 			},
@@ -28,7 +26,7 @@ var config = &bridge.Bridge{
 		RequestWaitMs: 5000,
 	},
 	Output: &stream.Options{
-		Nats: &nats.Options{
+		Nats: &transport.Options{
 			Endpoints: []string{
 				"nats://localhost:4222",
 			},

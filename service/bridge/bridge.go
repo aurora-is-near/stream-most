@@ -3,7 +3,6 @@ package bridge
 import (
 	"context"
 	"github.com/aurora-is-near/stream-most/service/block_processor"
-	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/near_v3"
 	"github.com/aurora-is-near/stream-most/service/block_writer"
 	"github.com/aurora-is-near/stream-most/service/stream_peek"
 	"github.com/aurora-is-near/stream-most/service/stream_seek"
@@ -68,7 +67,7 @@ func (b *Bridge) Run() error {
 	)
 
 	// Pass messages through the block processor, and write them out
-	driver := near_v3.NewNearV3NoSorting(
+	driver := near_v3_nosort.NewNearV3NoSorting(
 		stream_seek.NewStreamSeek(inputStream),
 	)
 

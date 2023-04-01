@@ -1,8 +1,9 @@
-package near_v3
+package near_v3_nosort
 
 import (
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
+	"github.com/aurora-is-near/stream-most/service/fakes"
 	"github.com/aurora-is-near/stream-most/service/stream_seek"
 	"github.com/aurora-is-near/stream-most/stream/adapters"
 	"github.com/aurora-is-near/stream-most/stream/fake"
@@ -12,8 +13,8 @@ import (
 )
 
 func TestNearV3_Basic(t *testing.T) {
-	fakeInput := &fake.Stream{}
-	fakeOutput := &fake.Stream{}
+	fakeInput := fake.NewStream()
+	fakeOutput := fake.NewStream()
 
 	fakeInput.Add(
 		u.Announcement(1, []bool{true, true, true}, 1, "AAA", "000"),
@@ -28,7 +29,7 @@ func TestNearV3_Basic(t *testing.T) {
 
 	fakeInput.Display()
 
-	reader, err := reader.Start(&reader.Options{}, fakeInput, 0, 0)
+	rdr, err := reader.Start(&reader.Options{}, fakeInput, 0, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -37,7 +38,7 @@ func TestNearV3_Basic(t *testing.T) {
 		stream_seek.NewStreamSeek(fakeInput),
 	)
 
-	input := adapters.ReaderOutputToNatsMessages(reader.Output())
+	input := adapters.ReaderOutputToNatsMessages(rdr.Output())
 	output := make(chan messages.AbstractNatsMessage, 100)
 	driver.Bind(input, output)
 
@@ -54,7 +55,8 @@ func TestNearV3_Basic(t *testing.T) {
 }
 
 func TestNearV3_Rescue(t *testing.T) {
-	// logrus.SetLevel(logrus.DebugLevel)
+	fakes.UseDefaultOnes()
+
 	fakeInput := &fake.Stream{}
 	fakeOutput := &fake.Stream{}
 
@@ -71,7 +73,7 @@ func TestNearV3_Rescue(t *testing.T) {
 
 	fakeInput.Display()
 
-	reader, err := reader.Start(&reader.Options{}, fakeInput, 3, 0)
+	rdr, err := reader.Start(&reader.Options{}, fakeInput, 3, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -80,7 +82,7 @@ func TestNearV3_Rescue(t *testing.T) {
 		stream_seek.NewStreamSeek(fakeInput),
 	)
 
-	input := adapters.ReaderOutputToNatsMessages(reader.Output())
+	input := adapters.ReaderOutputToNatsMessages(rdr.Output())
 	output := make(chan messages.AbstractNatsMessage, 100)
 	driver.Bind(input, output)
 	driver.BindObserver(observer.NewObserver())
@@ -94,6 +96,5 @@ func TestNearV3_Rescue(t *testing.T) {
 		fakeOutput.Add(x.(messages.NatsMessage))
 	}
 
-	println()
 	fakeOutput.DisplayRows()
 }
