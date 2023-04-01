@@ -2,8 +2,9 @@ package main
 
 import (
 	"bytes"
+	"github.com/aurora-is-near/stream-most/nats"
 	"github.com/aurora-is-near/stream-most/stream"
-	"github.com/aurora-is-near/stream-most/transport"
+	"github.com/aurora-is-near/stream-most/stream/stream"
 	"github.com/sirupsen/logrus"
 	"io"
 	"os"
@@ -11,7 +12,7 @@ import (
 )
 
 func main() {
-	config := &transport.NatsConnectionConfig{
+	config := &nats.Options{
 		Endpoints: []string{
 			"tls://developer.nats.backend.aurora.dev:4222/",
 		},
@@ -22,7 +23,7 @@ func main() {
 		LogTag:              "input",
 	}
 
-	connectStream, err := stream.ConnectStream(&stream.Opts{
+	connectStream, err := stream.Connect(&stream.Options{
 		Nats:    config,
 		Stream:  "v3_mainnet_near_blocks",
 		Subject: "*",

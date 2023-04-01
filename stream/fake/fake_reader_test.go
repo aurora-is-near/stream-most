@@ -1,12 +1,13 @@
-package stream
+package fake
 
 import (
+	reader2 "github.com/aurora-is-near/stream-most/stream/reader"
 	"github.com/aurora-is-near/stream-most/u"
 	"testing"
 )
 
 func TestFakeReader(t *testing.T) {
-	fakeInput := &FakeNearV3Stream{}
+	fakeInput := &Stream{}
 	fakeInput.Add(
 		u.ATN(1, u.NewSimpleBlockAnnouncement([]bool{true, true, true}, 1, "hash", "prev_hash")),
 		u.ATN(2, u.NewSimpleBlockAnnouncement([]bool{true, true, true}, 2, "hash", "prev_hash")),
@@ -15,7 +16,7 @@ func TestFakeReader(t *testing.T) {
 		u.ATN(5, u.NewSimpleBlockAnnouncement([]bool{true, true, true}, 5, "hash", "prev_hash")),
 	)
 
-	reader, err := StartReader(&ReaderOpts{}, fakeInput, 2, 3)
+	reader, err := reader2.Start(&reader2.Options{}, fakeInput, 2, 3)
 	if err != nil {
 		panic(err)
 	}

@@ -4,11 +4,11 @@ import (
 	borealisproto "github.com/aurora-is-near/borealis-prototypes/go"
 	v3 "github.com/aurora-is-near/stream-most/domain/formats/v3"
 	"github.com/aurora-is-near/stream-most/domain/messages"
-	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/aurora-is-near/stream-most/stream/reader"
 	"github.com/sirupsen/logrus"
 )
 
-func ReaderOutputToNatsMessages(input <-chan *stream.ReaderOutput) chan messages.AbstractNatsMessage {
+func ReaderOutputToNatsMessages(input <-chan *reader.Output) chan messages.AbstractNatsMessage {
 	in := make(chan messages.AbstractNatsMessage, 1024)
 	go func() {
 		for k := range input {

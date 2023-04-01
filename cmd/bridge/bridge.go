@@ -4,15 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/aurora-is-near/stream-most/service/bridge"
+	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/aurora-is-near/stream-most/stream/reader"
 	"os"
 
-	"github.com/aurora-is-near/stream-most/stream"
-	"github.com/aurora-is-near/stream-most/transport"
+	"github.com/aurora-is-near/stream-most/nats"
 )
 
 var config = &bridge.Bridge{
-	Input: &stream.Opts{
-		Nats: &transport.NatsConnectionConfig{
+	Input: &stream.Options{
+		Nats: &nats.Options{
 			Endpoints: []string{
 				"",
 			},
@@ -26,8 +27,8 @@ var config = &bridge.Bridge{
 		Subject:       "v2_mainnet_near_blocks",
 		RequestWaitMs: 5000,
 	},
-	Output: &stream.Opts{
-		Nats: &transport.NatsConnectionConfig{
+	Output: &stream.Options{
+		Nats: &nats.Options{
 			Endpoints: []string{
 				"nats://localhost:4222",
 			},
@@ -41,7 +42,7 @@ var config = &bridge.Bridge{
 		Subject:       "myblocks",
 		RequestWaitMs: 5000,
 	},
-	Reader: &stream.ReaderOpts{
+	Reader: &reader.Options{
 		MaxRps:                       2,
 		BufferSize:                   1000,
 		MaxRequestBatchSize:          250,

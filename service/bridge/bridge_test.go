@@ -1,14 +1,20 @@
 package bridge
 
 import (
+	"github.com/aurora-is-near/stream-most/service/fakes"
 	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/aurora-is-near/stream-most/stream/fake"
+	"github.com/aurora-is-near/stream-most/stream/reader"
 	"github.com/aurora-is-near/stream-most/u"
 	"testing"
 )
 
 func TestBridge(t *testing.T) {
-	inputStream := stream.NewFakeNearV3Stream()
-	outputStream := stream.NewFakeNearV3Stream().WithDeduplication()
+	// Use default fakes for reader and streams
+	fakes.UseDefaultOnes()
+
+	inputStream := fake.NewStream()
+	outputStream := fake.NewStream().WithDeduplication()
 
 	inputStream.Add(
 		u.Announcement(1, []bool{true, true, true}, 1, "AAA", "000"),
@@ -27,9 +33,9 @@ func TestBridge(t *testing.T) {
 	)
 
 	bridge := NewBridge(
-		&stream.Opts{ShouldFake: true, FakeStream: inputStream},
-		&stream.Opts{ShouldFake: true, FakeStream: outputStream},
-		&stream.ReaderOpts{},
+		&stream.Options{ShouldFake: true, FakeStream: inputStream},
+		&stream.Options{ShouldFake: true, FakeStream: outputStream},
+		&reader.Options{},
 		1, 0,
 	)
 
@@ -38,5 +44,5 @@ func TestBridge(t *testing.T) {
 		panic(err)
 	}
 
-	outputStream.DisplayWithHeaders() // or DisplayWithHeaders()
+	outputStream.DisplayWithHeaders()
 }

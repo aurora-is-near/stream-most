@@ -6,7 +6,7 @@ import (
 )
 
 // BlockShard is a message that contains part of a near block that was previously announced.
-// Structurally it'u just a wrapper around borealisproto.Message_NearBlockShard
+// Structurally it's just a wrapper around borealisproto.Message_NearBlockShard
 type BlockShard struct {
 	Parent  *borealisproto.Message_NearBlockShard
 	ShardID uint8

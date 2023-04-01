@@ -1,8 +1,9 @@
-package stream
+package reader
 
 import (
 	"errors"
 	"fmt"
+	"github.com/aurora-is-near/stream-most/stream"
 	"log"
 	"sort"
 	"time"
@@ -11,110 +12,70 @@ import (
 )
 
 type IReader interface {
-	Output() <-chan *ReaderOutput
+	Output() <-chan *Output
 	Stop()
 	IsFake() bool
 }
 
-const readerMinRps = 0.001
-
-type ReaderOpts struct {
-	MaxRps                       float64
-	BufferSize                   uint
-	MaxRequestBatchSize          uint
-	SubscribeAckWaitMs           uint
-	InactiveThresholdSeconds     uint
-	FetchTimeoutMs               uint
-	SortBatch                    bool
-	LastSeqUpdateIntervalSeconds uint
-	Durable                      string
-	StrictStart                  bool
-	WrongSeqToleranceWindow      uint
-}
-
-type ReaderOutput struct {
+type Output struct {
 	Msg      *nats.Msg
 	Metadata *nats.MsgMetadata
 	Error    error
 }
 
 type Reader struct {
-	opts     *ReaderOpts
-	stream   Interface
+	opts     *Options
+	stream   stream.Interface
 	startSeq uint64
 	endSeq   uint64
 
 	stop    chan bool
 	stopped chan bool
-	output  chan *ReaderOutput
+	output  chan *Output
 	sub     *nats.Subscription
 }
 
-func (opts ReaderOpts) FillMissingFields() *ReaderOpts {
-	if opts.MaxRps < readerMinRps {
-		opts.MaxRps = readerMinRps
+func Start(opts *Options, input stream.Interface, startSeq uint64, endSeq uint64) (IReader, error) {
+	if input.IsFake() {
+		return createFake(opts, input, startSeq, endSeq)
 	}
-	if opts.MaxRequestBatchSize == 0 {
-		opts.MaxRequestBatchSize = 100
-	}
-	if opts.SubscribeAckWaitMs == 0 {
-		opts.SubscribeAckWaitMs = 5000
-	}
-	if opts.InactiveThresholdSeconds == 0 {
-		opts.InactiveThresholdSeconds = 300
-	}
-	if opts.FetchTimeoutMs == 0 {
-		opts.FetchTimeoutMs = 10000
-	}
-	if opts.LastSeqUpdateIntervalSeconds == 0 {
-		opts.LastSeqUpdateIntervalSeconds = 5
-	}
-	return &opts
-}
-
-func StartReader(opts *ReaderOpts, stream Interface, startSeq uint64, endSeq uint64) (IReader, error) {
-	if stream.IsFake() {
-		return StartFakeReader(opts, stream, startSeq, endSeq)
-	}
-
-	opts = opts.FillMissingFields()
 
 	if startSeq < 1 {
 		startSeq = 1
 	}
 	r := &Reader{
 		opts:     opts,
-		stream:   stream,
+		stream:   input,
 		startSeq: startSeq,
 		endSeq:   endSeq,
 		stop:     make(chan bool),
 		stopped:  make(chan bool),
-		output:   make(chan *ReaderOutput, opts.BufferSize),
+		output:   make(chan *Output, opts.BufferSize),
 	}
 
-	log.Printf("Stream Reader [%v]: making sure that previous consumer is deleted...", stream.GetStream().Opts.Nats.LogTag)
-	err := stream.GetStream().Js.DeleteConsumer(stream.GetStream().Opts.Stream, opts.Durable)
+	log.Printf("Stream Reader [%v]: making sure that previous consumer is deleted...", input.Options().Nats.LogTag)
+	err := input.Js().DeleteConsumer(input.Options().Stream, opts.Durable)
 	if err != nil && err != nats.ErrConsumerNotFound {
-		log.Printf("Stream Reader [%v]: can't delete previous consumer: %v", stream.GetStream().Opts.Nats.LogTag, err)
+		log.Printf("Stream Reader [%v]: can't delete previous consumer: %v", input.Options().Nats.LogTag, err)
 	}
 
-	log.Printf("Stream Reader [%v]: subscribing...", stream.GetStream().Opts.Nats.LogTag)
-	r.sub, err = stream.GetStream().Js.PullSubscribe(
-		stream.GetStream().Opts.Subject,
+	log.Printf("Stream Reader [%v]: subscribing...", input.Options().Nats.LogTag)
+	r.sub, err = input.Js().PullSubscribe(
+		input.Options().Subject,
 		opts.Durable,
-		nats.BindStream(stream.GetStream().Opts.Stream),
+		nats.BindStream(input.Options().Stream),
 		//nats.OrderedConsumer(),
 		nats.StartSequence(startSeq),
 		nats.InactiveThreshold(time.Second*time.Duration(opts.InactiveThresholdSeconds)),
 	)
 	if err != nil {
-		log.Printf("Stream Reader [%v]: unable to subscribe: %v", stream.GetStream().Opts.Nats.LogTag, err)
+		log.Printf("Stream Reader [%v]: unable to subscribe: %v", input.Options().Nats.LogTag, err)
 		return nil, err
 	}
 
-	log.Printf("Stream Reader [%v]: subscribed", stream.GetStream().Opts.Nats.LogTag)
+	log.Printf("Stream Reader [%v]: subscribed", input.Options().Nats.LogTag)
 
-	log.Printf("Stream Reader [%v]: running...", stream.GetStream().Opts.Nats.LogTag)
+	log.Printf("Stream Reader [%v]: running...", input.Options().Nats.LogTag)
 	go r.run()
 
 	return r, nil
@@ -124,12 +85,12 @@ func (r *Reader) IsFake() bool {
 	return false
 }
 
-func (r *Reader) Output() <-chan *ReaderOutput {
+func (r *Reader) Output() <-chan *Output {
 	return r.output
 }
 
 func (r *Reader) Stop() {
-	log.Printf("Stream Reader [%v]: stopping...", r.stream.GetStream().Opts.Nats.LogTag)
+	log.Printf("Stream Reader [%v]: stopping...", r.stream.Options().Nats.LogTag)
 	for {
 		select {
 		case r.stop <- true:
@@ -192,17 +153,17 @@ func (r *Reader) run() {
 				return
 			}
 
-			result := make([]*ReaderOutput, 0, len(messages))
+			result := make([]*Output, 0, len(messages))
 			for _, msg := range messages {
 				if err := msg.Ack(); err != nil {
-					log.Printf("Stream Reader [%v]: can't ack message: %v", r.stream.GetStream().Opts.Nats.LogTag, err)
+					log.Printf("Stream Reader [%v]: can't ack message: %v", r.stream.Options().Nats.LogTag, err)
 				}
 				meta, err := msg.Metadata()
 				if err != nil {
 					r.finish("unable to parse message metadata", err)
 					return
 				}
-				result = append(result, &ReaderOutput{
+				result = append(result, &Output{
 					Msg:      msg,
 					Metadata: meta,
 				})
@@ -218,7 +179,7 @@ func (r *Reader) run() {
 				if (!first || r.opts.StrictStart) && res.Metadata.Sequence.Stream != curSeq+1 {
 					log.Printf(
 						"Stream Reader [%v]: wrong sequence detected: %v, expected %v",
-						r.stream.GetStream().Opts.Nats.LogTag,
+						r.stream.Options().Nats.LogTag,
 						res.Metadata.Sequence.Stream,
 						curSeq+1,
 					)
@@ -286,9 +247,9 @@ func (r *Reader) getLastSeq() (uint64, error) {
 }
 
 func (r *Reader) finish(logMsg string, err error) {
-	log.Printf("Stream Reader [%v]: %v: %v", r.stream.GetStream().Opts.Nats.LogTag, logMsg, err)
+	log.Printf("Stream Reader [%v]: %v: %v", r.stream.Options().Nats.LogTag, logMsg, err)
 	if err != nil {
-		out := &ReaderOutput{
+		out := &Output{
 			Error: err,
 		}
 		select {

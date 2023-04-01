@@ -4,16 +4,20 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/near_v3"
 	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
+	"github.com/aurora-is-near/stream-most/service/fakes"
 	"github.com/aurora-is-near/stream-most/service/stream_seek"
-	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/adapters"
+	"github.com/aurora-is-near/stream-most/stream/fake"
+	"github.com/aurora-is-near/stream-most/stream/reader"
 	"github.com/aurora-is-near/stream-most/u"
 	"github.com/sirupsen/logrus"
 	"testing"
 )
 
 func TestBlockProcessor(t *testing.T) {
-	input := stream.NewFakeStream()
+	fakes.UseDefaultOnes()
+
+	input := fake.NewStream()
 	input.Add(
 		u.Shard(1, 1, "AAA", "AAA", 3),
 		u.Announcement(2, []bool{true, true, true}, 1, "AAA", "000"),
@@ -23,7 +27,7 @@ func TestBlockProcessor(t *testing.T) {
 		u.Announcement(5, []bool{true, true, true}, 2, "BBB", "AAA"),
 	)
 
-	reader, err := stream.StartReader(&stream.ReaderOpts{}, input, 2, 0)
+	reader, err := reader.Start(&reader.Options{}, input, 2, 0)
 	if err != nil {
 		return
 	}
@@ -39,7 +43,7 @@ func TestBlockProcessor(t *testing.T) {
 	})
 
 	output := processor.Run()
-	outputStream := stream.NewFakeStream()
+	outputStream := fake.NewStream()
 	for msg := range output {
 		outputStream.Add(msg.(messages.NatsMessage))
 	}

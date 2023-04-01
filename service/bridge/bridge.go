@@ -8,13 +8,14 @@ import (
 	"github.com/aurora-is-near/stream-most/service/stream_peek"
 	"github.com/aurora-is-near/stream-most/service/stream_seek"
 	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/aurora-is-near/stream-most/stream/reader"
 	"github.com/sirupsen/logrus"
 )
 
 type Bridge struct {
-	Input  *stream.Opts
-	Output *stream.Opts
-	Reader *stream.ReaderOpts
+	Input  *stream.Options
+	Output *stream.Options
+	Reader *reader.Options
 
 	InputStartSequence uint64
 	InputEndSequence   uint64
@@ -22,12 +23,12 @@ type Bridge struct {
 
 func (b *Bridge) Run() error {
 	// First, connect to both streams
-	inputStream, err := stream.ConnectStream(b.Input)
+	inputStream, err := stream.Connect(b.Input)
 	if err != nil {
 		return err
 	}
 
-	outputStream, err := stream.ConnectStream(b.Output)
+	outputStream, err := stream.Connect(b.Output)
 	if err != nil {
 		return err
 	}
@@ -53,11 +54,11 @@ func (b *Bridge) Run() error {
 		return err
 	}
 
-	reader, err := stream.StartReader(b.Reader, inputStream, startSequence, b.InputEndSequence)
+	rdr, err := reader.Start(b.Reader, inputStream, startSequence, b.InputEndSequence)
 	if err != nil {
 		return err
 	}
-	defer reader.Stop()
+	defer rdr.Stop()
 
 	// Create a block writer
 	writer := block_writer.NewWriter(
@@ -71,7 +72,7 @@ func (b *Bridge) Run() error {
 		stream_seek.NewStreamSeek(inputStream),
 	)
 
-	processor := block_processor.NewProcessorWithReader(reader.Output(), driver)
+	processor := block_processor.NewProcessorWithReader(rdr.Output(), driver)
 
 	for results := range processor.Run() {
 		err := writer.Write(context.Background(), results)
@@ -84,7 +85,7 @@ func (b *Bridge) Run() error {
 	return nil
 }
 
-func NewBridge(inputOpts, outputOpts *stream.Opts, readerOpts *stream.ReaderOpts, from, to uint64) *Bridge {
+func NewBridge(inputOpts, outputOpts *stream.Options, readerOpts *reader.Options, from, to uint64) *Bridge {
 	return &Bridge{
 		Input:              inputOpts,
 		Output:             outputOpts,

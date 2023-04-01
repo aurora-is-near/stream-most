@@ -1,4 +1,4 @@
-package stream
+package fake
 
 import (
 	"errors"
@@ -6,38 +6,54 @@ import (
 	borealisproto "github.com/aurora-is-near/borealis-prototypes/go"
 	"github.com/aurora-is-near/stream-most/domain/formats/v3"
 	"github.com/aurora-is-near/stream-most/domain/messages"
+	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/u"
 	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 	"time"
 )
 
-type FakeNearV3Stream struct {
+// Stream is a default fake for a stream.Interface
+// It wraps an array and allows for easy behaviour testing,
+// but no complex interactions with the stream are testable with it
+type Stream struct {
 	stream []messages.AbstractNatsMessage
 
 	deduplicate         bool
 	deduplicationHashes map[string]struct{}
 }
 
-func (s *FakeNearV3Stream) WithDeduplication() *FakeNearV3Stream {
+func (s *Stream) GetArray() []messages.AbstractNatsMessage {
+	return s.stream
+}
+
+func (s *Stream) Js() nats.JetStreamContext {
+	return nil
+}
+
+func (s *Stream) Options() *stream.Options {
+	return nil
+}
+
+func (s *Stream) WithDeduplication() *Stream {
 	s.deduplicate = true
 	s.deduplicationHashes = make(map[string]struct{})
 	return s
 }
 
-func (s *FakeNearV3Stream) IsFake() bool {
+func (s *Stream) IsFake() bool {
 	return true
 }
 
-func (s *FakeNearV3Stream) GetStream() *Stream {
+func (s *Stream) GetStream() *stream.Stream {
 	return nil
 }
 
-func (s *FakeNearV3Stream) Disconnect() error {
+func (s *Stream) Disconnect() error {
 	return nil
 }
 
-func (s *FakeNearV3Stream) GetInfo(_ time.Duration) (*nats.StreamInfo, time.Time, error) {
+func (s *Stream) GetInfo(_ time.Duration) (*nats.StreamInfo, time.Time, error) {
 	var firstSeq, lastSeq uint64
 	if len(s.stream) > 0 {
 		firstSeq = s.stream[0].GetSequence()
@@ -53,7 +69,7 @@ func (s *FakeNearV3Stream) GetInfo(_ time.Duration) (*nats.StreamInfo, time.Time
 	}, time.Now(), nil
 }
 
-func (s *FakeNearV3Stream) Get(seq uint64) (*nats.RawStreamMsg, error) {
+func (s *Stream) Get(seq uint64) (*nats.RawStreamMsg, error) {
 	i := uint64(0)
 	for i < uint64(len(s.stream)) {
 		msg := s.stream[i]
@@ -70,7 +86,7 @@ func (s *FakeNearV3Stream) Get(seq uint64) (*nats.RawStreamMsg, error) {
 	return nil, errors.New("not found in the fake stream")
 }
 
-func (s *FakeNearV3Stream) Add(msgs ...messages.NatsMessage) {
+func (s *Stream) Add(msgs ...messages.NatsMessage) {
 	for _, msg := range msgs {
 		data := u.BuildMessageToRawStreamMsg(msg)
 		_, err := s.Write(data.Data, data.Header, nats.AckWait(0))
@@ -80,7 +96,7 @@ func (s *FakeNearV3Stream) Add(msgs ...messages.NatsMessage) {
 	}
 }
 
-func (s *FakeNearV3Stream) Write(data []byte, header nats.Header, publishAckWait nats.AckWait) (*nats.PubAck, error) {
+func (s *Stream) Write(data []byte, header nats.Header, publishAckWait nats.AckWait) (*nats.PubAck, error) {
 	seq := uint64(1)
 	if len(s.stream) != 0 {
 		seq = s.stream[len(s.stream)-1].GetSequence() + 1
@@ -126,7 +142,7 @@ func (s *FakeNearV3Stream) Write(data []byte, header nats.Header, publishAckWait
 	return nil, nil
 }
 
-func (s *FakeNearV3Stream) Stats() *nats.Statistics {
+func (s *Stream) Stats() *nats.Statistics {
 	return &nats.Statistics{
 		InMsgs:     0,
 		OutMsgs:    0,
@@ -136,7 +152,7 @@ func (s *FakeNearV3Stream) Stats() *nats.Statistics {
 	}
 }
 
-func (s *FakeNearV3Stream) Display() {
+func (s *Stream) Display() {
 	for _, msg := range s.stream {
 		if msg.IsAnnouncement() {
 			fmt.Printf("%s:%s ", msg.GetType().String(), msg.GetAnnouncement().Block.Hash[:3])
@@ -147,7 +163,7 @@ func (s *FakeNearV3Stream) Display() {
 	fmt.Println()
 }
 
-func (s *FakeNearV3Stream) DisplayRows() {
+func (s *Stream) DisplayRows() {
 	for _, msg := range s.stream {
 		if msg.IsAnnouncement() {
 			fmt.Printf("%s:%s\n", msg.GetType().String(), msg.GetAnnouncement().Block.Hash[:3])
@@ -157,7 +173,7 @@ func (s *FakeNearV3Stream) DisplayRows() {
 	}
 }
 
-func (s *FakeNearV3Stream) DisplayWithHeaders() {
+func (s *Stream) DisplayWithHeaders() {
 	for _, msg := range s.stream {
 		if msg.IsAnnouncement() {
 			fmt.Printf(
@@ -178,12 +194,12 @@ func (s *FakeNearV3Stream) DisplayWithHeaders() {
 	}
 }
 
-func NewFakeStream() *FakeNearV3Stream {
-	return NewFakeNearV3Stream()
-}
-
-func NewFakeNearV3Stream() *FakeNearV3Stream {
-	return &FakeNearV3Stream{
+func NewStream() *Stream {
+	return &Stream{
 		stream: make([]messages.AbstractNatsMessage, 0),
 	}
+}
+
+func NewFakeStream() stream.Interface {
+	return NewStream()
 }

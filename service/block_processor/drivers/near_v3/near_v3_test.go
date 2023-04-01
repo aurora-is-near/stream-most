@@ -4,15 +4,16 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
 	"github.com/aurora-is-near/stream-most/service/stream_seek"
-	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/adapters"
+	"github.com/aurora-is-near/stream-most/stream/fake"
+	"github.com/aurora-is-near/stream-most/stream/reader"
 	"github.com/aurora-is-near/stream-most/u"
 	"testing"
 )
 
 func TestNearV3_Basic(t *testing.T) {
-	fakeInput := &stream.FakeNearV3Stream{}
-	fakeOutput := &stream.FakeNearV3Stream{}
+	fakeInput := &fake.Stream{}
+	fakeOutput := &fake.Stream{}
 
 	fakeInput.Add(
 		u.Announcement(1, []bool{true, true, true}, 1, "AAA", "000"),
@@ -27,7 +28,7 @@ func TestNearV3_Basic(t *testing.T) {
 
 	fakeInput.Display()
 
-	reader, err := stream.StartReader(&stream.ReaderOpts{}, fakeInput, 0, 0)
+	reader, err := reader.Start(&reader.Options{}, fakeInput, 0, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -54,8 +55,8 @@ func TestNearV3_Basic(t *testing.T) {
 
 func TestNearV3_Rescue(t *testing.T) {
 	// logrus.SetLevel(logrus.DebugLevel)
-	fakeInput := &stream.FakeNearV3Stream{}
-	fakeOutput := &stream.FakeNearV3Stream{}
+	fakeInput := &fake.Stream{}
+	fakeOutput := &fake.Stream{}
 
 	fakeInput.Add(
 		u.Shard(1, 1, "AAA", "000", 1),
@@ -70,7 +71,7 @@ func TestNearV3_Rescue(t *testing.T) {
 
 	fakeInput.Display()
 
-	reader, err := stream.StartReader(&stream.ReaderOpts{}, fakeInput, 3, 0)
+	reader, err := reader.Start(&reader.Options{}, fakeInput, 3, 0)
 	if err != nil {
 		t.Error(err)
 	}

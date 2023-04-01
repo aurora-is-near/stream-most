@@ -1,31 +1,34 @@
-package stream
+package autoreader
 
 import (
+	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/aurora-is-near/stream-most/stream/reader"
+	"github.com/aurora-is-near/stream-most/stream/stream"
 	"log"
 	"sync"
 	"time"
 )
 
-var ConnectMockStream = ConnectStream
+var ConnectMockStream = stream.Connect
 
 type AutoReader struct {
-	Stream          *Opts
-	Reader          *ReaderOpts
+	Stream          *stream.Options
+	Reader          *reader.Options
 	ReconnectWaitMs uint
 
-	output chan *ReaderOutput
+	output chan *reader.Output
 	stop   chan struct{}
 	wg     sync.WaitGroup
 }
 
 func (sw *AutoReader) Start(startSeq uint64) {
-	sw.output = make(chan *ReaderOutput)
+	sw.output = make(chan *reader.Output)
 	sw.stop = make(chan struct{})
 	sw.wg.Add(1)
 	go sw.run(startSeq)
 }
 
-func (sc *AutoReader) Output() chan *ReaderOutput {
+func (sc *AutoReader) Output() chan *reader.Output {
 	return sc.output
 }
 
@@ -38,8 +41,8 @@ func (sw *AutoReader) run(nextSeq uint64) {
 	defer sw.wg.Done()
 
 	var err error
-	var s Interface
-	var r IReader
+	var s stream.Interface
+	var r reader.IReader
 
 	disconnect := func() {
 		if r != nil {
@@ -89,7 +92,7 @@ func (sw *AutoReader) run(nextSeq uint64) {
 			default:
 			}
 
-			r, err = StartReader(sw.Reader, s, nextSeq, 0)
+			r, err = reader.Start(sw.Reader, s, nextSeq, 0)
 			if err != nil {
 				log.Printf("Can't start reader: %v", err)
 				connectionProblem = true
