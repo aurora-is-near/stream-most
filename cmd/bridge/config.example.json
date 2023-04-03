@@ -1,26 +1,25 @@
 {
-  "Mode": "aurora",
   "Input": {
     "Nats": {
       "Endpoints": [
-        "tls://input.dev:4222"
+        "tls://developer.nats.backend.aurora.dev:4222/"
       ],
-      "Creds": "nats.creds",
+      "Creds": "production_developer.creds",
       "TimeoutMs": 10000,
       "PingIntervalMs": 600000,
       "MaxPingsOutstanding": 5,
       "LogTag": "input"
     },
-    "Stream": "myblocks",
-    "Subject": "myblocks",
+    "Stream": "v3_mainnet_near_blocks",
+    "Subject": "",
     "RequestWaitMs": 5000
   },
   "Output": {
     "Nats": {
       "Endpoints": [
-        "tls://output.dev:4222"
+        "nats://localhost:4222"
       ],
-      "Creds": "nats.creds",
+      "Creds": "",
       "TimeoutMs": 10000,
       "PingIntervalMs": 600000,
       "MaxPingsOutstanding": 5,
@@ -43,13 +42,7 @@
     "StrictStart": false,
     "WrongSeqToleranceWindow": 50
   },
-  "Writer": {
-    "PublishAckWaitMs": 5000,
-    "MaxWriteAttempts": 3,
-    "WriteRetryWaitMs": 1000,
-    "TipTtlSeconds": 60
-  },
-  "InputStartSequence": 0,
+  "InputStartSequence": 3192520152,
   "InputEndSequenece": 0,
   "RestartDelayMs": 2000,
   "ToleranceWindow": 1000,
@@ -66,5 +59,6 @@
       "whatever": "whatever"
     },
     "StdoutIntervalSeconds": 10
-  }
+  },
+  "RestartAttempts": 1
 }

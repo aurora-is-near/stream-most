@@ -15,7 +15,7 @@ func TestBridge(t *testing.T) {
 	fakes.UseDefaultOnes()
 
 	inputStream := fake.NewStream()
-	outputStream := fake.NewStream().WithDeduplication()
+	outputStream := fake.NewStream() //.WithDeduplication()
 
 	inputStream.Add(
 		u.Announcement(1, []bool{true, true, true}, 0, "XXX", "000"),
@@ -56,6 +56,7 @@ func TestBridge(t *testing.T) {
 	}
 
 	outputStream.DisplayWithHeaders()
+
 	outputStream.ExpectExactly(t,
 		u.Announcement(1, []bool{true, true, true}, 1, "AAA", "000"),
 		u.Shard(2, 1, "AAA", "000", 0),

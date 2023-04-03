@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/aurora-is-near/stream-most/service/block_processor"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers"
-	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/jitter"
 	"github.com/aurora-is-near/stream-most/service/block_writer"
 	"github.com/aurora-is-near/stream-most/service/stream_peek"
 	"github.com/aurora-is-near/stream-most/service/stream_seek"
@@ -18,7 +17,6 @@ type Bridge struct {
 	Input  *stream.Options
 	Output *stream.Options
 	Reader *reader.Options
-	Jitter *jitter.Options
 
 	InputStartSequence uint64
 	InputEndSequence   uint64
