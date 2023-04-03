@@ -18,6 +18,10 @@ type Jitter struct {
 	opts            *Options
 }
 
+func (j *Jitter) Error() error {
+	return nil
+}
+
 func (j *Jitter) BindObserver(obs *observer.Observer) {
 	j.observer = obs
 }

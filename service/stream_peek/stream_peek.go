@@ -98,9 +98,9 @@ func (p *StreamPeek) GetTipHeight() (uint64, error) {
 	}
 
 	switch m := message.(type) {
-	case messages.BlockAnnouncement:
+	case *messages.BlockAnnouncement:
 		return m.Block.Height, nil
-	case messages.BlockShard:
+	case *messages.BlockShard:
 		return m.Block.Height, nil
 	}
 	return 0, ErrCorruptedTip

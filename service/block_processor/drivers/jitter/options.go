@@ -11,7 +11,7 @@ type Options struct {
 	DropoutChance float64
 }
 
-func (o *Options) Validate() {
+func (o *Options) Validated() *Options {
 	if o.MaxDelay < 0 {
 		panic("max delay must be positive")
 	}
@@ -19,4 +19,6 @@ func (o *Options) Validate() {
 	if o.DropoutChance < 0 || o.DropoutChance > 1 {
 		panic("dropout chance must be between 0 and 1")
 	}
+
+	return o
 }

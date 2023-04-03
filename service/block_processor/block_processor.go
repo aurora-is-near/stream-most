@@ -3,6 +3,7 @@ package block_processor
 import (
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers"
+	"github.com/aurora-is-near/stream-most/service/block_processor/metrics"
 	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
 )
 
@@ -40,6 +41,8 @@ func (g *Processor) proxyMessages() {
 func (g *Processor) Run() chan messages.AbstractNatsMessage {
 	g.driverOutput = make(chan messages.AbstractNatsMessage, 1024)
 	g.myOutput = make(chan messages.AbstractNatsMessage, 1024)
+	metrics.RegisterObservations(g.Observer)
+
 	go g.work()
 	go g.proxyMessages()
 	return g.myOutput
