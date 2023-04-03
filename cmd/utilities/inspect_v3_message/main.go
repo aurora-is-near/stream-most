@@ -48,11 +48,17 @@ func ProtoDecode(d []byte) (*borealisproto.Message, error) {
 	return &msg, nil
 }
 
+func hashToHex(h []byte) string {
+	h2 := make([]byte, len(h)*2)
+	_ = hex.Encode(h2, h)
+	return string(h2)
+}
+
 func main() {
-	startSeq := 2524980072
+	startSeq := 0
 	for i := 0; i < 100; i++ {
 		startSeq += 1
-		file := "./out/read_v3_message_" + strconv.Itoa(startSeq) + ".out"
+		file := "./out/local/read_v3_message_" + strconv.Itoa(startSeq) + ".out"
 		logrus.Info("Reading ", file)
 		fileReader, err := os.Open(file)
 		defer fileReader.Close()
@@ -74,12 +80,10 @@ func main() {
 		switch msgT := msg.Payload.(type) {
 		case *borealisproto.Message_NearBlockHeader:
 			fmt.Println("NearBlockHeader")
-			h := msgT.NearBlockHeader.GetHeader().H256Hash
-			h2 := make([]byte, len(h)*2)
+			hash := hashToHex(msgT.NearBlockHeader.GetHeader().H256Hash)
+			prevHash := hashToHex(msgT.NearBlockHeader.GetHeader().H256PrevHash)
 
-			_ = hex.Encode(h2, h)
-
-			fmt.Printf("block hash %s, chunks %v\n", string(h2), msgT.NearBlockHeader.Header.ChunkMask)
+			fmt.Printf("block hash %s\nprev hash %s\nchunks %v\n", hash, prevHash, msgT.NearBlockHeader.Header.ChunkMask)
 		case *borealisproto.Message_NearBlockShard:
 			fmt.Println("NearBlockShard")
 			h := msgT.NearBlockShard.GetHeader().Header.H256Hash

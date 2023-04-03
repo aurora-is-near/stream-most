@@ -38,7 +38,7 @@ func ProtoToMessage(d []byte) (interface{}, error) {
 
 	switch msgT := decoded.Payload.(type) {
 	case *borealisproto.Message_NearBlockHeader:
-		return messages.NewBlockAnnouncement(msgT), nil
+		return messages.NewBlockAnnouncementV3(msgT), nil
 	case *borealisproto.Message_NearBlockShard:
 		return messages.NewBlockShard(msgT), nil
 	}

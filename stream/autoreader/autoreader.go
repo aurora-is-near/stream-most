@@ -3,17 +3,17 @@ package autoreader
 import (
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/reader"
-	"github.com/aurora-is-near/stream-most/stream/stream"
+	"github.com/sirupsen/logrus"
 	"log"
 	"sync"
 	"time"
 )
 
-var ConnectMockStream = stream.Connect
-
 type AutoReader struct {
-	Stream          *stream.Options
-	Reader          *reader.Options
+	*logrus.Entry
+
+	streamOpts      *stream.Options
+	readerOpts      *reader.Options
 	ReconnectWaitMs uint
 
 	output chan *reader.Output
@@ -21,24 +21,47 @@ type AutoReader struct {
 	wg     sync.WaitGroup
 }
 
-func (sw *AutoReader) Start(startSeq uint64) {
-	sw.output = make(chan *reader.Output)
-	sw.stop = make(chan struct{})
-	sw.wg.Add(1)
-	go sw.run(startSeq)
+func NewAutoReader(startSeq uint64, streamOptions *stream.Options) *AutoReader {
+	ar := &AutoReader{
+		Entry: logrus.New().
+			WithField("component", "autoreader").
+			WithField("stream", streamOptions.Stream),
+		streamOpts: streamOptions,
+	}
+
+	ar.start(startSeq)
+	return ar
 }
 
-func (sc *AutoReader) Output() chan *reader.Output {
-	return sc.output
+func (ar *AutoReader) start(startSeq uint64) {
+	ar.output = make(chan *reader.Output)
+	ar.stop = make(chan struct{})
+	ar.wg.Add(1)
+	go ar.run(startSeq)
 }
 
-func (sw *AutoReader) Stop() {
-	close(sw.stop)
-	sw.wg.Wait()
+func (ar *AutoReader) Output() chan *reader.Output {
+	return ar.output
 }
 
-func (sw *AutoReader) run(nextSeq uint64) {
-	defer sw.wg.Done()
+func (ar *AutoReader) Stop() {
+	close(ar.stop)
+	ar.wg.Wait()
+}
+
+func (ar *AutoReader) newStream() (stream.Interface, error) {
+	if ar.streamOpts.ShouldFake {
+		if ar.streamOpts.FakeStream != nil {
+			return ar.streamOpts.FakeStream, nil
+		} else {
+			return defaultFakeStreamOpener(ar.streamOpts), nil
+		}
+	}
+	return stream.Connect(ar.streamOpts)
+}
+
+func (ar *AutoReader) run(nextSeq uint64) {
+	defer ar.wg.Done()
 
 	var err error
 	var s stream.Interface
@@ -50,7 +73,7 @@ func (sw *AutoReader) run(nextSeq uint64) {
 			r = nil
 		}
 		if s != nil {
-			s.Disconnect()
+			_ = s.Disconnect()
 			s = nil
 		}
 	}
@@ -59,17 +82,17 @@ func (sw *AutoReader) run(nextSeq uint64) {
 	connectionProblem := false
 	for {
 		select {
-		case <-sw.stop:
+		case <-ar.stop:
 			return
 		default:
 		}
 
 		if connectionProblem {
 			disconnect()
-			log.Printf("Waiting for %vms before reconnection...", sw.ReconnectWaitMs)
-			timer := time.NewTimer(time.Millisecond * time.Duration(sw.ReconnectWaitMs))
+			log.Printf("Waiting for %vms before reconnection...", ar.ReconnectWaitMs)
+			timer := time.NewTimer(time.Millisecond * time.Duration(ar.ReconnectWaitMs))
 			select {
-			case <-sw.stop:
+			case <-ar.stop:
 				timer.Stop()
 				return
 			case <-timer.C:
@@ -79,7 +102,7 @@ func (sw *AutoReader) run(nextSeq uint64) {
 
 		if s == nil || r == nil {
 			disconnect()
-			s, err = ConnectMockStream(sw.Stream)
+			s, err = ar.newStream()
 			if err != nil {
 				log.Printf("Can't connect stream: %v", err)
 				connectionProblem = true
@@ -87,12 +110,12 @@ func (sw *AutoReader) run(nextSeq uint64) {
 			}
 
 			select {
-			case <-sw.stop:
+			case <-ar.stop:
 				return
 			default:
 			}
 
-			r, err = reader.Start(sw.Reader, s, nextSeq, 0)
+			r, err = reader.Start(ar.readerOpts, s, nextSeq, 0)
 			if err != nil {
 				log.Printf("Can't start reader: %v", err)
 				connectionProblem = true
@@ -101,22 +124,22 @@ func (sw *AutoReader) run(nextSeq uint64) {
 		}
 
 		select {
-		case <-sw.stop:
+		case <-ar.stop:
 			return
 		default:
 		}
 
 		select {
-		case <-sw.stop:
+		case <-ar.stop:
 			return
 		case out, ok := <-r.Output():
 			if !ok {
-				log.Printf("Reader was stopped for some reason")
+				log.Printf("readerOpts was stopped for some reason")
 				connectionProblem = true
 				continue
 			}
 			if out.Error != nil {
-				log.Printf("Reader error: %v", out.Error)
+				log.Printf("readerOpts error: %v", out.Error)
 				connectionProblem = true
 				continue
 			}
@@ -126,9 +149,9 @@ func (sw *AutoReader) run(nextSeq uint64) {
 				continue
 			}
 			select {
-			case <-sw.stop:
+			case <-ar.stop:
 				return
-			case sw.output <- out:
+			case ar.output <- out:
 			}
 			nextSeq++
 		}

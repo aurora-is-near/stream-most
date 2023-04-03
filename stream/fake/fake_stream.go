@@ -10,6 +10,7 @@ import (
 	"github.com/aurora-is-near/stream-most/u"
 	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
+	"testing"
 	"time"
 )
 
@@ -96,6 +97,38 @@ func (s *Stream) Add(msgs ...messages.NatsMessage) {
 	}
 }
 
+func (s *Stream) ExpectExactly(t *testing.T, msgs ...messages.NatsMessage) {
+	if len(msgs) != len(s.stream) {
+		t.Errorf("Different count of messages. Expected: %d, found: %d", len(msgs), len(s.stream))
+		return
+	}
+
+	for i := 0; i < len(msgs); i++ {
+		expected := msgs[i]
+		found := s.stream[i]
+		if expected.GetType() != found.GetType() {
+			t.Errorf("Different message types. Expected: %s, found: %s", expected.GetType(), found.GetType())
+		}
+		if expected.GetSequence() != found.GetSequence() {
+			t.Errorf("Different message sequences. Expected: %d, found: %d", expected.GetSequence(), found.GetSequence())
+		}
+		if expected.GetBlock().Hash != found.GetBlock().Hash {
+			t.Errorf("Different block hashes. Expected: %s, found: %s", expected.GetBlock().Hash, found.GetBlock().Hash)
+		}
+		if expected.GetBlock().Height != found.GetBlock().Height {
+			t.Errorf("Different block heights. Expected: %d, found: %d", expected.GetBlock().Height, found.GetBlock().Height)
+		}
+		if expected.GetBlock().PrevHash != found.GetBlock().PrevHash {
+			t.Errorf("Different block prev hashes. Expected: %s, found: %s", expected.GetBlock().PrevHash, found.GetBlock().PrevHash)
+		}
+		if expected.IsShard() {
+			if expected.GetShard().ShardID != found.GetShard().ShardID {
+				t.Errorf("Different shard numbers. Expected: %d, found: %d", expected.GetShard().ShardID, found.GetShard().ShardID)
+			}
+		}
+	}
+}
+
 func (s *Stream) Write(data []byte, header nats.Header, publishAckWait nats.AckWait) (*nats.PubAck, error) {
 	seq := uint64(1)
 	if len(s.stream) != 0 {
@@ -130,7 +163,7 @@ func (s *Stream) Write(data []byte, header nats.Header, publishAckWait nats.AckW
 
 	switch k := message.Payload.(type) {
 	case *borealisproto.Message_NearBlockHeader:
-		m.Announcement = messages.NewBlockAnnouncement(k)
+		m.Announcement = messages.NewBlockAnnouncementV3(k)
 	case *borealisproto.Message_NearBlockShard:
 		m.Shard = messages.NewBlockShard(k)
 	}
@@ -201,5 +234,9 @@ func NewStream() *Stream {
 }
 
 func NewFakeStream() stream.Interface {
+	return NewStream()
+}
+
+func NewFakeStreamWithOptions(_ *stream.Options) stream.Interface {
 	return NewStream()
 }

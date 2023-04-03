@@ -1,11 +1,11 @@
 package stream_seek
 
 import (
-	"errors"
 	"github.com/aurora-is-near/stream-most/domain/formats/v3"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/nats-io/nats.go"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -113,7 +113,7 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint64, error) {
 	info, _, err := p.stream.GetInfo(0)
 	if err != nil {
-		return 0, err
+		return 0, errors.Wrap(err, "cannot get stream info")
 	}
 
 	if to == 0 {
@@ -140,12 +140,12 @@ func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint6
 	for seq := from; seq <= to; seq++ {
 		d, err := p.stream.Get(seq)
 		if err != nil {
-			return 0, err
+			return 0, errors.Wrap(err, "cannot get message at the given sequence")
 		}
 
 		message, err := v3.ProtoToMessage(d.Data)
 		if err != nil {
-			return 0, err
+			return 0, errors.Wrap(err, "cannot decode message at the given sequence")
 		}
 
 		switch message.(type) {

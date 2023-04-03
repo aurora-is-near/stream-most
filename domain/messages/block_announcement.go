@@ -15,7 +15,7 @@ type BlockAnnouncement struct {
 	ParticipatingShardsMap []bool
 }
 
-func NewBlockAnnouncement(parent *borealisproto.Message_NearBlockHeader) *BlockAnnouncement {
+func NewBlockAnnouncementV3(parent *borealisproto.Message_NearBlockHeader) *BlockAnnouncement {
 	header := parent.NearBlockHeader.GetHeader()
 	return &BlockAnnouncement{
 		Parent: parent,

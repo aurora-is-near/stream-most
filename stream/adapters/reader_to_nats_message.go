@@ -22,7 +22,7 @@ func ReaderOutputToNatsMessages(input <-chan *reader.Output) chan messages.Abstr
 				in <- messages.NatsMessage{
 					Msg:          k.Msg,
 					Metadata:     k.Metadata,
-					Announcement: messages.NewBlockAnnouncement(msgT),
+					Announcement: messages.NewBlockAnnouncementV3(msgT),
 				}
 			case *borealisproto.Message_NearBlockShard:
 				in <- messages.NatsMessage{

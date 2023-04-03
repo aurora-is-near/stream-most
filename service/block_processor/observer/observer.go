@@ -3,9 +3,10 @@ package observer
 type EventType string
 
 var (
-	NewAnnouncement EventType = "new_announcement"
-	NewShard        EventType = "new_shard"
-	RescueNeeded    EventType = "rescue_needed"
+	NewAnnouncement            EventType = "new_announcement"
+	NewShard                   EventType = "new_shard"
+	RescueNeeded               EventType = "rescue_needed"
+	BlockAnnouncementDuplicate EventType = "block_announcement_duplicate"
 )
 
 type Observer struct {

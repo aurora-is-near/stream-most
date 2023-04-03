@@ -141,6 +141,10 @@ func (n *NearV3NoSorting) processShard(msg messages.AbstractNatsMessage) {
 	n.shardsCompleteForCurrentBlock[msg.GetShard().ShardID] = true
 }
 
+func (n *NearV3NoSorting) Error() error {
+	return nil
+}
+
 func NewNearV3NoSorting(seeker Seeker) *NearV3NoSorting {
 	return &NearV3NoSorting{
 		seeker:         seeker,

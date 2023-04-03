@@ -130,7 +130,7 @@ func newStream(options *Options) (Interface, error) {
 		curInfo := info
 		for curInfo.Config.Mirror != nil {
 			mirrorName := curInfo.Config.Mirror.Name
-			s.Info("Stream '%s' is mirrored from stream '%s', getting it's info...", curInfo.Config.Name, mirrorName)
+			s.Info("streamOpts '%s' is mirrored from stream '%s', getting it's info...", curInfo.Config.Name, mirrorName)
 			curInfo, err = s.js.StreamInfo(mirrorName, s.requestWait)
 			if err != nil {
 				s.Info("unable to get stream '%s' info: %v", mirrorName, err)

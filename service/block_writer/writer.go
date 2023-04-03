@@ -89,6 +89,9 @@ func (w *Writer) enrichHeaders(message messages.AbstractNatsMessage, header nats
 		uniqueId = fmt.Sprintf("%d:%d", message.GetBlock().Height, message.GetShard().ShardID)
 	}
 
+	if header == nil {
+		header = make(nats.Header)
+	}
 	header.Add(nats.MsgIdHdr, uniqueId)
 	return header
 }

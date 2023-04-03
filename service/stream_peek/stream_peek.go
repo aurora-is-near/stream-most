@@ -72,8 +72,8 @@ func (p *StreamPeek) GetTip() (messages.AbstractNatsMessage, error) {
 	return nil, ErrCorruptedTip
 }
 
-// GetTipHeight returns the last announced block'u height.
-// Unlike the old-format stream-bridge'u peeking, this one doesn't return height
+// GetTipHeight returns the last announced block's height.
+// Unlike the old-format stream-bridge's peeking, this one doesn't return height
 // of a last fully written block, but the height of the last block announcement.
 // Hence, it can still miss some shard-blocks yet.
 func (p *StreamPeek) GetTipHeight() (uint64, error) {

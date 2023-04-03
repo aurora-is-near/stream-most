@@ -6,6 +6,7 @@ import (
 )
 
 type Driver interface {
+	Error() error
 	Bind(input chan messages.AbstractNatsMessage, output chan messages.AbstractNatsMessage)
 	BindObserver(observer *observer.Observer)
 	Run()

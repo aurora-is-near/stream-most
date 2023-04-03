@@ -148,5 +148,6 @@ func NewSimpleBlockShard(shardsMap []bool, height uint64, hash string, prevHash 
 			PrevHash: prevHash,
 			Height:   height,
 		},
+		ShardID: uint8(shardId),
 	}
 }
