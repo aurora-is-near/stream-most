@@ -52,7 +52,7 @@ func (w *Writer) Write(ctx context.Context, msg messages.AbstractNatsMessage) er
 			return ErrCancelled
 		}
 	}
-	return nil
+	return lastError
 }
 
 func (w *Writer) getTip() (messages.AbstractNatsMessage, error) {

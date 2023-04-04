@@ -2,6 +2,7 @@ package block_processor
 
 import (
 	"github.com/aurora-is-near/stream-most/domain/messages"
+	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/near_v3_nosort"
 	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
 	"github.com/aurora-is-near/stream-most/service/fakes"
 	"github.com/aurora-is-near/stream-most/service/stream_seek"

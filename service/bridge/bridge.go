@@ -14,8 +14,8 @@ import (
 )
 
 type Bridge struct {
-	Input  *stream.Options
-	Output *stream.Options
+	Input  stream.Interface
+	Output stream.Interface
 	Reader *reader.Options
 
 	InputStartSequence uint64
@@ -24,19 +24,8 @@ type Bridge struct {
 }
 
 func (b *Bridge) Run() error {
-	// First, connect to both streams
-	inputStream, err := stream.Connect(b.Input)
-	if err != nil {
-		return errors.Wrap(err, "cannot connect the input stream")
-	}
-
-	outputStream, err := stream.Connect(b.Output)
-	if err != nil {
-		return errors.Wrap(err, "cannot connect the output stream")
-	}
-
 	// Determine height on the output stream
-	height, err := stream_peek.NewStreamPeek(outputStream).GetTipHeight()
+	height, err := stream_peek.NewStreamPeek(b.Output).GetTipHeight()
 	if err != nil {
 		return errors.Wrap(err, "cannot determine the height of the output stream")
 	}
@@ -48,17 +37,17 @@ func (b *Bridge) Run() error {
 
 	if height == 0 {
 		// Output stream is empty, we'll start at the first block announcement found starting from InputStartSequence
-		startSequence, err = stream_seek.NewStreamSeek(inputStream).
+		startSequence, err = stream_seek.NewStreamSeek(b.Input).
 			SeekFirstAnnouncementBetween(b.InputStartSequence, b.InputEndSequence)
 	} else {
-		startSequence, err = stream_seek.NewStreamSeek(inputStream).
+		startSequence, err = stream_seek.NewStreamSeek(b.Input).
 			SeekAnnouncementWithHeightBelow(height, b.InputStartSequence, b.InputEndSequence)
 	}
 	if err != nil {
 		return errors.Wrap(err, "cannot determine the best place to start reading from the input stream")
 	}
 
-	rdr, err := reader.Start(b.Reader, inputStream, startSequence, b.InputEndSequence)
+	rdr, err := reader.Start(b.Reader, b.Input, startSequence, b.InputEndSequence)
 	if err != nil {
 		return errors.Wrap(err, "cannot start the reader")
 	}
@@ -67,8 +56,8 @@ func (b *Bridge) Run() error {
 	// Create a block writer
 	writer := block_writer.NewWriter(
 		block_writer.NewOptions().WithDefaults().Validated(),
-		outputStream,
-		stream_peek.NewStreamPeek(outputStream),
+		b.Output,
+		stream_peek.NewStreamPeek(b.Output),
 	)
 
 	// Pass messages through the block processor, and write them out
@@ -91,11 +80,11 @@ func (b *Bridge) Run() error {
 	return nil
 }
 
-func NewBridge(driver drivers.Driver, inputOpts, outputOpts *stream.Options, readerOpts *reader.Options, from, to uint64) *Bridge {
+func NewBridge(driver drivers.Driver, input, output stream.Interface, readerOpts *reader.Options, from, to uint64) *Bridge {
 	return &Bridge{
 		Driver:             driver,
-		Input:              inputOpts,
-		Output:             outputOpts,
+		Input:              input,
+		Output:             output,
 		Reader:             readerOpts,
 		InputStartSequence: from,
 		InputEndSequence:   to,

@@ -108,6 +108,98 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 	return 0, ErrNotFound
 }
 
+func (p *StreamSeek) SeekLastFullyWrittenBlock() (
+	announcement messages.AbstractNatsMessage,
+	shards []messages.AbstractNatsMessage,
+	err error,
+) {
+	info, _, err := p.stream.GetInfo(0)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if info.State.LastSeq == 0 {
+		return nil, nil, errors.New("empty stream")
+	}
+
+	upperBound := info.State.LastSeq
+	lowerBound := info.State.FirstSeq
+	if upperBound-lowerBound > 100 {
+		lowerBound = upperBound - 100
+	}
+	if lowerBound == 0 {
+		lowerBound = 1
+	}
+
+	var shardsStash []messages.AbstractNatsMessage
+
+	for seq := upperBound; seq >= lowerBound; seq-- {
+		msg, err := p.stream.Get(seq)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// We need to inspect the message to see its height
+		message, err := v3.ProtoToMessage(msg.Data)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		switch m := message.(type) {
+		case *messages.BlockAnnouncement:
+			countOfShards := 0
+			for _, v := range m.ParticipatingShardsMap {
+				if v {
+					countOfShards++
+				}
+			}
+
+			if len(shardsStash) != countOfShards {
+				shardsStash = nil
+				break
+			}
+
+			// Reverse the stash
+			ln := len(shardsStash)
+			for i := 0; i < ln/2; i++ {
+				j := ln - i - 1
+				shardsStash[i], shardsStash[j] = shardsStash[j], shardsStash[i]
+			}
+
+			return messages.NatsMessage{
+				Msg: &nats.Msg{
+					Subject: msg.Subject,
+					Header:  msg.Header,
+					Data:    msg.Data,
+				},
+				Metadata: &nats.MsgMetadata{
+					Sequence: nats.SequencePair{
+						Stream: msg.Sequence,
+					},
+				},
+				Announcement: m,
+			}, shardsStash, nil
+		case *messages.BlockShard:
+			// We found some shard, stash it
+			shardsStash = append(shardsStash, messages.NatsMessage{
+				Msg: &nats.Msg{
+					Subject: msg.Subject,
+					Header:  msg.Header,
+					Data:    msg.Data,
+				},
+				Metadata: &nats.MsgMetadata{
+					Sequence: nats.SequencePair{
+						Stream: msg.Sequence,
+					},
+				},
+				Shard: m,
+			})
+		}
+	}
+
+	return nil, nil, ErrNotFound
+}
+
 // SeekFirstAnnouncementBetween returns the sequence number of the first block announcement which sequence number
 // is between from and to. Both from and to are given in sequence numbers and are used to limit the search range.
 func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint64, error) {

@@ -3,7 +3,6 @@ package bridge
 import (
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/near_v3"
 	"github.com/aurora-is-near/stream-most/service/fakes"
-	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/fake"
 	"github.com/aurora-is-near/stream-most/stream/reader"
 	"github.com/aurora-is-near/stream-most/u"
@@ -44,8 +43,8 @@ func TestBridge(t *testing.T) {
 
 	bridge := NewBridge(
 		driver,
-		&stream.Options{ShouldFake: true, FakeStream: inputStream},
-		&stream.Options{ShouldFake: true, FakeStream: outputStream},
+		inputStream,
+		outputStream,
 		&reader.Options{},
 		1, 0,
 	)
