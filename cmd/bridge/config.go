@@ -12,5 +12,5 @@ type Config struct {
 	InputStartSequence uint64
 	InputEndSequence   uint64
 
-	RestartAttempts uint64
+	ToleranceWindow uint64
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/aurora-is-near/stream-most/service/stream_seek"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/reader"
+	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -27,7 +28,13 @@ func (b *Bridge) Run() error {
 	// Determine height on the output stream
 	height, err := stream_peek.NewStreamPeek(b.Output).GetTipHeight()
 	if err != nil {
-		return errors.Wrap(err, "cannot determine the height of the output stream")
+		logrus.Error(errors.Wrap(err, "cannot determine the height of the output stream"))
+		// TODO: wrap to a custom error type
+		if errors.Is(err, nats.ErrMsgNotFound) {
+			height = 0
+		} else {
+			return err
+		}
 	}
 
 	logrus.Infof("Starting with height of %d", height)
@@ -35,6 +42,7 @@ func (b *Bridge) Run() error {
 	// Determine the best place to start reading from the input stream
 	var startSequence uint64
 
+	logrus.Info("Determining the best sequence to start reading from the input stream...")
 	if height == 0 {
 		// Output stream is empty, we'll start at the first block announcement found starting from InputStartSequence
 		startSequence, err = stream_seek.NewStreamSeek(b.Input).
@@ -46,6 +54,7 @@ func (b *Bridge) Run() error {
 	if err != nil {
 		return errors.Wrap(err, "cannot determine the best place to start reading from the input stream")
 	}
+	logrus.Infof("Starting from the sequence %d", startSequence)
 
 	rdr, err := reader.Start(b.Reader, b.Input, startSequence, b.InputEndSequence)
 	if err != nil {
@@ -66,7 +75,7 @@ func (b *Bridge) Run() error {
 	for results := range processor.Run() {
 		err := writer.Write(context.Background(), results)
 		if err != nil {
-			logrus.Error(err)
+			logrus.Errorf("Error while writing a message to output stream: %v", err)
 		}
 	}
 
@@ -76,7 +85,7 @@ func (b *Bridge) Run() error {
 		return err
 	}
 
-	logrus.Info("Finished!")
+	logrus.Info("Finished without error")
 	return nil
 }
 

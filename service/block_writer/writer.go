@@ -8,6 +8,7 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/nats-io/nats.go"
+	"github.com/pkg/errors"
 	"strconv"
 	"time"
 )
@@ -57,6 +58,10 @@ func (w *Writer) Write(ctx context.Context, msg messages.AbstractNatsMessage) er
 
 func (w *Writer) getTip() (messages.AbstractNatsMessage, error) {
 	tip, err := w.TipCached.GetTip()
+	if err != nil {
+		return nil, err
+	}
+
 	if w.lastWritten != nil && tip.GetBlock().Height < w.lastWritten.GetBlock().Height {
 		return w.lastWritten, nil
 	}
@@ -66,7 +71,11 @@ func (w *Writer) getTip() (messages.AbstractNatsMessage, error) {
 func (w *Writer) validate(block *blocks.AbstractBlock) error {
 	tip, err := w.getTip()
 	if err != nil {
-		return err
+		if errors.Is(err, nats.ErrMsgNotFound) {
+			// Output stream is empty, so we can write any block
+			return nil
+		}
+		return errors.Wrap(err, "cannot determine tip block for the output stream")
 	}
 
 	if tip != nil {

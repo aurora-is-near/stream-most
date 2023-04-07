@@ -1,42 +1,29 @@
 package main
 
 import (
-	"fmt"
-	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/near_v3"
+	"github.com/aurora-is-near/stream-most/configs"
+	"github.com/aurora-is-near/stream-most/monitor"
+	"github.com/aurora-is-near/stream-most/service/block_processor/drivers"
 	"github.com/aurora-is-near/stream-most/service/bridge"
-	"github.com/aurora-is-near/stream-most/service/stream_seek"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 	"os"
 )
 
-func run(config Config) {
+func run(config Config) error {
 	input, err := stream.Connect(config.Input)
 	if err != nil {
 		logrus.Error(err)
-		return
+		return err
 	}
 
 	output, err := stream.Connect(config.Output)
 	if err != nil {
 		logrus.Error(err)
-		return
+		return err
 	}
 
-	var lastWrittenHash *string
-	lastWrittenBlock, _, err := stream_seek.NewStreamSeek(output).SeekLastFullyWrittenBlock()
-	if err != stream_seek.ErrNotFound {
-		lastWrittenHash = &lastWrittenBlock.GetBlock().Hash
-	}
-
-	driver := near_v3.NewNearV3((&near_v3.Options{
-		StuckTolerance:          5,
-		StuckRecovery:           true,
-		StuckRecoveryWindowSize: 10,
-		LastWrittenBlockHash:    lastWrittenHash,
-		BlocksCacheSize:         10,
-	}).Validated())
+	driver := drivers.Infer(drivers.NearV3, input, output)
 
 	b := bridge.NewBridge(
 		driver,
@@ -46,33 +33,26 @@ func run(config Config) {
 		config.InputEndSequence,
 	)
 	if err := b.Run(); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+		return err
 	}
+	return nil
 }
 
 func main() {
-	configFile := "cmd/bridge/config.json"
-	if len(os.Args) > 1 {
-		configFile = os.Args[1]
-	}
-
-	viper.SetConfigFile(configFile)
-	viper.AddConfigPath(".")
-	viper.SetConfigType("json")
-	if err := viper.ReadInConfig(); err != nil {
-		panic(err)
-	}
-
 	config := Config{}
-	if err := viper.Unmarshal(&config); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "Error parsing config file: %s\n", err)
-		os.Exit(1)
-	}
-	config.Input.Nats.Name = "streammost"
-	config.Output.Nats.Name = "streammost"
+	configs.ReadTo("cmd/bridge/config.json", &config)
+	logrus.Info("%v\n", config)
+	config.Input.Nats.Name = "stream-most"
+	config.Output.Nats.Name = "stream-most"
 
-	for i := uint64(0); i < config.RestartAttempts; i++ {
-		run(config)
+	go monitor.NewMetricsServer().Serve(true)
+
+	for i := uint64(0); i < config.ToleranceWindow; i++ {
+		err := run(config)
+		if err != nil {
+			logrus.Error(err)
+			continue
+		}
 	}
-	os.Exit(1)
+	os.Exit(0)
 }

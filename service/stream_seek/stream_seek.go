@@ -6,6 +6,8 @@ import (
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+	"io"
 )
 
 var (
@@ -65,18 +67,18 @@ func (p *StreamSeek) SeekShards(from, to uint64, forBlock *string) ([]messages.A
 func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore uint64, notAfter uint64) (uint64, error) {
 	info, _, err := p.stream.GetInfo(0)
 	if err != nil {
-		return 0, err
+		return 0, p.wrapNatsError(err)
 	}
 
 	if info.State.LastSeq == 0 {
-		return 0, ErrNotFound
+		return 0, p.wrapNatsError(ErrNotFound)
 	}
 
 	if notBefore > info.State.LastSeq {
 		return 0, ErrNotFound
 	}
 
-	// To not cross the stream'u boundaries
+	// To not cross the stream's boundaries
 	if notAfter > info.State.LastSeq {
 		notAfter = info.State.LastSeq
 	}
@@ -86,23 +88,76 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 		notAfter = info.State.LastSeq
 	}
 
-	for seq := notAfter; seq >= notBefore; seq-- {
+	// Binary search :)
+	// L included in the range of search, R excluded
+	l := notBefore
+	r := notAfter + 1
+	shift := uint64(0)
+	for l+1 < r {
+		seq := (l+r)/2 + shift
+		if seq > notAfter {
+			r = (l + r) / 2
+			shift = 0
+			continue
+		}
+
+		logrus.Infof("Searching at sequence %d, l %d, r %d, shift %d...", seq, l, r, shift)
+
 		d, err := p.stream.Get(seq)
 		if err != nil {
-			return 0, err
+			if errors.Is(err, nats.ErrMsgNotFound) {
+				l = (l + r) / 2
+				shift = 0
+				continue
+			}
+			if errors.Is(err, io.EOF) {
+				r = (l + r) / 2
+				shift = 0
+				continue
+			}
+			return 0, p.wrapNatsError(err)
+		}
+
+		if len(d.Data) == 0 {
+			// Empty message :(
+			shift += 1
+			continue
 		}
 
 		message, err := v3.ProtoToMessage(d.Data)
 		if err != nil {
+			logrus.Info("Corrupted message")
 			return 0, err
 		}
 
 		switch msg := message.(type) {
 		case *messages.BlockAnnouncement:
+			shift = 0
 			if msg.Block.Height < height {
-				return seq, nil
+				l = (l + r) / 2
+			} else {
+				r = (l + r) / 2
 			}
+		case *messages.BlockShard:
+			shift += 1
 		}
+	}
+
+	// If we found the message, it's at L
+	d, err := p.stream.Get(l)
+	if err != nil {
+		return 0, p.wrapNatsError(err)
+	}
+
+	message, err := v3.ProtoToMessage(d.Data)
+	if err != nil {
+		logrus.Info("Corrupted message")
+		return 0, err
+	}
+
+	switch message.(type) {
+	case *messages.BlockAnnouncement:
+		return l, nil
 	}
 
 	return 0, ErrNotFound
@@ -115,7 +170,7 @@ func (p *StreamSeek) SeekLastFullyWrittenBlock() (
 ) {
 	info, _, err := p.stream.GetInfo(0)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, p.wrapNatsError(err)
 	}
 
 	if info.State.LastSeq == 0 {
@@ -136,7 +191,7 @@ func (p *StreamSeek) SeekLastFullyWrittenBlock() (
 	for seq := upperBound; seq >= lowerBound; seq-- {
 		msg, err := p.stream.Get(seq)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, p.wrapNatsError(err)
 		}
 
 		// We need to inspect the message to see its height
@@ -247,6 +302,14 @@ func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint6
 	}
 
 	return 0, ErrNotFound
+}
+
+func (p *StreamSeek) wrapNatsError(err error) error {
+	if errors.Is(err, nats.ErrMsgNotFound) {
+		return ErrNotFound
+	}
+
+	return errors.Wrap(err, "stream seek: ")
 }
 
 func NewStreamSeek(streamInterface stream.Interface) *StreamSeek {

@@ -1,5 +1,7 @@
 package near_v3_nosort
 
+// DEPRECATED: use near_v3 instead
+
 import (
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
@@ -12,7 +14,7 @@ type Seeker interface {
 	SeekShards(from, to uint64, forBlock *string) ([]messages.AbstractNatsMessage, error)
 }
 
-// NearV3NoSorting this driver is the same as NearV3, but it does not sort the shards.
+// DEPRECATED: this driver is the same as NearV3, but it does not sort the shards.
 type NearV3NoSorting struct {
 	observer *observer.Observer
 
@@ -145,6 +147,7 @@ func (n *NearV3NoSorting) Error() error {
 	return nil
 }
 
+// NewNearV3NoSorting this driver is deprecated, use near_v3 instead
 func NewNearV3NoSorting(seeker Seeker) *NearV3NoSorting {
 	return &NearV3NoSorting{
 		seeker:         seeker,
