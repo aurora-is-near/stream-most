@@ -52,7 +52,6 @@ func (c *NatsConnection) connect() error {
 		options = append(options, nats.UserCredentials(c.opts.Creds))
 	}
 
-	c.Info("Connecting to NATS...")
 	var err error
 	c.connection, err = nats.Connect(strings.Join(c.opts.Endpoints, ", "), options...)
 	return err

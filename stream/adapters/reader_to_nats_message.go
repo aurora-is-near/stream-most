@@ -5,6 +5,7 @@ import (
 	v3 "github.com/aurora-is-near/stream-most/domain/formats/v3"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream/reader"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -12,9 +13,19 @@ func ReaderOutputToNatsMessages(input <-chan *reader.Output) chan messages.Abstr
 	in := make(chan messages.AbstractNatsMessage, 1024)
 	go func() {
 		for k := range input {
+			if k.Error != nil {
+				logrus.Errorf("Reader adapter: %v", k.Error)
+				continue
+			}
 			message, err := v3.ProtoDecode(k.Msg.Data)
 			if err != nil {
-				logrus.Error(err)
+				logrus.Error(errors.Wrap(err, "failed to decode message: "))
+				continue
+			}
+
+			if message.Payload == nil {
+				logrus.Error("Message without a payload!")
+				continue
 			}
 
 			switch msgT := message.Payload.(type) {

@@ -93,6 +93,7 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 	l := notBefore
 	r := notAfter + 1
 	shift := uint64(0)
+
 	for l+1 < r {
 		seq := (l+r)/2 + shift
 		if seq > notAfter {
@@ -132,6 +133,7 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 
 		switch msg := message.(type) {
 		case *messages.BlockAnnouncement:
+			logrus.Infof("Found block announcement at seq %d", seq)
 			shift = 0
 			if msg.Block.Height < height {
 				l = (l + r) / 2
@@ -143,21 +145,28 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 		}
 	}
 
-	// If we found the message, it's at L
-	d, err := p.stream.Get(l)
-	if err != nil {
-		return 0, p.wrapNatsError(err)
-	}
+	// TODO: scan a bit to the left in case we found a block announcement with shift
 
-	message, err := v3.ProtoToMessage(d.Data)
-	if err != nil {
-		logrus.Info("Corrupted message")
-		return 0, err
-	}
+	logrus.Info(l, r)
 
-	switch message.(type) {
-	case *messages.BlockAnnouncement:
-		return l, nil
+	for shift := uint64(0); shift < 10; shift++ {
+		d, err := p.stream.Get(l + shift)
+		if err != nil {
+			logrus.Error(errors.Wrap(err, "cannot read message:"))
+			continue
+		}
+
+		message, err := v3.ProtoToMessage(d.Data)
+		if err != nil {
+			logrus.Error(errors.Wrap(err, "corrupted message:"))
+			continue
+		}
+
+		switch msg := message.(type) {
+		case *messages.BlockAnnouncement:
+			logrus.Infof("Found block announcement with height %d at sequence %d", msg.Block.Height, l)
+			return l + shift, nil
+		}
 	}
 
 	return 0, ErrNotFound
@@ -275,6 +284,10 @@ func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint6
 		return 0, ErrNotFound
 	}
 
+	if info.State.FirstSeq > from {
+		from = info.State.FirstSeq
+	}
+
 	if from > info.State.LastSeq {
 		return 0, ErrNotFound
 	}
@@ -284,14 +297,26 @@ func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint6
 		to = info.State.LastSeq
 	}
 
+	logrus.Info(from, to)
+
 	for seq := from; seq <= to; seq++ {
 		d, err := p.stream.Get(seq)
 		if err != nil {
+			if errors.Is(err, nats.ErrMsgNotFound) {
+				logrus.Warn("Stream is deleting messages too fast, skipping 5%")
+				seq += (to - from) / 20
+				continue
+			}
 			return 0, errors.Wrap(err, "cannot get message at the given sequence")
 		}
 
 		message, err := v3.ProtoToMessage(d.Data)
 		if err != nil {
+			if errors.Is(err, io.EOF) {
+				// Those are truncated messages, just skip
+				logrus.Warn(errors.Wrap(err, "cannot decode message at the given sequence"))
+				continue
+			}
 			return 0, errors.Wrap(err, "cannot decode message at the given sequence")
 		}
 

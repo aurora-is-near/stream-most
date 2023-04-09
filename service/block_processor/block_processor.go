@@ -18,10 +18,10 @@ type Processor struct {
 }
 
 func (g *Processor) work() {
+	defer close(g.myOutput)
 	g.driver.BindObserver(g.Observer)
 	g.driver.Bind(g.input, g.driverOutput)
 	g.driver.Run()
-	close(g.driverOutput)
 }
 
 func (g *Processor) proxyMessages() {
@@ -35,7 +35,6 @@ func (g *Processor) proxyMessages() {
 			g.Observer.Emit(observer.NewAnnouncement, msg.GetAnnouncement())
 		}
 	}
-	close(g.myOutput)
 }
 
 func (g *Processor) Run() chan messages.AbstractNatsMessage {

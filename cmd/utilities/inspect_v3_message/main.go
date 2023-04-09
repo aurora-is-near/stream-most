@@ -55,10 +55,11 @@ func hashToHex(h []byte) string {
 }
 
 func main() {
-	startSeq := 3205829527
+	//startSeq := 3205829527
+	startSeq := 5900
 	for i := 0; i < 100; i++ {
 		startSeq += 1
-		file := "./out/prod/read_v3_message_" + strconv.Itoa(startSeq) + ".out"
+		file := "./out/local/read_v3_message_" + strconv.Itoa(startSeq) + ".out"
 		logrus.Info("Reading ", file)
 		fileReader, err := os.Open(file)
 		defer fileReader.Close()

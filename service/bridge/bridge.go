@@ -15,9 +15,10 @@ import (
 )
 
 type Bridge struct {
-	Input  stream.Interface
-	Output stream.Interface
-	Reader *reader.Options
+	Input         stream.Interface
+	Output        stream.Interface
+	WriterOptions *block_writer.Options
+	ReaderOptions *reader.Options
 
 	InputStartSequence uint64
 	InputEndSequence   uint64
@@ -56,7 +57,7 @@ func (b *Bridge) Run() error {
 	}
 	logrus.Infof("Starting from the sequence %d", startSequence)
 
-	rdr, err := reader.Start(b.Reader, b.Input, startSequence, b.InputEndSequence)
+	rdr, err := reader.Start(b.ReaderOptions, b.Input, startSequence, b.InputEndSequence)
 	if err != nil {
 		return errors.Wrap(err, "cannot start the reader")
 	}
@@ -64,7 +65,7 @@ func (b *Bridge) Run() error {
 
 	// Create a block writer
 	writer := block_writer.NewWriter(
-		block_writer.NewOptions().WithDefaults().Validated(),
+		b.WriterOptions.WithDefaults().Validated(),
 		b.Output,
 		stream_peek.NewStreamPeek(b.Output),
 	)
@@ -79,7 +80,7 @@ func (b *Bridge) Run() error {
 		}
 	}
 
-	err = b.Driver.Error()
+	err = b.Driver.FinishError()
 	if err != nil {
 		logrus.Errorf("Finished with error: %v", err)
 		return err
@@ -89,12 +90,13 @@ func (b *Bridge) Run() error {
 	return nil
 }
 
-func NewBridge(driver drivers.Driver, input, output stream.Interface, readerOpts *reader.Options, from, to uint64) *Bridge {
+func NewBridge(driver drivers.Driver, input, output stream.Interface, writerOptions *block_writer.Options, readerOpts *reader.Options, from, to uint64) *Bridge {
 	return &Bridge{
 		Driver:             driver,
 		Input:              input,
 		Output:             output,
-		Reader:             readerOpts,
+		WriterOptions:      writerOptions,
+		ReaderOptions:      readerOpts,
 		InputStartSequence: from,
 		InputEndSequence:   to,
 	}

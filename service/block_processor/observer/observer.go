@@ -7,6 +7,10 @@ var (
 	NewShard                   EventType = "new_shard"
 	RescueNeeded               EventType = "rescue_needed"
 	BlockAnnouncementDuplicate EventType = "block_announcement_duplicate"
+
+	// ErrorInData indicates that some data on the input stream is corrupted.
+	// Data on the callback is driver-specific
+	ErrorInData EventType = "error_in_data"
 )
 
 type Observer struct {

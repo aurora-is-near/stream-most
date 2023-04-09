@@ -2,19 +2,34 @@ package main
 
 import (
 	"fmt"
+	"github.com/aurora-is-near/stream-most/configs"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/jitter"
 	"github.com/aurora-is-near/stream-most/service/bridge"
-	"github.com/spf13/viper"
+	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/sirupsen/logrus"
 	"os"
 )
 
-func run(config Config) {
+func run(config Config) error {
 	driver := jitter.NewJitter(config.Jitter.Validated())
+
+	input, err := stream.Connect(config.Input)
+	if err != nil {
+		logrus.Error(err)
+		return err
+	}
+
+	output, err := stream.Connect(config.Output)
+	if err != nil {
+		logrus.Error(err)
+		return err
+	}
 
 	b := bridge.NewBridge(
 		driver,
-		config.Input,
-		config.Output,
+		input,
+		output,
+		config.Writer,
 		config.Reader,
 		config.InputStartSequence,
 		config.InputEndSequence,
@@ -22,31 +37,20 @@ func run(config Config) {
 	if err := b.Run(); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 	}
+	return nil
 }
 
 func main() {
-	configFile := "cmd/bridge/config.json"
-	if len(os.Args) > 1 {
-		configFile = os.Args[1]
-	}
-
-	viper.SetConfigFile(configFile)
-	viper.AddConfigPath(".")
-	viper.SetConfigType("json")
-	if err := viper.ReadInConfig(); err != nil {
-		panic(err)
-	}
-
 	config := Config{}
-	if err := viper.Unmarshal(&config); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "Error parsing config file: %s\n", err)
-		os.Exit(1)
-	}
-	config.Input.Nats.Name = "streammost-jitter"
-	config.Output.Nats.Name = "streammost-jitter"
+	configs.ReadTo("cmd/jitter/config.json", &config)
+	config.Input.Nats.Name = "stream-most-jitter"
+	config.Output.Nats.Name = "stream-most-jitter"
 
 	for i := uint64(0); i < config.RestartAttempts; i++ {
-		run(config)
+		err := run(config)
+		if err != nil {
+			panic(err)
+		}
 	}
 	os.Exit(1)
 }

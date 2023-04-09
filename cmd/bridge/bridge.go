@@ -28,6 +28,7 @@ func run(config Config) error {
 	b := bridge.NewBridge(
 		driver,
 		input, output,
+		config.Writer,
 		config.Reader,
 		config.InputStartSequence,
 		config.InputEndSequence,

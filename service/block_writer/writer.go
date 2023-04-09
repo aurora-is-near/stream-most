@@ -9,6 +9,7 @@ import (
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"strconv"
 	"time"
 )
@@ -37,6 +38,7 @@ func (w *Writer) Write(ctx context.Context, msg messages.AbstractNatsMessage) er
 			nats.AckWait(1*time.Second),
 		)
 		if lastError == nil {
+			logrus.Debugf("Wrote a message for a block with height %d", msg.GetBlock().Height)
 			w.lastWritten = msg
 			return nil
 		}
@@ -69,6 +71,10 @@ func (w *Writer) getTip() (messages.AbstractNatsMessage, error) {
 }
 
 func (w *Writer) validate(block *blocks.AbstractBlock) error {
+	if w.options.BypassValidation {
+		return nil
+	}
+
 	tip, err := w.getTip()
 	if err != nil {
 		if errors.Is(err, nats.ErrMsgNotFound) {

@@ -39,6 +39,7 @@ func (n *NearV3) BindObserver(observer *observer.Observer) {
 }
 
 func (n *NearV3) Run() {
+	defer close(n.output)
 	for msg := range n.input {
 		n.clock += 1
 
@@ -66,7 +67,7 @@ func (n *NearV3) Run() {
 	}
 }
 
-func (n *NearV3) Error() error {
+func (n *NearV3) FinishError() error {
 	return n.err
 }
 

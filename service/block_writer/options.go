@@ -6,6 +6,9 @@ import (
 )
 
 type Options struct {
+	// All validations (height & hash) are disabled if this is set to true
+	BypassValidation bool
+
 	PublishAckWaitMs           uint
 	MaxWriteAttempts           uint
 	WriteRetryWaitMs           uint
@@ -35,6 +38,10 @@ func (o *Options) Validated() *Options {
 	if o.TipTtl < 500*time.Millisecond {
 		logrus.Warn("[block_writer] TipTtlSeconds is too low, setting to 0.5s")
 		o.TipTtl = 500 * time.Millisecond
+	}
+
+	if o.BypassValidation {
+		logrus.Warn("[block_writer] BypassValidation is set to true, all validations are disabled!")
 	}
 
 	return o

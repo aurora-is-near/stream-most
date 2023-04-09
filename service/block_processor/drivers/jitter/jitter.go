@@ -18,7 +18,7 @@ type Jitter struct {
 	opts            *Options
 }
 
-func (j *Jitter) Error() error {
+func (j *Jitter) FinishError() error {
 	return nil
 }
 
@@ -32,6 +32,7 @@ func (j *Jitter) Bind(input chan messages.AbstractNatsMessage, output chan messa
 }
 
 func (j *Jitter) Run() {
+	defer close(j.output)
 	for msg := range j.input {
 		j.clock += 1
 

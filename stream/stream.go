@@ -100,7 +100,7 @@ func newStream(options *Options) (Interface, error) {
 		requestWait: nats.MaxWait(time.Millisecond * time.Duration(options.RequestWaitMs)),
 	}
 
-	s.Info("Connecting to NATS...")
+	s.Infof("Connecting to NATS at %v", options.Nats.Endpoints)
 	var err error
 	s.nc, err = transport.NewConnection(options.Nats.WithDefaults(), nil)
 	if err != nil {
@@ -109,7 +109,7 @@ func newStream(options *Options) (Interface, error) {
 		return nil, err
 	}
 
-	s.Info("Connecting to NATS JetStream...")
+	s.Info("Connecting to JetStream")
 	s.js, err = s.nc.Conn().JetStream(s.requestWait)
 	if err != nil {
 		s.Infof("Unable to connect to NATS JetStream: %v", err)

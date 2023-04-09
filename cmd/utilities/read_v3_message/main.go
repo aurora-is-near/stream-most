@@ -39,19 +39,20 @@ func chooseConfig(env string) *transport.Options {
 }
 
 func main() {
-	env := "prod"
+	env := "local"
 
 	connectStream, err := stream.Connect(&stream.Options{
-		Nats:          chooseConfig(env),
-		Stream:        "v3_mainnet_near_blocks",
+		Nats:   chooseConfig(env),
+		Stream: "myblocks",
+		//Stream:        "v3_mainnet_near_blocks",
 		RequestWaitMs: 5000,
-		//Stream:        "myblocks",
-		Subject: "*",
+		Subject:       "*",
 	})
 	if err != nil {
 		panic(err)
 	}
-	seq := uint64(3205829527)
+	//seq := uint64(3205829527)
+	seq := uint64(5900)
 	for i := 0; i < 100; i++ {
 		seq += 1
 
