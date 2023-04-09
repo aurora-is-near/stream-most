@@ -26,12 +26,11 @@ func run(config Config) error {
 	driver := drivers.Infer(drivers.NearV3, input, output)
 
 	b := bridge.NewBridge(
+		config.Bridge,
 		driver,
 		input, output,
 		config.Writer,
 		config.Reader,
-		config.InputStartSequence,
-		config.InputEndSequence,
 	)
 	if err := b.Run(); err != nil {
 		return err
@@ -42,7 +41,6 @@ func run(config Config) error {
 func main() {
 	config := Config{}
 	configs.ReadTo("cmd/bridge/config.json", &config)
-	logrus.Info("%v\n", config)
 	config.Input.Nats.Name = "stream-most"
 	config.Output.Nats.Name = "stream-most"
 

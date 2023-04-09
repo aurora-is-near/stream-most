@@ -15,31 +15,48 @@ import (
 )
 
 type Writer struct {
-	options      *Options
-	TipCached    *TipCached
-	outputStream stream.Interface
+	options        *Options
+	TipCached      *TipCached
+	outputStream   stream.Interface
+	lowHeightInRow uint64
 
-	lastWritten messages.AbstractNatsMessage
+	lastWritten      messages.AbstractNatsMessage
+	closed           bool
+	onCloseListeners []func(err error)
 }
 
 func (w *Writer) Write(ctx context.Context, msg messages.AbstractNatsMessage) error {
+	if w.closed {
+		return ErrClosed
+	}
+
 	block := msg.GetBlock()
 	if err := w.validate(block); err != nil {
+		w.processError(err)
 		return err
 	}
 
 	headers := w.enrichHeaders(msg, msg.GetMsg().Header)
 
 	var lastError error
+	var puback *nats.PubAck
+
 	for attempts := w.options.MaxWriteAttempts; attempts >= 1; attempts-- {
-		_, lastError = w.outputStream.Write(
+		puback, lastError = w.outputStream.Write(
 			msg.GetMsg().Data,
 			headers,
 			nats.AckWait(1*time.Second),
 		)
 		if lastError == nil {
-			logrus.Debugf("Wrote a message for a block with height %d", msg.GetBlock().Height)
 			w.lastWritten = msg
+
+			if puback.Duplicate {
+				logrus.Debugf("Duplicate message for a block with height %d", msg.GetBlock().Height)
+				return ErrDuplicate
+			}
+
+			logrus.Debugf("Wrote a message for a block with height %d", msg.GetBlock().Height)
+			w.lowHeightInRow = 0
 			return nil
 		}
 
@@ -107,8 +124,30 @@ func (w *Writer) enrichHeaders(message messages.AbstractNatsMessage, header nats
 	if header == nil {
 		header = make(nats.Header)
 	}
+	delete(header, "Nats-Expected-Stream")
 	header.Add(nats.MsgIdHdr, uniqueId)
 	return header
+}
+
+func (w *Writer) processError(err error) {
+	switch err {
+	case ErrLowHeight:
+		w.lowHeightInRow += 1
+		if w.lowHeightInRow >= w.options.LowHeightTolerance {
+			w.gracefulShutdown(ErrLowHeight)
+		}
+	}
+}
+
+func (w *Writer) gracefulShutdown(err error) {
+	w.closed = true
+	for _, listener := range w.onCloseListeners {
+		listener(err)
+	}
+}
+
+func (w *Writer) OnClose(f func(error)) {
+	w.onCloseListeners = append(w.onCloseListeners, f)
 }
 
 func NewWriter(options *Options, outputStream stream.Interface, peek TipPeeker) *Writer {

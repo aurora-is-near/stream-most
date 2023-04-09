@@ -5,6 +5,7 @@ import (
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers"
 	"github.com/aurora-is-near/stream-most/service/block_processor/metrics"
 	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
+	"github.com/sirupsen/logrus"
 )
 
 // Processor receives messages from the NATS stream,
@@ -45,6 +46,11 @@ func (g *Processor) Run() chan messages.AbstractNatsMessage {
 	go g.work()
 	go g.proxyMessages()
 	return g.myOutput
+}
+
+func (g *Processor) Kill() {
+	g.driver.Kill()
+	logrus.Info("Processor is shutting down")
 }
 
 func NewProcessor(input chan messages.AbstractNatsMessage, driver drivers.Driver) *Processor {

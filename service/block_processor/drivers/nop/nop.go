@@ -8,10 +8,16 @@ import (
 type NopDriver struct {
 	input  chan messages.AbstractNatsMessage
 	output chan messages.AbstractNatsMessage
+
+	killed bool
 }
 
 func (n *NopDriver) BindObserver(obs *observer.Observer) {
 	// not using one :)
+}
+
+func (n *NopDriver) Kill() {
+	n.killed = true
 }
 
 func (n *NopDriver) Bind(input chan messages.AbstractNatsMessage, output chan messages.AbstractNatsMessage) {
@@ -21,6 +27,9 @@ func (n *NopDriver) Bind(input chan messages.AbstractNatsMessage, output chan me
 
 func (n *NopDriver) Run() {
 	for msg := range n.input {
+		if n.killed {
+			break
+		}
 		n.output <- msg
 	}
 }

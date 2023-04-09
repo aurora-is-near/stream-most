@@ -9,6 +9,11 @@ type Options struct {
 	// All validations (height & hash) are disabled if this is set to true
 	BypassValidation bool
 
+	// How much "low height" errors in row should we receive
+	// so that we decide that we are outdated and need to restart
+	// This one considers duplicates (as indicated by NATS) as "low height" as well
+	LowHeightTolerance uint64
+
 	PublishAckWaitMs           uint
 	MaxWriteAttempts           uint
 	WriteRetryWaitMs           uint
@@ -18,6 +23,9 @@ type Options struct {
 }
 
 func (o *Options) WithDefaults() *Options {
+	if o.LowHeightTolerance == 0 {
+		o.LowHeightTolerance = 20
+	}
 	if o.PublishAckWaitMs == 0 {
 		o.PublishAckWaitMs = 5000
 	}

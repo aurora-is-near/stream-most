@@ -16,6 +16,12 @@ type Jitter struct {
 	delayedMessages *DelayedMessagesHeap
 	clock           uint64
 	opts            *Options
+
+	killed bool
+}
+
+func (j *Jitter) Kill() {
+	j.killed = true
 }
 
 func (j *Jitter) FinishError() error {
@@ -34,6 +40,10 @@ func (j *Jitter) Bind(input chan messages.AbstractNatsMessage, output chan messa
 func (j *Jitter) Run() {
 	defer close(j.output)
 	for msg := range j.input {
+		if j.killed {
+			break
+		}
+
 		j.clock += 1
 
 		if j.shouldDropout(msg) {

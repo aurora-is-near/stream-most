@@ -147,6 +147,10 @@ func (n *NearV3NoSorting) FinishError() error {
 	return nil
 }
 
+func (n *NearV3NoSorting) Kill() {
+
+}
+
 // NewNearV3NoSorting this driver is deprecated, use near_v3 instead
 func NewNearV3NoSorting(seeker Seeker) *NearV3NoSorting {
 	return &NearV3NoSorting{

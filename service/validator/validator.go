@@ -31,10 +31,7 @@ func (b *Validator) Run() error {
 		return errors.Wrap(err, "cannot get stream stats: ")
 	}
 
-	logrus.Info("Last seq in the stream: ", streamStats.State.LastSeq)
-
 	startingSequence := streamStats.State.FirstSeq
-	logrus.Info(streamStats.State.FirstSeq)
 	if b.InputStartSequence > startingSequence {
 		startingSequence = b.InputStartSequence
 	}

@@ -145,10 +145,6 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 		}
 	}
 
-	// TODO: scan a bit to the left in case we found a block announcement with shift
-
-	logrus.Info(l, r)
-
 	for shift := uint64(0); shift < 10; shift++ {
 		d, err := p.stream.Get(l + shift)
 		if err != nil {
@@ -297,9 +293,8 @@ func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint6
 		to = info.State.LastSeq
 	}
 
-	logrus.Info(from, to)
-
 	for seq := from; seq <= to; seq++ {
+		logrus.Info("Looking at sequence", seq)
 		d, err := p.stream.Get(seq)
 		if err != nil {
 			if errors.Is(err, nats.ErrMsgNotFound) {

@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/near_v3"
+	"github.com/aurora-is-near/stream-most/service/block_writer"
 	"github.com/aurora-is-near/stream-most/service/fakes"
 	"github.com/aurora-is-near/stream-most/stream/fake"
 	"github.com/aurora-is-near/stream-most/stream/reader"
@@ -42,11 +43,12 @@ func TestBridge(t *testing.T) {
 	}).Validated())
 
 	bridge := NewBridge(
+		&Options{},
 		driver,
 		inputStream,
 		outputStream,
+		&block_writer.Options{},
 		&reader.Options{},
-		1, 0,
 	)
 
 	err := bridge.Run()

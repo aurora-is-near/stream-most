@@ -26,7 +26,8 @@ type NearV3 struct {
 	messagesSinceLastWrite uint64
 	clock                  uint64
 
-	err error
+	err    error
+	killed bool
 }
 
 func (n *NearV3) Bind(input chan messages.AbstractNatsMessage, output chan messages.AbstractNatsMessage) {
@@ -41,6 +42,10 @@ func (n *NearV3) BindObserver(observer *observer.Observer) {
 func (n *NearV3) Run() {
 	defer close(n.output)
 	for msg := range n.input {
+		if n.killed {
+			break
+		}
+
 		n.clock += 1
 
 		if msg.IsAnnouncement() {
@@ -195,6 +200,10 @@ func (n *NearV3) clearCache() {
 			break
 		}
 	}
+}
+
+func (n *NearV3) Kill() {
+	n.killed = true
 }
 
 func NewNearV3(opts *Options) *NearV3 {

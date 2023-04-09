@@ -10,4 +10,5 @@ type Driver interface {
 	Bind(input chan messages.AbstractNatsMessage, output chan messages.AbstractNatsMessage)
 	BindObserver(observer *observer.Observer)
 	Run()
+	Kill()
 }

@@ -12,6 +12,8 @@ type Validator struct {
 
 	currentAnnouncement messages.AbstractNatsMessage
 	shardsLeft          map[uint8]struct{}
+
+	killed bool
 }
 
 func (n *Validator) BindObserver(obs *observer.Observer) {
@@ -26,6 +28,9 @@ func (n *Validator) Bind(input chan messages.AbstractNatsMessage, output chan me
 func (n *Validator) Run() {
 	defer close(n.output)
 	for msg := range n.input {
+		if n.killed {
+			break
+		}
 		n.process(msg)
 	}
 }
@@ -45,6 +50,10 @@ func (n *Validator) process(message messages.AbstractNatsMessage) {
 
 func (n *Validator) FinishError() error {
 	return nil
+}
+
+func (n *Validator) Kill() {
+	n.killed = true
 }
 
 func (n *Validator) processAnnouncement(msg messages.AbstractNatsMessage) {

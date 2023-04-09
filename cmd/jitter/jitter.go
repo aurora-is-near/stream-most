@@ -26,13 +26,12 @@ func run(config Config) error {
 	}
 
 	b := bridge.NewBridge(
+		config.Bridge,
 		driver,
 		input,
 		output,
 		config.Writer,
 		config.Reader,
-		config.InputStartSequence,
-		config.InputEndSequence,
 	)
 	if err := b.Run(); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "Error: %s\n", err)

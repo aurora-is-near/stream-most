@@ -19,10 +19,9 @@ type Bridge struct {
 	Output        stream.Interface
 	WriterOptions *block_writer.Options
 	ReaderOptions *reader.Options
+	Driver        drivers.Driver
 
-	InputStartSequence uint64
-	InputEndSequence   uint64
-	Driver             drivers.Driver
+	options *Options
 }
 
 func (b *Bridge) Run() error {
@@ -47,17 +46,17 @@ func (b *Bridge) Run() error {
 	if height == 0 {
 		// Output stream is empty, we'll start at the first block announcement found starting from InputStartSequence
 		startSequence, err = stream_seek.NewStreamSeek(b.Input).
-			SeekFirstAnnouncementBetween(b.InputStartSequence, b.InputEndSequence)
+			SeekFirstAnnouncementBetween(b.options.InputStartSequence, b.options.InputEndSequence)
 	} else {
 		startSequence, err = stream_seek.NewStreamSeek(b.Input).
-			SeekAnnouncementWithHeightBelow(height, b.InputStartSequence, b.InputEndSequence)
+			SeekAnnouncementWithHeightBelow(height, b.options.InputStartSequence, b.options.InputEndSequence)
 	}
 	if err != nil {
 		return errors.Wrap(err, "cannot determine the best place to start reading from the input stream")
 	}
 	logrus.Infof("Starting from the sequence %d", startSequence)
 
-	rdr, err := reader.Start(b.ReaderOptions, b.Input, startSequence, b.InputEndSequence)
+	rdr, err := reader.Start(b.ReaderOptions, b.Input, startSequence, b.options.InputEndSequence)
 	if err != nil {
 		return errors.Wrap(err, "cannot start the reader")
 	}
@@ -72,6 +71,12 @@ func (b *Bridge) Run() error {
 
 	// Pass messages through the block processor, and write them out
 	processor := block_processor.NewProcessorWithReader(rdr.Output(), b.Driver)
+
+	writer.OnClose(func(err error) {
+		logrus.Error("Writer closed with error: ", err)
+		rdr.Stop()
+		processor.Kill()
+	})
 
 	for results := range processor.Run() {
 		err := writer.Write(context.Background(), results)
@@ -90,14 +95,13 @@ func (b *Bridge) Run() error {
 	return nil
 }
 
-func NewBridge(driver drivers.Driver, input, output stream.Interface, writerOptions *block_writer.Options, readerOpts *reader.Options, from, to uint64) *Bridge {
+func NewBridge(options *Options, driver drivers.Driver, input, output stream.Interface, writerOptions *block_writer.Options, readerOpts *reader.Options) *Bridge {
 	return &Bridge{
-		Driver:             driver,
-		Input:              input,
-		Output:             output,
-		WriterOptions:      writerOptions,
-		ReaderOptions:      readerOpts,
-		InputStartSequence: from,
-		InputEndSequence:   to,
+		Driver:        driver,
+		Input:         input,
+		Output:        output,
+		WriterOptions: writerOptions,
+		ReaderOptions: readerOpts,
+		options:       options,
 	}
 }
