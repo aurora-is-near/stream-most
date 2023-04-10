@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/aurora-is-near/stream-most/domain/formats"
+	"github.com/aurora-is-near/stream-most/monitor/monitor_options"
 	"github.com/aurora-is-near/stream-most/service/block_writer"
 	"github.com/aurora-is-near/stream-most/service/bridge"
 	"github.com/aurora-is-near/stream-most/stream"
@@ -17,4 +18,5 @@ type Config struct {
 
 	ToleranceWindow uint64
 	MessagesFormat  formats.FormatType
+	Monitoring      *monitor_options.Options
 }

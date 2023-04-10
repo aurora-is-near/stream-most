@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/aurora-is-near/stream-most/configs"
 	"github.com/aurora-is-near/stream-most/domain/formats"
+	"github.com/aurora-is-near/stream-most/monitor"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/jitter"
 	"github.com/aurora-is-near/stream-most/service/bridge"
 	"github.com/aurora-is-near/stream-most/stream"
@@ -47,6 +48,8 @@ func main() {
 	config.Output.Nats.Name = "stream-most-jitter"
 
 	formats.UseFormat(config.MessagesFormat)
+
+	go monitor.NewMetricsServer(config.Monitoring).Serve(true)
 
 	for i := uint64(0); i < config.RestartAttempts; i++ {
 		err := run(config)

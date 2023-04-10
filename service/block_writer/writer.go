@@ -6,6 +6,7 @@ import (
 	"github.com/aurora-is-near/stream-bridge/util"
 	"github.com/aurora-is-near/stream-most/domain/blocks"
 	"github.com/aurora-is-near/stream-most/domain/messages"
+	"github.com/aurora-is-near/stream-most/service/block_writer/monitoring"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
@@ -49,6 +50,7 @@ func (w *Writer) Write(ctx context.Context, msg messages.AbstractNatsMessage) er
 		)
 		if lastError == nil {
 			w.lastWritten = msg
+			monitoring.LastWriteHeight.Set(float64(block.Height))
 
 			if puback.Duplicate {
 				logrus.Debugf("Duplicate message for a block with height %d", msg.GetBlock().Height)
@@ -80,6 +82,8 @@ func (w *Writer) getTip() (messages.AbstractNatsMessage, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	monitoring.TipHeight.Set(float64(tip.GetBlock().Height))
 
 	if w.lastWritten != nil && tip.GetBlock().Height < w.lastWritten.GetBlock().Height {
 		return w.lastWritten, nil

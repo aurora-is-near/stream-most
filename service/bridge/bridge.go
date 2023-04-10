@@ -70,7 +70,7 @@ func (b *Bridge) Run() error {
 	)
 
 	// Pass messages through the block processor, and write them out
-	processor := block_processor.NewProcessorWithReader(
+	processor, readerErrors := block_processor.NewProcessorWithReader(
 		rdr.Output(),
 		b.Driver,
 		b.options.ParseTolerance,
@@ -87,6 +87,11 @@ func (b *Bridge) Run() error {
 		if err != nil {
 			logrus.Errorf("Error while writing a message to output stream: %v", err)
 		}
+	}
+
+	err = <-readerErrors
+	if err != nil {
+		logrus.Errorf("Reader adapter finished with error: %v", err)
 	}
 
 	err = b.Driver.FinishError()

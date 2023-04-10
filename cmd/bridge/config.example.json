@@ -65,18 +65,10 @@
   "InputEndSequenece": 0,
   "RestartDelayMs": 2000,
   "ToleranceWindow": 1000,
-  "Metrics": {
-    "Server": {
-      "ListenAddress": "localhost:9991",
-      "Namespace": "infra",
-      "Subsystem": "stream_bridge"
-    },
-    "Labels": {
-      "inputcluster": "X",
-      "outputcluster": "Y",
-      "stream": "myblocks",
-      "whatever": "whatever"
-    },
+  "Monitoring": {
+    "ListenAddress": "localhost:9991",
+    "Namespace": "infra",
+    "Subsystem": "stream_bridge",
     "StdoutIntervalSeconds": 10
   },
   "RestartAttempts": 1

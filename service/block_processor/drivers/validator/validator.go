@@ -78,6 +78,7 @@ func (n *Validator) processAnnouncement(msg messages.AbstractNatsMessage) {
 			n.shardsLeft[uint8(k)] = struct{}{}
 		}
 	}
+	n.obs.Emit(observer.ValidationOK, observer.WrapMessage(msg, nil))
 }
 
 func (n *Validator) processShard(msg messages.AbstractNatsMessage) {
@@ -106,6 +107,7 @@ func (n *Validator) processShard(msg messages.AbstractNatsMessage) {
 	}
 
 	delete(n.shardsLeft, msg.GetShard().ShardID)
+	n.obs.Emit(observer.ValidationOK, observer.WrapMessage(msg, nil))
 }
 
 func (n *Validator) previousCompleted() bool {

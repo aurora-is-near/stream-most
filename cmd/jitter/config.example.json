@@ -66,5 +66,11 @@
       "whatever": "whatever"
     },
     "StdoutIntervalSeconds": 10
+  },
+  "Monitoring": {
+    "ListenAddress": "localhost:9991",
+    "Namespace": "infra",
+    "Subsystem": "stream_bridge",
+    "StdoutIntervalSeconds": 10
   }
 }

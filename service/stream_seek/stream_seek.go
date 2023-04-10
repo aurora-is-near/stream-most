@@ -90,7 +90,7 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 			continue
 		}
 
-		logrus.Infof("Searching at sequence %d, l %d, r %d, shift %d...", seq, l, r, shift)
+		logrus.Infof("Searching at sequence %d...", seq)
 
 		d, err := p.stream.Get(seq)
 		if err != nil {
@@ -121,7 +121,6 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 
 		switch {
 		case message.IsAnnouncement():
-			logrus.Infof("Found block announcement at seq %d", seq)
 			shift = 0
 			if message.GetBlock().Height < height {
 				l = (l + r) / 2
@@ -262,8 +261,8 @@ func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint6
 		d, err := p.stream.Get(seq)
 		if err != nil {
 			if errors.Is(err, nats.ErrMsgNotFound) {
-				logrus.Warn("Stream is deleting messages too fast, skipping 5%")
-				seq += (to - from) / 20
+				logrus.Warn("Stream is deleting messages too fast, skipping 2%")
+				seq += (to - from) / 50
 				continue
 			}
 			return 0, errors.Wrap(err, "cannot get message at the given sequence")

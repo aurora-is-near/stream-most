@@ -11,6 +11,9 @@ var (
 	// ErrorInData indicates that some data on the input stream is corrupted.
 	// Data on the callback is driver-specific
 	ErrorInData EventType = "error_in_data"
+
+	// ValidationOK happens when validator passes some message as good one
+	ValidationOK EventType = "validation_ok"
 )
 
 type Observer struct {

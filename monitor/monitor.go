@@ -1,6 +1,10 @@
 package monitor
 
 import (
+	"github.com/aurora-is-near/stream-most/monitor/monitor_options"
+	blockProcessorMonitoring "github.com/aurora-is-near/stream-most/service/block_processor/monitoring"
+	blockWriterMonitoring "github.com/aurora-is-near/stream-most/service/block_writer/monitoring"
+	readerMonitoring "github.com/aurora-is-near/stream-most/stream/reader/monitoring"
 	"github.com/olekukonko/tablewriter"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -11,8 +15,17 @@ import (
 )
 
 type MetricsServer struct {
+	Registry *prometheus.Registry
+	options  *monitor_options.Options
+
 	stdoutStop chan struct{}
 	ticker     *time.Ticker
+}
+
+func (m *MetricsServer) registerExports() {
+	readerMonitoring.Export(m.options)
+	blockProcessorMonitoring.Export(m.options)
+	blockWriterMonitoring.Export(m.options)
 }
 
 // Serve serves a server for Prometheus to scrape metrics from.
@@ -24,7 +37,7 @@ func (m *MetricsServer) Serve(logMilestones bool) {
 	}()
 
 	if logMilestones {
-		ticker := time.NewTicker(10 * time.Second)
+		ticker := time.NewTicker(time.Duration(m.options.StdoutIntervalSeconds) * time.Second)
 		defer ticker.Stop()
 		for {
 			select {
@@ -62,6 +75,11 @@ func (m *MetricsServer) spewStdout() {
 	table.Render()
 }
 
-func NewMetricsServer() *MetricsServer {
-	return &MetricsServer{}
+func NewMetricsServer(options *monitor_options.Options) *MetricsServer {
+	m := &MetricsServer{
+		options:  options,
+		Registry: prometheus.NewRegistry(),
+	}
+	m.registerExports()
+	return m
 }

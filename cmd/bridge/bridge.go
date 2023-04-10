@@ -47,7 +47,7 @@ func main() {
 
 	formats.UseFormat(config.MessagesFormat)
 
-	go monitor.NewMetricsServer().Serve(true)
+	go monitor.NewMetricsServer(config.Monitoring).Serve(true)
 
 	for i := uint64(0); i < config.ToleranceWindow; i++ {
 		err := run(config)

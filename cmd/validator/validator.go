@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/aurora-is-near/stream-most/configs"
 	"github.com/aurora-is-near/stream-most/domain/formats"
+	"github.com/aurora-is-near/stream-most/monitor"
 	"github.com/aurora-is-near/stream-most/service/validator"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/sirupsen/logrus"
@@ -30,6 +31,8 @@ func main() {
 	config := Config{}
 	configs.ReadTo("cmd/validator/config.json", &config)
 	config.Input.Nats.Name = "stream-most-validator"
+
+	go monitor.NewMetricsServer(config.Monitoring).Serve(true)
 
 	formats.UseFormat(config.MessagesFormat)
 

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/aurora-is-near/stream-most/stream/reader/monitoring"
 	"github.com/sirupsen/logrus"
 	"sort"
 	"time"
@@ -215,6 +216,8 @@ func (r *Reader) run() {
 					r.finish("finished", nil)
 					return
 				}
+
+				monitoring.LastReadSequence.Set(float64(res.Metadata.Sequence.Stream))
 
 				// Prioritized stop check
 				select {
