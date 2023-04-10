@@ -2,10 +2,9 @@ package stream_peek
 
 import (
 	"errors"
-	"github.com/aurora-is-near/stream-most/domain/formats/v3"
+	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream"
-	"github.com/nats-io/nats.go"
 )
 
 var (
@@ -32,44 +31,7 @@ func (p *StreamPeek) GetTip() (messages.AbstractNatsMessage, error) {
 		return nil, err
 	}
 
-	// We need to inspect the message to see its height
-	message, err := v3.ProtoToMessage(msg.Data)
-	if err != nil {
-		return nil, err
-	}
-
-	switch m := message.(type) {
-	case *messages.BlockAnnouncement:
-		return messages.NatsMessage{
-			Msg: &nats.Msg{
-				Subject: msg.Subject,
-				Header:  msg.Header,
-				Data:    msg.Data,
-			},
-			Metadata: &nats.MsgMetadata{
-				Sequence: nats.SequencePair{
-					Stream: msg.Sequence,
-				},
-			},
-			Announcement: m,
-		}, nil
-	case *messages.BlockShard:
-		return messages.NatsMessage{
-			Msg: &nats.Msg{
-				Subject: msg.Subject,
-				Header:  msg.Header,
-				Data:    msg.Data,
-			},
-			Metadata: &nats.MsgMetadata{
-				Sequence: nats.SequencePair{
-					Stream: msg.Sequence,
-				},
-			},
-			Shard: m,
-		}, nil
-	}
-
-	return nil, ErrCorruptedTip
+	return formats.Active().ParseRawMsg(msg)
 }
 
 // GetTipHeight returns the last announced block's height.
@@ -92,18 +54,12 @@ func (p *StreamPeek) GetTipHeight() (uint64, error) {
 	}
 
 	// We need to inspect the message to see its height
-	message, err := v3.ProtoToMessage(msg.Data)
+	message, err := formats.Active().ParseRawMsg(msg)
 	if err != nil {
 		return 0, err
 	}
 
-	switch m := message.(type) {
-	case *messages.BlockAnnouncement:
-		return m.Block.Height, nil
-	case *messages.BlockShard:
-		return m.Block.Height, nil
-	}
-	return 0, ErrCorruptedTip
+	return message.GetBlock().Height, nil
 }
 
 func NewStreamPeek(streamInterface stream.Interface) *StreamPeek {

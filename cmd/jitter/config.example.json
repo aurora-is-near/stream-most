@@ -1,5 +1,5 @@
 {
-  "Mode": "aurora",
+  "MessagesFormat": "near_v3",
   "Input": {
     "Nats": {
       "Endpoints": [

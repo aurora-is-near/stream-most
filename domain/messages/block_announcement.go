@@ -2,6 +2,7 @@ package messages
 
 import (
 	borealisproto "github.com/aurora-is-near/borealis-prototypes/go"
+	"github.com/aurora-is-near/stream-bridge/types"
 	"github.com/aurora-is-near/stream-most/domain/blocks"
 )
 
@@ -13,6 +14,18 @@ type BlockAnnouncement struct {
 
 	// If ParticipatingShardsMap[i-1] is true, then shard with id i is participating in this block.
 	ParticipatingShardsMap []bool
+}
+
+func NewBlockAnnouncementV2(block *types.AbstractBlock) *BlockAnnouncement {
+	return &BlockAnnouncement{
+		Parent: nil,
+		Block: blocks.NearBlock{
+			Hash:     block.Hash,
+			PrevHash: block.PrevHash,
+			Height:   block.Height,
+		},
+		ParticipatingShardsMap: []bool{},
+	}
 }
 
 func NewBlockAnnouncementV3(parent *borealisproto.Message_NearBlockHeader) *BlockAnnouncement {

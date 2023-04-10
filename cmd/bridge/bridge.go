@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/aurora-is-near/stream-most/configs"
+	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/monitor"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers"
 	"github.com/aurora-is-near/stream-most/service/bridge"
@@ -43,6 +44,8 @@ func main() {
 	configs.ReadTo("cmd/bridge/config.json", &config)
 	config.Input.Nats.Name = "stream-most"
 	config.Output.Nats.Name = "stream-most"
+
+	formats.UseFormat(config.MessagesFormat)
 
 	go monitor.NewMetricsServer().Serve(true)
 

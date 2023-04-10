@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/jitter"
 	"github.com/aurora-is-near/stream-most/service/block_writer"
 	"github.com/aurora-is-near/stream-most/service/bridge"
@@ -19,4 +20,5 @@ type Config struct {
 	InputEndSequence   uint64
 
 	RestartAttempts uint64
+	MessagesFormat  formats.FormatType
 }

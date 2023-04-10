@@ -13,7 +13,7 @@ func Infer(tp DriverType, input, output stream.Interface) Driver {
 		var lastWrittenHash *string
 		lastWrittenBlock, _, err := stream_seek.NewStreamSeek(output).SeekLastFullyWrittenBlock()
 		if err != nil {
-			if err != stream_seek.ErrNotFound {
+			if err != stream_seek.ErrNotFound && err != stream_seek.ErrEmptyStream {
 				panic(err)
 			}
 		} else {

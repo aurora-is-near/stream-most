@@ -1,7 +1,7 @@
 package stream_seek
 
 import (
-	"github.com/aurora-is-near/stream-most/domain/formats/v3"
+	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/nats-io/nats.go"
@@ -11,7 +11,8 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("not found")
+	ErrNotFound    = errors.New("not found")
+	ErrEmptyStream = errors.New("empty stream")
 )
 
 // StreamSeek provides methods to seek for something on the given stream
@@ -33,27 +34,14 @@ func (p *StreamSeek) SeekShards(from, to uint64, forBlock *string) ([]messages.A
 			continue
 		}
 
-		message, err := v3.ProtoToMessage(d.Data)
+		message, err := formats.Active().ParseRawMsg(d)
 		if err != nil {
 			return shards, err
 		}
 
-		switch msg := message.(type) {
-		case *messages.BlockShard:
-			if forBlock == nil || (msg.Block.Hash == *forBlock) {
-				shards = append(shards, messages.NatsMessage{
-					Msg: &nats.Msg{
-						Subject: d.Subject,
-						Header:  d.Header,
-						Data:    d.Data,
-					},
-					Metadata: &nats.MsgMetadata{
-						Sequence: nats.SequencePair{
-							Stream: d.Sequence,
-						},
-					},
-					Shard: msg,
-				})
+		if message.IsShard() {
+			if forBlock == nil || (message.GetBlock().Hash == *forBlock) {
+				shards = append(shards, message)
 			}
 		}
 	}
@@ -125,22 +113,22 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 			continue
 		}
 
-		message, err := v3.ProtoToMessage(d.Data)
+		message, err := formats.Active().ParseRawMsg(d)
 		if err != nil {
 			logrus.Info("Corrupted message")
 			return 0, err
 		}
 
-		switch msg := message.(type) {
-		case *messages.BlockAnnouncement:
+		switch {
+		case message.IsAnnouncement():
 			logrus.Infof("Found block announcement at seq %d", seq)
 			shift = 0
-			if msg.Block.Height < height {
+			if message.GetBlock().Height < height {
 				l = (l + r) / 2
 			} else {
 				r = (l + r) / 2
 			}
-		case *messages.BlockShard:
+		case message.IsShard():
 			shift += 1
 		}
 	}
@@ -152,15 +140,15 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 			continue
 		}
 
-		message, err := v3.ProtoToMessage(d.Data)
+		message, err := formats.Active().ParseRawMsg(d)
 		if err != nil {
 			logrus.Error(errors.Wrap(err, "corrupted message:"))
 			continue
 		}
 
-		switch msg := message.(type) {
-		case *messages.BlockAnnouncement:
-			logrus.Infof("Found block announcement with height %d at sequence %d", msg.Block.Height, l)
+		switch {
+		case message.IsAnnouncement():
+			logrus.Infof("Found block announcement with height %d at sequence %d", message.GetBlock().Height, l)
 			return l + shift, nil
 		}
 	}
@@ -179,7 +167,7 @@ func (p *StreamSeek) SeekLastFullyWrittenBlock() (
 	}
 
 	if info.State.LastSeq == 0 {
-		return nil, nil, errors.New("empty stream")
+		return nil, nil, ErrEmptyStream
 	}
 
 	upperBound := info.State.LastSeq
@@ -200,15 +188,15 @@ func (p *StreamSeek) SeekLastFullyWrittenBlock() (
 		}
 
 		// We need to inspect the message to see its height
-		message, err := v3.ProtoToMessage(msg.Data)
+		message, err := formats.Active().ParseRawMsg(msg)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		switch m := message.(type) {
-		case *messages.BlockAnnouncement:
+		switch {
+		case message.IsAnnouncement():
 			countOfShards := 0
-			for _, v := range m.ParticipatingShardsMap {
+			for _, v := range message.GetAnnouncement().ParticipatingShardsMap {
 				if v {
 					countOfShards++
 				}
@@ -226,34 +214,10 @@ func (p *StreamSeek) SeekLastFullyWrittenBlock() (
 				shardsStash[i], shardsStash[j] = shardsStash[j], shardsStash[i]
 			}
 
-			return messages.NatsMessage{
-				Msg: &nats.Msg{
-					Subject: msg.Subject,
-					Header:  msg.Header,
-					Data:    msg.Data,
-				},
-				Metadata: &nats.MsgMetadata{
-					Sequence: nats.SequencePair{
-						Stream: msg.Sequence,
-					},
-				},
-				Announcement: m,
-			}, shardsStash, nil
-		case *messages.BlockShard:
+			return message, shardsStash, nil
+		case message.IsShard():
 			// We found some shard, stash it
-			shardsStash = append(shardsStash, messages.NatsMessage{
-				Msg: &nats.Msg{
-					Subject: msg.Subject,
-					Header:  msg.Header,
-					Data:    msg.Data,
-				},
-				Metadata: &nats.MsgMetadata{
-					Sequence: nats.SequencePair{
-						Stream: msg.Sequence,
-					},
-				},
-				Shard: m,
-			})
+			shardsStash = append(shardsStash, message)
 		}
 	}
 
@@ -305,7 +269,7 @@ func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint6
 			return 0, errors.Wrap(err, "cannot get message at the given sequence")
 		}
 
-		message, err := v3.ProtoToMessage(d.Data)
+		message, err := formats.Active().ParseRawMsg(d)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				// Those are truncated messages, just skip
@@ -315,8 +279,7 @@ func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint6
 			return 0, errors.Wrap(err, "cannot decode message at the given sequence")
 		}
 
-		switch message.(type) {
-		case *messages.BlockAnnouncement:
+		if message.IsAnnouncement() {
 			return seq, nil
 		}
 	}

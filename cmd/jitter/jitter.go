@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/aurora-is-near/stream-most/configs"
+	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/jitter"
 	"github.com/aurora-is-near/stream-most/service/bridge"
 	"github.com/aurora-is-near/stream-most/stream"
@@ -44,6 +45,8 @@ func main() {
 	configs.ReadTo("cmd/jitter/config.json", &config)
 	config.Input.Nats.Name = "stream-most-jitter"
 	config.Output.Nats.Name = "stream-most-jitter"
+
+	formats.UseFormat(config.MessagesFormat)
 
 	for i := uint64(0); i < config.RestartAttempts; i++ {
 		err := run(config)
