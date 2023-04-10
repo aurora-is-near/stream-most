@@ -6,8 +6,8 @@ import (
 	"github.com/aurora-is-near/stream-most/stream/reader"
 )
 
-func NewProcessorWithReader(input <-chan *reader.Output, driver drivers.Driver) *Processor {
-	in := adapters.ReaderOutputToNatsMessages(input)
+func NewProcessorWithReader(input <-chan *reader.Output, driver drivers.Driver, parseTolerance uint64) (*Processor, chan error) {
+	in, errors := adapters.ReaderOutputToNatsMessages(input, parseTolerance)
 	f := NewProcessor(in, driver)
-	return f
+	return f, errors
 }

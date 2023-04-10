@@ -70,7 +70,11 @@ func (b *Bridge) Run() error {
 	)
 
 	// Pass messages through the block processor, and write them out
-	processor := block_processor.NewProcessorWithReader(rdr.Output(), b.Driver)
+	processor := block_processor.NewProcessorWithReader(
+		rdr.Output(),
+		b.Driver,
+		b.options.ParseTolerance,
+	)
 
 	writer.OnClose(func(err error) {
 		logrus.Error("Writer closed with error: ", err)

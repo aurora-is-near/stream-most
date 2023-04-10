@@ -51,7 +51,7 @@ func (b *Validator) Run() error {
 	driver := validator.NewValidator()
 
 	// Pass messages through the block processor
-	processor := block_processor.NewProcessorWithReader(rdr.Output(), driver)
+	processor, readerErrors := block_processor.NewProcessorWithReader(rdr.Output(), driver, 30)
 	processor.On(observer.ErrorInData, func(data interface{}) {
 		d, ok := data.(*observer.WrappedMessage)
 		if !ok {
@@ -63,13 +63,19 @@ func (b *Validator) Run() error {
 
 	<-processor.Run() // Validation driver doesn't write anything and then closes
 
-	err = driver.FinishError()
+	err = <-readerErrors
 	if err != nil {
-		logrus.Errorf("Finished with error: %v", err)
+		logrus.Errorf("Reader adapter finished with error: %v", err)
 		return err
 	}
 
-	logrus.Info("Finished without error")
+	err = driver.FinishError()
+	if err != nil {
+		logrus.Errorf("Driver finished with error: %v", err)
+		return err
+	}
+
+	logrus.Info("Driver finished without error")
 	return nil
 }
 

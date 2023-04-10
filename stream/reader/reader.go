@@ -104,7 +104,7 @@ func (r *Reader) Output() <-chan *Output {
 }
 
 func (r *Reader) Stop() {
-	r.Info("Stopping...")
+	r.Info("Stopping reader...")
 	for {
 		select {
 		case r.stop <- true:
@@ -264,7 +264,7 @@ func (r *Reader) getLastSeq() (uint64, error) {
 }
 
 func (r *Reader) finish(logMsg string, err error) {
-	r.Infof("Finishing. %v: %v", logMsg, err)
+	r.Infof("Stopped reader. %v: %v", logMsg, err)
 	if err != nil {
 		out := &Output{
 			Error: err,
