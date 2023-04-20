@@ -2,6 +2,7 @@ package formats
 
 import (
 	borealisproto "github.com/aurora-is-near/borealis-prototypes/go"
+	"github.com/aurora-is-near/stream-most/domain/blocks"
 	"github.com/aurora-is-near/stream-most/domain/formats/v2_aurora"
 	"github.com/aurora-is-near/stream-most/domain/formats/v2_near"
 	v3 "github.com/aurora-is-near/stream-most/domain/formats/v3"
@@ -16,6 +17,36 @@ type Facade struct {
 
 func (f *Facade) UseFormat(format FormatType) {
 	f.format = format
+}
+
+func (f *Facade) ParseAbstractBlock(data []byte) (*blocks.AbstractBlock, error) {
+	switch f.format {
+	case NearV2:
+		return v2_near.ParseNearBlock(data, map[string][]string{})
+	case AuroraV2:
+		return v2_aurora.ParseAuroraBlock(data, map[string][]string{})
+	case NearV3:
+		message, err := v3.ProtoToMessage(data)
+		if err != nil {
+			return nil, err
+		}
+
+		switch m := message.(type) {
+		case *messages.BlockAnnouncement:
+			return &blocks.AbstractBlock{
+				Hash:     m.Block.Hash,
+				PrevHash: m.Block.PrevHash,
+				Height:   m.Block.Height,
+			}, nil
+		case *messages.BlockShard:
+			return &blocks.AbstractBlock{
+				Hash:     m.Block.Hash,
+				PrevHash: m.Block.PrevHash,
+				Height:   m.Block.Height,
+			}, nil
+		}
+	}
+	return nil, errors.New("unknown format")
 }
 
 func (f *Facade) ParseRawMsg(msg *nats.RawStreamMsg) (messages.AbstractNatsMessage, error) {

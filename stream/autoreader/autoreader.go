@@ -21,7 +21,7 @@ type AutoReader struct {
 	wg     sync.WaitGroup
 }
 
-func NewAutoReader(startSeq uint64, streamOptions *stream.Options) *AutoReader {
+func NewAutoReader(startSeq uint64, endSeq uint64, streamOptions *stream.Options) *AutoReader {
 	ar := &AutoReader{
 		Entry: logrus.New().
 			WithField("component", "autoreader").
@@ -29,11 +29,11 @@ func NewAutoReader(startSeq uint64, streamOptions *stream.Options) *AutoReader {
 		streamOpts: streamOptions,
 	}
 
-	ar.start(startSeq)
+	ar.Start(startSeq)
 	return ar
 }
 
-func (ar *AutoReader) start(startSeq uint64) {
+func (ar *AutoReader) Start(startSeq uint64) {
 	ar.output = make(chan *reader.Output)
 	ar.stop = make(chan struct{})
 	ar.wg.Add(1)

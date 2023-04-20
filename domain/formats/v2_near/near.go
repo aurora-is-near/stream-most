@@ -1,12 +1,12 @@
 package v2_near
 
 import (
-	"github.com/aurora-is-near/stream-bridge/types"
+	"github.com/aurora-is-near/stream-most/domain/blocks"
 	"github.com/nats-io/nats.go"
 )
 
-func ParseNearBlock(data []byte, header nats.Header) (*types.AbstractBlock, error) {
-	block, err := types.DecodeNearBlock(data)
+func ParseNearBlock(data []byte, header nats.Header) (*blocks.AbstractBlock, error) {
+	block, err := blocks.DecodeNearBlock(data)
 	if err != nil {
 		return nil, err
 	}

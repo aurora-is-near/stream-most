@@ -1,12 +1,12 @@
 package v2_aurora
 
 import (
-	"github.com/aurora-is-near/stream-bridge/types"
+	"github.com/aurora-is-near/stream-most/domain/blocks"
 	"github.com/nats-io/nats.go"
 )
 
-func ParseAuroraBlock(data []byte, header nats.Header) (*types.AbstractBlock, error) {
-	block, err := types.DecodeAuroraBlock(data)
+func ParseAuroraBlock(data []byte, header nats.Header) (*blocks.AbstractBlock, error) {
+	block, err := blocks.DecodeAuroraBlock(data)
 	if err != nil {
 		return nil, err
 	}

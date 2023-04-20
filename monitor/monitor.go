@@ -33,7 +33,7 @@ func (m *MetricsServer) registerExports() {
 func (m *MetricsServer) Serve(logMilestones bool) {
 	defer func() {
 		http.Handle("/metrics", promhttp.Handler())
-		_ = http.ListenAndServe(":7000", nil)
+		_ = http.ListenAndServe(m.options.ListenAddress, nil)
 	}()
 
 	if logMilestones {

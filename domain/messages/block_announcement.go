@@ -2,7 +2,6 @@ package messages
 
 import (
 	borealisproto "github.com/aurora-is-near/borealis-prototypes/go"
-	"github.com/aurora-is-near/stream-bridge/types"
 	"github.com/aurora-is-near/stream-most/domain/blocks"
 )
 
@@ -16,7 +15,7 @@ type BlockAnnouncement struct {
 	ParticipatingShardsMap []bool
 }
 
-func NewBlockAnnouncementV2(block *types.AbstractBlock) *BlockAnnouncement {
+func NewBlockAnnouncementV2(block *blocks.AbstractBlock) *BlockAnnouncement {
 	return &BlockAnnouncement{
 		Parent: nil,
 		Block: blocks.NearBlock{
