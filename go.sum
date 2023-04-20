@@ -49,6 +49,8 @@ github.com/aurora-is-near/borealis-spec/go v0.0.0-20220616124124-3f4ad3465ecf h1
 github.com/aurora-is-near/borealis-spec/go v0.0.0-20220616124124-3f4ad3465ecf/go.mod h1:6Z2nAgmeaeCgdJbw0GMg1CQwnyxcQITkzynxV99alyM=
 github.com/aurora-is-near/borealis.go v0.1.8 h1:UJRxRwDMjn4FlChbdqEOte0bzUXDxKw44jb7CXtuEnI=
 github.com/aurora-is-near/borealis.go v0.1.8/go.mod h1:xGonkgHAKVpl/Mc8ZHUM93P6FXBYQOXZJXgRULTJm6U=
+github.com/aurora-is-near/stream-backup v0.0.0-20230116080553-82b7cd616f04 h1:vEOoLlj+wIeVzZytDjGlurIheu7tMPfG3QqYI/w+OuE=
+github.com/aurora-is-near/stream-backup v0.0.0-20230116080553-82b7cd616f04/go.mod h1:71KeQcNFeKIHH0WeppWnXZBfwpGo/YwLK8TtC+r+TfY=
 github.com/aurora-is-near/stream-bridge v0.0.0-20230313105757-8c6a70a0363c h1:0fOLsxITAgcjNjTzKEHzYfMU1Sy0zG7ezyuiOlpNXWU=
 github.com/aurora-is-near/stream-bridge v0.0.0-20230313105757-8c6a70a0363c/go.mod h1:sSYnXQaK30pnnV44BofLSMgyUi1AAJOnYBOsf8t4HlM=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=

@@ -4,6 +4,7 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/monitor/monitor_options"
 	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/aurora-is-near/stream-most/stream/reader"
 )
 
 type Config struct {
@@ -21,4 +22,5 @@ type Config struct {
 
 	MessagesFormat formats.FormatType
 	Monitoring     *monitor_options.Options
+	Reader         *reader.Options
 }

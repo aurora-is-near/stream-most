@@ -83,7 +83,9 @@ func (w *Writer) getTip() (messages.AbstractNatsMessage, error) {
 		return nil, err
 	}
 
-	monitoring.TipHeight.Set(float64(tip.GetBlock().Height))
+	if tip != nil {
+		monitoring.TipHeight.Set(float64(tip.GetBlock().Height))
+	}
 
 	if w.lastWritten != nil && tip.GetBlock().Height < w.lastWritten.GetBlock().Height {
 		return w.lastWritten, nil

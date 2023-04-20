@@ -257,7 +257,7 @@ func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint6
 	}
 
 	for seq := from; seq <= to; seq++ {
-		logrus.Info("Looking at sequence", seq)
+		logrus.Info("Looking at sequence ", seq)
 		d, err := p.stream.Get(seq)
 		if err != nil {
 			if errors.Is(err, nats.ErrMsgNotFound) {

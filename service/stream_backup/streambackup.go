@@ -6,6 +6,7 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/blocks"
 	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/stream/autoreader"
+	"github.com/sirupsen/logrus"
 	"log"
 	"os"
 	"os/signal"
@@ -57,6 +58,7 @@ func (sb *StreamBackup) Run() error {
 		if err != nil {
 			return fmt.Errorf("can't figure out next range: %w", err)
 		}
+		logrus.Info("LMAO")
 
 		log.Printf("Pulling segment [%d, %d]", l, r)
 		err = sb.pullSegment(l, r)
@@ -71,6 +73,27 @@ func (sb *StreamBackup) Run() error {
 
 func (sb *StreamBackup) pullSegment(l, r uint64) error {
 	var prevBlock *blocks.AbstractBlock
+	if l > sb.StartSeq {
+		if err := sb.Chunks.SeekReader(l - 1); err != nil {
+			return fmt.Errorf("can't seek to prev block: %w", err)
+		}
+		prev, prevData, err := sb.Chunks.ReadNext()
+		sb.Chunks.CloseReader()
+		if err != nil {
+			return fmt.Errorf("can't read prev block: %w", err)
+		}
+		if prev != l-1 {
+			return fmt.Errorf("prev != l - 1")
+		}
+		mb := &messagebackup.MessageBackup{}
+		if err := mb.UnmarshalVT(prevData); err != nil {
+			return fmt.Errorf("can't unmarshal prev block: %w", err)
+		}
+		prevBlock, err = sb.decodeBlock(mb.Data)
+		if err != nil {
+			return fmt.Errorf("can't decode prev block: %v", err)
+		}
+	}
 
 	sb.Reader.Start(l)
 	defer sb.Reader.Stop()

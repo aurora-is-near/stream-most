@@ -13,7 +13,6 @@ import (
 
 func run(config Config) error {
 	sb := &stream_backup.StreamBackup{
-		Mode: "",
 		Chunks: &chunks.Chunks{
 			Dir:                config.OutputDir,
 			ChunkNamePrefix:    config.ChunkPrefix + "_",
@@ -24,8 +23,11 @@ func run(config Config) error {
 		Reader: autoreader.NewAutoReader(
 			config.FromSeq,
 			config.ToSeq,
+			config.Reader,
 			config.Input,
 		),
+		StartSeq: config.FromSeq,
+		EndSeq:   config.ToSeq,
 	}
 
 	return sb.Run()
