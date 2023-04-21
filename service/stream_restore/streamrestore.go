@@ -4,6 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/aurora-is-near/stream-most/domain/blocks"
+	"github.com/aurora-is-near/stream-most/domain/messages"
+	"github.com/aurora-is-near/stream-most/service/block_writer"
+	"github.com/aurora-is-near/stream-most/service/stream_peek"
+	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/nats-io/nats.go"
+	"github.com/sirupsen/logrus"
 	"log"
 	"os"
 	"os/signal"
@@ -12,14 +19,7 @@ import (
 	"time"
 
 	"github.com/aurora-is-near/stream-backup/chunks"
-	"github.com/aurora-is-near/stream-bridge/blockparse"
-	"github.com/aurora-is-near/stream-bridge/blockwriter"
-	"github.com/aurora-is-near/stream-bridge/stream"
-	"github.com/aurora-is-near/stream-bridge/types"
 )
-
-var ConnectStream = stream.ConnectStream
-var NewBlockWriter = blockwriter.NewBlockWriter
 
 const stdoutInterval = time.Second * 5
 
@@ -30,26 +30,19 @@ var errStartNotFound = errors.New("start not found")
 type StreamRestore struct {
 	Mode            string
 	Chunks          chunks.ChunksInterface
-	Stream          *stream.Opts
-	Writer          *blockwriter.Opts
+	Stream          *stream.Options
+	Writer          *block_writer.Options
 	StartSeq        uint64
 	EndSeq          uint64
 	ToleranceWindow uint
 	ReconnectWaitMs uint
 
-	ParseBlock blockparse.ParseBlockFn
-	interrupt  chan os.Signal
+	interrupt chan os.Signal
 }
 
 func (sr *StreamRestore) Run() error {
 	if sr.StartSeq >= sr.EndSeq {
 		return fmt.Errorf("StartSeq must be less than EndSeq")
-	}
-
-	var err error
-	sr.ParseBlock, err = blockparse.GetParseBlockFn(sr.Mode)
-	if err != nil {
-		return err
 	}
 
 	if err := sr.Chunks.Open(); err != nil {
@@ -61,7 +54,7 @@ func (sr *StreamRestore) Run() error {
 	signal.Notify(sr.interrupt, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGABRT, syscall.SIGINT, syscall.SIGUSR1)
 
 	for {
-		switch err = sr.push(); err {
+		switch err := sr.push(); err {
 		case nil:
 			log.Printf("Finished")
 			return nil
@@ -90,7 +83,7 @@ func (sr *StreamRestore) push() error {
 		return errInterrupted
 	}
 
-	stream, err := ConnectStream(sr.Stream)
+	str, err := stream.Connect(sr.Stream)
 	if err != nil {
 		log.Printf("Got connection problem, will reconnect: %v", err)
 		return errConnectionProblem
@@ -100,13 +93,26 @@ func (sr *StreamRestore) push() error {
 		return errInterrupted
 	}
 
-	writer, tip, err := NewBlockWriter(sr.Writer, stream, sr.ParseBlock)
+	streamPeek := stream_peek.NewStreamPeek(str)
+
+	writer := block_writer.NewWriter(sr.Writer, str, streamPeek)
 	if err != nil {
 		log.Printf("Got connection problem, will reconnect: %v", err)
 		return errConnectionProblem
 	}
 
-	seq, err := sr.findStartChunkSeq(tip)
+	tip, err := streamPeek.GetTip()
+	if err != nil {
+		log.Printf("Got connection problem, will reconnect: %v", err)
+		return errConnectionProblem
+	}
+
+	var tipBlock *blocks.AbstractBlock
+	if tip != nil {
+		tipBlock = tip.GetBlock()
+	}
+
+	seq, err := sr.findStartChunkSeq(tipBlock)
 	if err == errStartNotFound {
 		log.Printf("Nothing to do")
 		return nil
@@ -158,13 +164,32 @@ func (sr *StreamRestore) push() error {
 			}
 			bb := out.blockBackup
 			lastReadSeq = bb.Sequence
-			switch ack, err := writer.Write(context.Background(), bb.Block, bb.MessageBackup.Data); err {
+			switch ack, err := writer.WriteWithAck(context.Background(), messages.NatsMessage{
+				Msg: &nats.Msg{
+					Subject: bb.Block.Hash,
+					Data:    bb.MessageBackup.Data,
+				},
+				Metadata: &nats.MsgMetadata{
+					Sequence: nats.SequencePair{
+						Stream: bb.Block.Height,
+					},
+				},
+				Announcement: &messages.BlockAnnouncement{Block: blocks.NearBlock{
+					Hash:     bb.Block.Hash,
+					PrevHash: bb.Block.PrevHash,
+					Height:   bb.Block.Height,
+				}},
+			}); err {
 			case nil:
-				lastWrittenSeq = ack.Sequence
-			case blockwriter.ErrHashMismatch:
+				if ack != nil {
+					lastWrittenSeq = ack.Sequence
+				}
+			case block_writer.ErrDuplicate:
+				logrus.Warn("Duplicate block")
+			case block_writer.ErrHashMismatch:
 				fmt.Printf("[WRONGHASH]: seq=%v\n", bb.Sequence)
 				lastBlockWasWrong = true
-			case blockwriter.ErrLowHeight:
+			case block_writer.ErrLowHeight:
 			default:
 				log.Printf("Got writer problem, will restart connection: %v", err)
 				return errConnectionProblem
@@ -173,7 +198,7 @@ func (sr *StreamRestore) push() error {
 	}
 }
 
-func (sr *StreamRestore) findStartChunkSeq(tip *types.AbstractBlock) (uint64, error) {
+func (sr *StreamRestore) findStartChunkSeq(tip *blocks.AbstractBlock) (uint64, error) {
 	tipHeight := uint64(0)
 	if tip != nil {
 		tipHeight = tip.Height

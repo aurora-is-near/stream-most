@@ -26,15 +26,15 @@ type Writer struct {
 	onCloseListeners []func(err error)
 }
 
-func (w *Writer) Write(ctx context.Context, msg messages.AbstractNatsMessage) error {
+func (w *Writer) write(ctx context.Context, msg messages.AbstractNatsMessage) (*nats.PubAck, error) {
 	if w.closed {
-		return ErrClosed
+		return nil, ErrClosed
 	}
 
 	block := msg.GetBlock()
 	if err := w.validate(block); err != nil {
 		w.processError(err)
-		return err
+		return nil, err
 	}
 
 	headers := w.enrichHeaders(msg, msg.GetMsg().Header)
@@ -54,12 +54,12 @@ func (w *Writer) Write(ctx context.Context, msg messages.AbstractNatsMessage) er
 
 			if puback.Duplicate {
 				logrus.Debugf("Duplicate message for a block with height %d", msg.GetBlock().Height)
-				return ErrDuplicate
+				return nil, ErrDuplicate
 			}
 
 			logrus.Debugf("Wrote a message for a block with height %d", msg.GetBlock().Height)
 			w.lowHeightInRow = 0
-			return nil
+			return puback, nil
 		}
 
 		if attempts == 1 {
@@ -67,14 +67,23 @@ func (w *Writer) Write(ctx context.Context, msg messages.AbstractNatsMessage) er
 		}
 
 		if !util.CtxSleep(ctx, time.Millisecond*time.Duration(w.options.WriteRetryWaitMs)) {
-			return ErrCancelled
+			return nil, ErrCancelled
 		}
 
 		if ctx.Err() != nil {
-			return ErrCancelled
+			return nil, ErrCancelled
 		}
 	}
-	return lastError
+	return nil, lastError
+}
+
+func (w *Writer) WriteWithAck(ctx context.Context, msg messages.AbstractNatsMessage) (*nats.PubAck, error) {
+	return w.write(ctx, msg)
+}
+
+func (w *Writer) Write(ctx context.Context, msg messages.AbstractNatsMessage) error {
+	_, err := w.write(ctx, msg)
+	return err
 }
 
 func (w *Writer) getTip() (messages.AbstractNatsMessage, error) {
