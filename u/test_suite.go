@@ -68,7 +68,8 @@ func ShardToNats(sequence uint64, msg *messages.BlockShard) messages.NatsMessage
 		},
 		Shard: msg,
 		Metadata: &nats.MsgMetadata{Sequence: nats.SequencePair{
-			Stream: sequence,
+			Stream:   sequence,
+			Consumer: sequence,
 		}},
 	}
 }

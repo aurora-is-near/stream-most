@@ -7,7 +7,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// NearV3 TODO: remove old blocks from memory
 type NearV3 struct {
 	opts *Options
 
@@ -185,6 +184,7 @@ func (n *NearV3) stuck() (leave bool) {
 
 func (n *NearV3) recovery() bool {
 	logrus.Error("Attempting to recover from stuck")
+	logrus.Error("Recovery is not implemented for NearV3 yet")
 	return false
 }
 

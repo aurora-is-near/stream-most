@@ -1,8 +1,8 @@
 package near_v3
 
 import (
+	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/domain/messages"
-	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
 	"github.com/aurora-is-near/stream-most/service/fakes"
 	"github.com/aurora-is-near/stream-most/stream/adapters"
 	"github.com/aurora-is-near/stream-most/stream/fake"
@@ -13,6 +13,7 @@ import (
 
 func TestNearV3_Basic(t *testing.T) {
 	fakes.UseDefaultOnes()
+	formats.UseFormat(formats.NearV3)
 
 	fakeInput := fake.NewStream()
 	fakeOutput := fake.NewStream()
@@ -43,13 +44,69 @@ func TestNearV3_Basic(t *testing.T) {
 		BlocksCacheSize:         10,
 	})
 
-	input := adapters.ReaderOutputToNatsMessages(rdr.Output())
+	input, _ := adapters.ReaderOutputToNatsMessages(rdr.Output(), 10)
 	output := make(chan messages.AbstractNatsMessage, 100)
 	driver.Bind(input, output)
 
 	go func() {
 		driver.Run()
-		close(output)
+	}()
+
+	for x := range output {
+		fakeOutput.Add(x.(messages.NatsMessage))
+	}
+
+	err = driver.FinishError()
+	if err != nil {
+		t.Error(err)
+	}
+
+	fakeOutput.Display()
+}
+
+func TestNearV3_Stuck(t *testing.T) {
+	fakes.UseDefaultOnes()
+	formats.UseFormat(formats.NearV3)
+
+	fakeInput := fake.NewStream()
+	fakeOutput := fake.NewStream()
+
+	fakeInput.Add(
+		u.Announcement(1, []bool{true, true, true}, 1, "AAA", "000"),
+		u.Shard(2, 1, "AAA", "000", 0),
+		u.Shard(3, 1, "AAA", "000", 1),
+		u.Shard(4, 1, "AAA", "000", 2),
+		u.Shard(5, 5, "BBB", "AAA", 0),
+		u.Shard(7, 5, "BBB", "AAA", 2),
+		u.Announcement(8, []bool{true, true, true}, 2, "BBB", "AAA"),
+		u.Announcement(9, []bool{true, true, true}, 3, "CCC", "BBB"),
+		u.Announcement(10, []bool{true, true, true}, 4, "DDD", "CCC"),
+		u.Announcement(11, []bool{true, true, true}, 5, "EEE", "DDD"),
+		u.Announcement(12, []bool{true, true, true}, 6, "FFF", "EEE"),
+		u.Announcement(13, []bool{true, true, true}, 7, "GGG", "FFF"),
+	)
+
+	fakeInput.Display()
+
+	rdr, err := reader.Start(&reader.Options{}, fakeInput, 0, 0)
+	if err != nil {
+		t.Error(err)
+	}
+
+	driver := NewNearV3(&Options{
+		StuckTolerance:          5,
+		StuckRecovery:           false,
+		StuckRecoveryWindowSize: 0,
+		LastWrittenBlockHash:    nil,
+		BlocksCacheSize:         10,
+	})
+
+	input, _ := adapters.ReaderOutputToNatsMessages(rdr.Output(), 10)
+	output := make(chan messages.AbstractNatsMessage, 100)
+	driver.Bind(input, output)
+
+	go func() {
+		driver.Run()
 	}()
 
 	for x := range output {
@@ -57,50 +114,12 @@ func TestNearV3_Basic(t *testing.T) {
 	}
 
 	fakeOutput.Display()
-}
 
-func TestNearV3_Rescue(t *testing.T) {
-	fakes.UseDefaultOnes()
-
-	fakeInput := &fake.Stream{}
-	fakeOutput := &fake.Stream{}
-
-	fakeInput.Add(
-		u.Shard(1, 1, "AAA", "000", 0),
-		u.Shard(2, 1, "AAA", "000", 1),
-		u.Announcement(3, []bool{true, true, true}, 1, "AAA", "000"),
-		u.Shard(4, 1, "AAA", "000", 2),
-		u.Shard(5, 2, "BBB", "AAA", 0),
-		u.Shard(6, 2, "BBB", "AAA", 1),
-		u.Shard(7, 2, "BBB", "AAA", 2),
-		u.Announcement(8, []bool{true, true, true}, 2, "BBB", "AAA"),
-	)
-
-	fakeInput.Display()
-
-	rdr, err := reader.Start(&reader.Options{}, fakeInput, 3, 0)
-	if err != nil {
-		t.Error(err)
+	err = driver.FinishError()
+	if err == nil {
+		t.Error("error is nil, expected stuck")
 	}
-
-	driver := NewNearV3((&Options{
-		StuckTolerance:       5,
-		LastWrittenBlockHash: &[]string{"000"}[0],
-	}).Validated())
-
-	input := adapters.ReaderOutputToNatsMessages(rdr.Output())
-	output := make(chan messages.AbstractNatsMessage, 100)
-	driver.Bind(input, output)
-	driver.BindObserver(observer.NewObserver())
-
-	go func() {
-		driver.Run()
-		close(output)
-	}()
-
-	for x := range output {
-		fakeOutput.Add(x.(messages.NatsMessage))
+	if err.Error() != "stuck" {
+		t.Error("error is not stuck")
 	}
-
-	fakeOutput.DisplayRows()
 }

@@ -136,6 +136,10 @@ func (f *Facade) ParseRawMsg(msg *nats.RawStreamMsg) (messages.AbstractNatsMessa
 
 func (f *Facade) Parse(msg *nats.Msg) (messages.AbstractNatsMessage, error) {
 	metadata, _ := msg.Metadata()
+	return f.ParseWithMetadata(msg, metadata)
+}
+
+func (f *Facade) ParseWithMetadata(msg *nats.Msg, metadata *nats.MsgMetadata) (messages.AbstractNatsMessage, error) {
 	header := msg.Header
 
 	switch f.format {
