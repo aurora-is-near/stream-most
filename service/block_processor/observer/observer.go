@@ -33,6 +33,14 @@ func (o *Observer) Emit(event EventType, data interface{}) {
 	}
 }
 
+func (o *Observer) Register(handlers map[EventType][]func(any)) {
+	for event, handlersArray := range handlers {
+		for _, v := range handlersArray {
+			o.On(event, v)
+		}
+	}
+}
+
 func NewObserver() *Observer {
 	return &Observer{
 		listeners: make(map[EventType][]func(interface{})),

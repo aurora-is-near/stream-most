@@ -37,7 +37,7 @@ func run(config Config) (bool, error) {
 		config.Writer,
 		config.Reader,
 	)
-	b.Observer().On(observer.Write, func(_ any) {
+	b.On(observer.Write, func(_ any) {
 		writeHappened = true
 	})
 

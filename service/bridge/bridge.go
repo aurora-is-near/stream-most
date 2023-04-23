@@ -22,13 +22,8 @@ type Bridge struct {
 	ReaderOptions *reader.Options
 	Driver        drivers.Driver
 
-	processor *block_processor.Processor
-
-	options *Options
-}
-
-func (b *Bridge) Observer() *observer.Observer {
-	return b.processor.Observer
+	options  *Options
+	handlers map[observer.EventType][]func(any)
 }
 
 func (b *Bridge) Run() error {
@@ -83,7 +78,7 @@ func (b *Bridge) Run() error {
 		b.options.ParseTolerance,
 	)
 
-	b.processor = processor
+	processor.Observer.Register(b.handlers)
 
 	writer.OnClose(func(err error) {
 		logrus.Error("Writer closed with error: ", err)
@@ -96,13 +91,14 @@ func (b *Bridge) Run() error {
 		if err != nil {
 			logrus.Errorf("Error while writing a message to output stream: %v", err)
 		} else {
-			b.processor.Emit(observer.Write, results)
+			processor.Emit(observer.Write, results)
 		}
 	}
 
 	err = <-readerErrors
 	if err != nil {
 		logrus.Errorf("Reader adapter finished with error: %v", err)
+		return err
 	}
 
 	err = b.Driver.FinishError()
@@ -115,8 +111,13 @@ func (b *Bridge) Run() error {
 	return nil
 }
 
+func (b *Bridge) On(write observer.EventType, f func(_ any)) {
+	b.handlers[write] = append(b.handlers[write], f)
+}
+
 func NewBridge(options *Options, driver drivers.Driver, input, output stream.Interface, writerOptions *block_writer.Options, readerOpts *reader.Options) *Bridge {
 	return &Bridge{
+		handlers:      map[observer.EventType][]func(any){},
 		Driver:        driver,
 		Input:         input,
 		Output:        output,

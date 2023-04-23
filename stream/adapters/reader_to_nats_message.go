@@ -26,6 +26,11 @@ func ReaderOutputToNatsMessages(input <-chan *reader.Output, parseTolerance uint
 				continue
 			}
 
+			if len(k.Msg.Data) == 0 {
+				logrus.Warnf("Empty message at sequence %d", k.Metadata.Sequence.Stream)
+				continue
+			}
+
 			message, err := formats.Active().Parse(k.Msg)
 			if err != nil {
 				logrus.Error(err)

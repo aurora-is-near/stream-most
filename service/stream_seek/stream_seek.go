@@ -225,6 +225,10 @@ func (p *StreamSeek) SeekLastFullyWrittenBlock() (
 
 // SeekFirstAnnouncementBetween returns the sequence number of the first block announcement which sequence number
 // is between from and to. Both from and to are given in sequence numbers and are used to limit the search range.
+// Despite it's name, it doesn't really guarantee that the returned announcement is the first one.
+// It might return non-first if NATS for some reason gives a lot of strange not-founds while we are searching.
+// For example, it will most likely return non-first announcement if it searches from the beginning of the actively
+// written stream with discard policy set to old, and the latency to the NATS cluster is high.
 func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint64, error) {
 	info, _, err := p.stream.GetInfo(0)
 	if err != nil {

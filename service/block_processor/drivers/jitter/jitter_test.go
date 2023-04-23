@@ -41,7 +41,7 @@ func TestJitter_NoDropout(t *testing.T) {
 		DropoutChance: 0.0,
 	})
 
-	input := adapters.ReaderOutputToNatsMessages(rdr.Output())
+	input, _ := adapters.ReaderOutputToNatsMessages(rdr.Output(), 10)
 	output := make(chan messages.AbstractNatsMessage, 100)
 	driver.Bind(input, output)
 

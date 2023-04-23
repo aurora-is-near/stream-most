@@ -19,13 +19,13 @@ type Processor struct {
 }
 
 func (g *Processor) work() {
-	defer close(g.myOutput)
 	g.driver.BindObserver(g.Observer)
 	g.driver.Bind(g.input, g.driverOutput)
 	g.driver.Run()
 }
 
 func (g *Processor) proxyMessages() {
+	defer close(g.myOutput)
 	for msg := range g.driverOutput {
 		g.myOutput <- msg
 

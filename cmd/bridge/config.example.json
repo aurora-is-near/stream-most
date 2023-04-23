@@ -59,17 +59,16 @@
   "Bridge": {
     "InputStartSequence": 0,
     "InputEndSequence": 0,
-    "ParseTolerance": 30,
+    "ParseTolerance": 30
   },
   "InputStartSequence": 3192520152,
   "InputEndSequenece": 0,
   "RestartDelayMs": 2000,
-  "ToleranceWindow": 1000,
+  "ToleranceWindow": 10,
   "Monitoring": {
     "ListenAddress": "localhost:9991",
     "Namespace": "infra",
     "Subsystem": "stream_bridge",
     "StdoutIntervalSeconds": 10
-  },
-  "RestartAttempts": 1
+  }
 }
