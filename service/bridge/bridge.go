@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/aurora-is-near/stream-most/service/block_processor"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers"
+	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
 	"github.com/aurora-is-near/stream-most/service/block_writer"
 	"github.com/aurora-is-near/stream-most/service/stream_peek"
 	"github.com/aurora-is-near/stream-most/service/stream_seek"
@@ -21,7 +22,13 @@ type Bridge struct {
 	ReaderOptions *reader.Options
 	Driver        drivers.Driver
 
+	processor *block_processor.Processor
+
 	options *Options
+}
+
+func (b *Bridge) Observer() *observer.Observer {
+	return b.processor.Observer
 }
 
 func (b *Bridge) Run() error {
@@ -76,6 +83,8 @@ func (b *Bridge) Run() error {
 		b.options.ParseTolerance,
 	)
 
+	b.processor = processor
+
 	writer.OnClose(func(err error) {
 		logrus.Error("Writer closed with error: ", err)
 		rdr.Stop()
@@ -86,6 +95,8 @@ func (b *Bridge) Run() error {
 		err := writer.Write(context.Background(), results)
 		if err != nil {
 			logrus.Errorf("Error while writing a message to output stream: %v", err)
+		} else {
+			b.processor.Emit(observer.Write, results)
 		}
 	}
 
