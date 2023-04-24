@@ -3,7 +3,7 @@ package backup
 import (
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
-	"github.com/aurora-is-near/stream-most/storage"
+	"github.com/aurora-is-near/stream-most/storage" // There's no such package
 )
 
 type Backup struct {

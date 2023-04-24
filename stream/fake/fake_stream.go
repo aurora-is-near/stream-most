@@ -62,7 +62,7 @@ func (s *Stream) GetInfo(_ time.Duration) (*nats.StreamInfo, time.Time, error) {
 	}
 
 	return &nats.StreamInfo{
-		Created: time.Now().Add(-1337 * time.Hour),
+		Created: time.Now().Add(-1337 * time.Hour), // ;D
 		State: nats.StreamState{
 			FirstSeq: firstSeq,
 			LastSeq:  lastSeq,
@@ -107,6 +107,7 @@ func (s *Stream) ExpectExactly(t *testing.T, msgs ...messages.NatsMessage) {
 		expected := msgs[i]
 		found := s.stream[i]
 		if expected.GetType() != found.GetType() {
+			// Wrong formatting directive (%d needed (or %v alternatively))
 			t.Errorf("Different message types. Expected: %s, found: %s", expected.GetType(), found.GetType())
 		}
 		if expected.GetSequence() != found.GetSequence() {

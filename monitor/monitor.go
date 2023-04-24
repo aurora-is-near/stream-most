@@ -34,6 +34,8 @@ func (m *MetricsServer) Serve(logMilestones bool) {
 	defer func() {
 		http.Handle("/metrics", promhttp.Handler())
 		_ = http.ListenAndServe(m.options.ListenAddress, nil)
+		// I'm not completely sure if not having a graceful shutdown is safe. Are you?
+		// In particular, that it won't panic, will release the socket, port binding etc
 	}()
 
 	if logMilestones {

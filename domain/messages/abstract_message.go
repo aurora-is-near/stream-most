@@ -26,6 +26,7 @@ type NatsMessage struct {
 	Shard        *BlockShard
 }
 
+// Why not pointer-receiver methods (all of them below)?
 func (f NatsMessage) GetSequence() uint64 {
 	return f.Metadata.Sequence.Stream
 }

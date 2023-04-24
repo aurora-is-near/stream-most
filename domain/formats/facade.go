@@ -58,7 +58,9 @@ func (f *Facade) ParseRawMsg(msg *nats.RawStreamMsg) (messages.AbstractNatsMessa
 		}
 
 		return messages.NatsMessage{
-			Msg: &nats.Msg{
+			// Msg and Metadata are same for all cases.
+			// Consider factoring them out outside of switch-case?
+			Msg: &nats.Msg{               
 				Subject: msg.Subject,
 				Header:  msg.Header,
 				Data:    msg.Data,

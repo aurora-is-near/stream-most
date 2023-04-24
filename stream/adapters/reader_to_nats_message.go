@@ -9,7 +9,7 @@ import (
 )
 
 func ReaderOutputToNatsMessages(input <-chan *reader.Output, parseTolerance uint64) (chan messages.AbstractNatsMessage, chan error) {
-	in := make(chan messages.AbstractNatsMessage, 1024)
+	in := make(chan messages.AbstractNatsMessage, 1024) // consider making buffer size configurable for delayed fine-tuning
 	errorsOutput := make(chan error, 1)
 
 	parsesFailedInRow := uint64(0)
@@ -40,8 +40,8 @@ func ReaderOutputToNatsMessages(input <-chan *reader.Output, parseTolerance uint
 
 			in <- message
 		}
-		close(in)
-		close(errorsOutput)
+		close(in) // defer
+		close(errorsOutput) // defer
 	}()
 
 	return in, errorsOutput

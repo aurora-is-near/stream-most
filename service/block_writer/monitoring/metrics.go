@@ -12,6 +12,7 @@ var (
 )
 
 func Export(opts *monitor_options.Options) {
+	// We _really_ need labels as well
 	TipHeight = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace:   opts.Namespace,
 		Subsystem:   opts.Subsystem,

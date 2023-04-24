@@ -32,10 +32,12 @@ func NewBlockAnnouncementV3(parent *borealisproto.Message_NearBlockHeader) *Bloc
 	return &BlockAnnouncement{
 		Parent: parent,
 		Block: blocks.NearBlock{
+			// Just a note: header.H256Hash is probably a binary-hash, not base58 (in contrast to V2).
+			// It's fine for doing comparisons etc, but not for displaying.
 			Hash:     string(header.H256Hash),
 			PrevHash: string(header.H256PrevHash),
 			Height:   header.Height,
 		},
-		ParticipatingShardsMap: parent.NearBlockHeader.Header.ChunkMask,
+		ParticipatingShardsMap: parent.NearBlockHeader.Header.ChunkMask, // header.ChunkMask?
 	}
 }

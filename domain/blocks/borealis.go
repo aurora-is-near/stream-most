@@ -9,6 +9,7 @@ import (
 )
 
 // TODO: Remove this shit, got, it looks awful
+// xD
 
 var cborDecMode cbor.DecMode
 

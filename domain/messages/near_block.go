@@ -5,11 +5,13 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/blocks"
 )
 
+// Hm looks like this struct is never used
 type NearBlock struct {
 	Parent *borealisproto.Message_NearBlockHeader
 	Block  blocks.NearBlock
 }
 
+// And this is just the same as NewBlockAnnouncementV3?
 func NewNearBlock(parent *borealisproto.Message_NearBlockHeader) *BlockAnnouncement {
 	header := parent.NearBlockHeader.GetHeader()
 	return &BlockAnnouncement{

@@ -7,6 +7,7 @@ import (
 )
 
 var (
+	// Note for later discussion: what if we have multiple readers?
 	LastReadSequence prometheus.Gauge
 )
 
