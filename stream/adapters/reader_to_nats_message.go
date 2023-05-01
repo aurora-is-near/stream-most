@@ -14,6 +14,9 @@ func ReaderOutputToNatsMessages(input <-chan *reader.Output, parseTolerance uint
 
 	parsesFailedInRow := uint64(0)
 	go func() {
+		defer close(in)
+		defer close(errorsOutput)
+
 		for k := range input {
 			if parsesFailedInRow > parseTolerance {
 				logrus.Error("Reader adapter: too many parse errors in a row, exiting")
@@ -40,8 +43,6 @@ func ReaderOutputToNatsMessages(input <-chan *reader.Output, parseTolerance uint
 
 			in <- message
 		}
-		close(in)
-		close(errorsOutput)
 	}()
 
 	return in, errorsOutput

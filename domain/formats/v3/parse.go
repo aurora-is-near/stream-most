@@ -1,11 +1,10 @@
 package v3
 
 import (
-	"bytes"
 	"errors"
 	borealisproto "github.com/aurora-is-near/borealis-prototypes/go"
 	"github.com/aurora-is-near/stream-most/domain/messages"
-	"github.com/klauspost/compress/zstd"
+	"github.com/aurora-is-near/stream-most/domain/zstd"
 	"io"
 )
 
@@ -13,17 +12,13 @@ func ProtoDecode(d []byte) (*borealisproto.Message, error) {
 	if len(d) == 0 {
 		return nil, io.EOF
 	}
-	decoded := new(bytes.Buffer)
-	dec, err := zstd.NewReader(bytes.NewBuffer(d))
+	decoder := zstd.GetDecoder()
+	decoded, err := decoder.DecodeAll(d, nil)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := io.Copy(decoded, dec); err != nil {
-		return nil, err
-	}
-	dec.Close()
 	msg := borealisproto.Message{}
-	if err := msg.UnmarshalVT(decoded.Bytes()); err != nil {
+	if err := msg.UnmarshalVT(decoded); err != nil {
 		return nil, err
 	}
 

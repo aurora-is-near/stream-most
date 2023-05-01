@@ -50,6 +50,17 @@ func (f *Facade) ParseAbstractBlock(data []byte) (*blocks.AbstractBlock, error) 
 }
 
 func (f *Facade) ParseRawMsg(msg *nats.RawStreamMsg) (messages.AbstractNatsMessage, error) {
+	message := &nats.Msg{
+		Subject: msg.Subject,
+		Header:  msg.Header,
+		Data:    msg.Data,
+	}
+	metadata := &nats.MsgMetadata{
+		Sequence: nats.SequencePair{
+			Stream: msg.Sequence,
+		},
+	}
+
 	switch f.format {
 	case NearV2:
 		parsed, err := v2_near.ParseNearBlock(msg.Data, msg.Header)
@@ -58,16 +69,8 @@ func (f *Facade) ParseRawMsg(msg *nats.RawStreamMsg) (messages.AbstractNatsMessa
 		}
 
 		return messages.NatsMessage{
-			Msg: &nats.Msg{
-				Subject: msg.Subject,
-				Header:  msg.Header,
-				Data:    msg.Data,
-			},
-			Metadata: &nats.MsgMetadata{
-				Sequence: nats.SequencePair{
-					Stream: msg.Sequence,
-				},
-			},
+			Msg:          message,
+			Metadata:     metadata,
 			Announcement: messages.NewBlockAnnouncementV2(parsed),
 			Shard:        nil,
 		}, nil
@@ -78,53 +81,29 @@ func (f *Facade) ParseRawMsg(msg *nats.RawStreamMsg) (messages.AbstractNatsMessa
 		}
 
 		return messages.NatsMessage{
-			Msg: &nats.Msg{
-				Subject: msg.Subject,
-				Header:  msg.Header,
-				Data:    msg.Data,
-			},
-			Metadata: &nats.MsgMetadata{
-				Sequence: nats.SequencePair{
-					Stream: msg.Sequence,
-				},
-			},
+			Msg:          message,
+			Metadata:     metadata,
 			Announcement: messages.NewBlockAnnouncementV2(parsed),
 			Shard:        nil,
 		}, nil
 	case NearV3:
-		message, err := v3.ProtoToMessage(msg.Data)
+		natsMessage, err := v3.ProtoToMessage(msg.Data)
 		if err != nil {
 			return nil, err
 		}
 
-		switch m := message.(type) {
+		switch m := natsMessage.(type) {
 		case *messages.BlockAnnouncement:
 			return messages.NatsMessage{
-				Msg: &nats.Msg{
-					Subject: msg.Subject,
-					Header:  msg.Header,
-					Data:    msg.Data,
-				},
-				Metadata: &nats.MsgMetadata{
-					Sequence: nats.SequencePair{
-						Stream: msg.Sequence,
-					},
-				},
+				Msg:          message,
+				Metadata:     metadata,
 				Announcement: m,
 			}, nil
 		case *messages.BlockShard:
 			return messages.NatsMessage{
-				Msg: &nats.Msg{
-					Subject: msg.Subject,
-					Header:  msg.Header,
-					Data:    msg.Data,
-				},
-				Metadata: &nats.MsgMetadata{
-					Sequence: nats.SequencePair{
-						Stream: msg.Sequence,
-					},
-				},
-				Shard: m,
+				Msg:      message,
+				Metadata: metadata,
+				Shard:    m,
 			}, nil
 		default:
 			return nil, errors.New("unknown message type for NearV3")

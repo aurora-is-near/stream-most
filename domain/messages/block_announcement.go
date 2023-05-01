@@ -36,6 +36,6 @@ func NewBlockAnnouncementV3(parent *borealisproto.Message_NearBlockHeader) *Bloc
 			PrevHash: string(header.H256PrevHash),
 			Height:   header.Height,
 		},
-		ParticipatingShardsMap: parent.NearBlockHeader.Header.ChunkMask,
+		ParticipatingShardsMap: header.ChunkMask,
 	}
 }

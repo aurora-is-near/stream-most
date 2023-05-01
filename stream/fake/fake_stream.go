@@ -107,7 +107,7 @@ func (s *Stream) ExpectExactly(t *testing.T, msgs ...messages.NatsMessage) {
 		expected := msgs[i]
 		found := s.stream[i]
 		if expected.GetType() != found.GetType() {
-			t.Errorf("Different message types. Expected: %s, found: %s", expected.GetType(), found.GetType())
+			t.Errorf("Different message types. Expected: %d, found: %d", expected.GetType(), found.GetType())
 		}
 		if expected.GetSequence() != found.GetSequence() {
 			t.Errorf("Different message sequences. Expected: %d, found: %d", expected.GetSequence(), found.GetSequence())

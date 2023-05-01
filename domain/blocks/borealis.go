@@ -8,8 +8,7 @@ import (
 	"github.com/fxamacker/cbor/v2"
 )
 
-// TODO: Remove this shit, got, it looks awful
-
+// TODO: Remove this shit, god, it looks awful
 var cborDecMode cbor.DecMode
 
 func getCborDecMode() (cbor.DecMode, error) {
