@@ -12,10 +12,9 @@ func ProtoEncode(message *borealisproto.Message) ([]byte, error) {
 		return nil, err
 	}
 
-	buf := make([]byte, 0)
-	out := bytes.NewBuffer(buf)
+	var out bytes.Buffer
 
-	writer, err := zstd.NewWriter(out, zstd.WithEncoderLevel(zstd.SpeedDefault))
+	writer, err := zstd.NewWriter(&out, zstd.WithEncoderLevel(zstd.SpeedDefault))
 	if err != nil {
 		return nil, err
 	}

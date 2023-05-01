@@ -1,7 +1,7 @@
 package v3
 
 import (
-	"errors"
+	"fmt"
 	borealisproto "github.com/aurora-is-near/borealis-prototypes/go"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/domain/zstd"
@@ -36,6 +36,7 @@ func ProtoToMessage(d []byte) (interface{}, error) {
 		return messages.NewBlockAnnouncementV3(msgT), nil
 	case *borealisproto.Message_NearBlockShard:
 		return messages.NewBlockShard(msgT), nil
+	default:
+		return nil, fmt.Errorf("unexpected payload type: %T", decoded.Payload)
 	}
-	return nil, errors.New("cant parse message")
 }
