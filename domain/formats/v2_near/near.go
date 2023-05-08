@@ -5,7 +5,7 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-func ParseNearBlock(data []byte, header nats.Header) (*blocks.AbstractBlock, error) {
+func ParseNearBlock(data []byte, _ nats.Header) (*blocks.AbstractBlock, error) {
 	block, err := blocks.DecodeNearBlock(data)
 	if err != nil {
 		return nil, err

@@ -80,7 +80,9 @@ func (b *Bridge) Run(ctx context.Context) error {
 
 	processor.Observer.Register(b.handlers)
 
+	var writerError error
 	writer.OnClose(func(err error) {
+		writerError = err
 		logrus.Error("Writer closed with error: ", err)
 		rdr.Stop()
 		processor.Kill()
@@ -90,25 +92,30 @@ func (b *Bridge) Run(ctx context.Context) error {
 		err := writer.Write(ctx, results)
 		if err != nil {
 			logrus.Errorf("Error while writing a message to output stream: %v", err)
-			return err
-		} else {
-			processor.Emit(observer.Write, results)
+			continue
 		}
+
+		processor.Emit(observer.Write, results)
 	}
 
 	err = <-readerErrors
 	if err != nil {
 		logrus.Errorf("Reader adapter finished with error: %v", err)
-		return err
+		return errors.Wrap(err, "reader adapter finished with error: ")
 	}
 
 	err = b.Driver.FinishError()
 	if err != nil {
 		logrus.Errorf("Finished with error: %v", err)
-		return err
+		return errors.Wrap(err, "driver finished with error: ")
 	}
 
-	logrus.Info("Finished without driver error")
+	if writerError != nil {
+		logrus.Errorf("Finishing because of writer's error: %v", writerError)
+		return errors.Wrap(writerError, "writer finished with error: ")
+	}
+
+	logrus.Info("Finished without error")
 	return nil
 }
 

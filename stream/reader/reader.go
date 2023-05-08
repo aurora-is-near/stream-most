@@ -159,6 +159,8 @@ func (r *Reader) run() {
 				batchSize = r.countBatchSize(curSeq, lastSeq)
 			}
 
+			logrus.Infof("Fetching %d", batchSize)
+
 			messages, err := r.sub.Fetch(int(batchSize), fetchWait)
 			if err != nil {
 				if curSeq >= lastSeq {
@@ -172,6 +174,7 @@ func (r *Reader) run() {
 				return
 			}
 
+			logrus.Infof("Received batch of %d", len(messages))
 			result := make([]*Output, 0, len(messages))
 			for _, msg := range messages {
 				if err := msg.Ack(); err != nil {

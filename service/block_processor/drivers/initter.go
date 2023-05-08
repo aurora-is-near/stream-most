@@ -7,7 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func Infer(tp DriverType, input, output stream.Interface) Driver {
+func Infer(tp DriverType, _, output stream.Interface) Driver {
 	switch tp {
 	case NearV3:
 		var lastWrittenHash *string

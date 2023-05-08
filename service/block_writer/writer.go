@@ -147,7 +147,7 @@ func (w *Writer) enrichHeaders(message messages.AbstractNatsMessage, header nats
 func (w *Writer) processError(err error) {
 	switch err {
 	case ErrLowHeight:
-		w.lowHeightInRow += 1
+		w.lowHeightInRow++
 		if w.lowHeightInRow >= w.options.LowHeightTolerance {
 			w.gracefulShutdown(ErrLowHeight)
 		}

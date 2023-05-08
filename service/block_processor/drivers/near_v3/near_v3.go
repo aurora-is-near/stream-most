@@ -45,7 +45,7 @@ func (n *NearV3) Run() {
 			break
 		}
 
-		n.clock += 1
+		n.clock++
 
 		if msg.IsAnnouncement() {
 			n.processAnnouncement(msg)
@@ -61,7 +61,7 @@ func (n *NearV3) Run() {
 
 		n.clearCache()
 
-		n.messagesSinceLastWrite += 1
+		n.messagesSinceLastWrite++
 		if n.messagesSinceLastWrite > n.opts.StuckTolerance {
 			leave := n.stuck()
 			if leave {

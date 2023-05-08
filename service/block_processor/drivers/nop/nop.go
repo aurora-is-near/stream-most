@@ -5,27 +5,27 @@ import (
 	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
 )
 
-type NopDriver struct {
+type Driver struct {
 	input  chan messages.AbstractNatsMessage
 	output chan messages.AbstractNatsMessage
 
 	killed bool
 }
 
-func (n *NopDriver) BindObserver(obs *observer.Observer) {
+func (n *Driver) BindObserver(_ *observer.Observer) {
 	// not using one :)
 }
 
-func (n *NopDriver) Kill() {
+func (n *Driver) Kill() {
 	n.killed = true
 }
 
-func (n *NopDriver) Bind(input chan messages.AbstractNatsMessage, output chan messages.AbstractNatsMessage) {
+func (n *Driver) Bind(input chan messages.AbstractNatsMessage, output chan messages.AbstractNatsMessage) {
 	n.input = input
 	n.output = output
 }
 
-func (n *NopDriver) Run() {
+func (n *Driver) Run() {
 	for msg := range n.input {
 		if n.killed {
 			break
@@ -34,6 +34,6 @@ func (n *NopDriver) Run() {
 	}
 }
 
-func NewNopDriver() *NopDriver {
-	return &NopDriver{}
+func NewNopDriver() *Driver {
+	return &Driver{}
 }

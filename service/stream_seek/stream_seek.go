@@ -109,7 +109,7 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 
 		if len(d.Data) == 0 {
 			// Empty message :(
-			shift += 1
+			shift++
 			continue
 		}
 
@@ -128,20 +128,20 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 				r = (l + r) / 2
 			}
 		case message.IsShard():
-			shift += 1
+			shift++
 		}
 	}
 
 	for shift := uint64(0); shift < 10; shift++ {
 		d, err := p.stream.Get(l + shift)
 		if err != nil {
-			logrus.Error(errors.Wrap(err, "cannot read message:"))
+			logrus.Error(errors.Wrap(err, "cannot read message: "))
 			continue
 		}
 
 		message, err := formats.Active().ParseRawMsg(d)
 		if err != nil {
-			logrus.Error(errors.Wrap(err, "corrupted message:"))
+			logrus.Error(errors.Wrap(err, "corrupted message: "))
 			continue
 		}
 

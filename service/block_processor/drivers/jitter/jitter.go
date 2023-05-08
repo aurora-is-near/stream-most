@@ -44,7 +44,7 @@ func (j *Jitter) Run() {
 			break
 		}
 
-		j.clock += 1
+		j.clock++
 
 		if j.shouldDropout(msg) {
 			continue

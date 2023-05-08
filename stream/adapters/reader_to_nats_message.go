@@ -38,7 +38,7 @@ func ReaderOutputToNatsMessages(input <-chan *reader.Output, parseTolerance uint
 			message, err := formats.Active().ParseWithMetadata(k.Msg, k.Metadata)
 			if err != nil {
 				logrus.Error(err)
-				parsesFailedInRow += 1
+				parsesFailedInRow++
 				continue
 			}
 

@@ -66,10 +66,11 @@ func main() {
 
 	for toleranceAttempts > 0 {
 		writeHappened, err := run(ctx, config)
+		logrus.Info("Write happened? ", writeHappened)
 		if err != nil {
 			logrus.Error(err)
 			if !writeHappened {
-				toleranceAttempts -= 1
+				toleranceAttempts--
 			}
 			continue
 		}

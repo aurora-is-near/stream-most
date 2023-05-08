@@ -83,6 +83,10 @@ func (m *MetricsServer) spewStdout() {
 			// It's a default metric about go stuff, skip it.
 			continue
 		}
+		if strings.HasPrefix(mf.GetName(), "promhttp_") {
+			// It's promhttp's own metrics, skip it.
+			continue
+		}
 		for _, metric := range mf.GetMetric() {
 			table.Append([]string{mf.GetName(), metric.String()})
 		}

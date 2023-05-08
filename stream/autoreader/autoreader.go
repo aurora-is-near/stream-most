@@ -53,9 +53,9 @@ func (ar *AutoReader) newStream() (stream.Interface, error) {
 	if ar.streamOpts.ShouldFake {
 		if ar.streamOpts.FakeStream != nil {
 			return ar.streamOpts.FakeStream, nil
-		} else {
-			return defaultFakeStreamOpener(ar.streamOpts), nil
 		}
+
+		return defaultFakeStreamOpener(ar.streamOpts), nil
 	}
 	return stream.Connect(ar.streamOpts)
 }

@@ -54,7 +54,7 @@ func main() {
 	//seq := uint64(3205829527)
 	seq := uint64(5900)
 	for i := 0; i < 100; i++ {
-		seq += 1
+		seq++
 
 		get, err := connectStream.Get(seq)
 		if err != nil {

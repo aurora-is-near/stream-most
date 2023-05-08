@@ -47,10 +47,10 @@ func (b *storedBlock) addShard(shard messages.AbstractNatsMessage) (isNew bool) 
 		b.shards = append(b.shards, shard)
 		b.shardsRequired[shard.GetShard().ShardID] = false
 		return true
-	} else {
-		logrus.Warn("Undesired shard received for the given block")
-		return false
 	}
+
+	logrus.Warn("Undesired shard received for the given block")
+	return false
 }
 
 func (b *storedBlock) stashShard(shard messages.AbstractNatsMessage) {

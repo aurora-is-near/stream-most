@@ -22,7 +22,7 @@ var nearBlockSchema = [][]string{
 	{"block", "header", "height"},
 }
 
-func DecodeNearBlockJson(data []byte) ([]byte, error) {
+func DecodeNearBlockJSON(data []byte) ([]byte, error) {
 	payload, err := DecodeBorealisPayload[[]byte](data)
 	if err != nil {
 		return nil, err
@@ -36,7 +36,7 @@ func DecodeNearBlockJson(data []byte) ([]byte, error) {
 }
 
 func DecodeNearBlock(data []byte) (*NearBlock, error) {
-	blockJson, err := DecodeNearBlockJson(data)
+	blockJSON, err := DecodeNearBlockJSON(data)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +45,7 @@ func DecodeNearBlock(data []byte) (*NearBlock, error) {
 
 	var anyErr error
 	jsonparser.EachKey(
-		blockJson,
+		blockJSON,
 		func(i int, b []byte, vt jsonparser.ValueType, err error) {
 			if anyErr != nil {
 				return
