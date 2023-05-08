@@ -30,7 +30,11 @@ func (g *Processor) proxyMessages(ctx context.Context) {
 loop:
 	for {
 		select {
-		case msg := <-g.driverOutput:
+		case msg, isOpen := <-g.driverOutput:
+			if !isOpen {
+				break loop
+			}
+
 			g.myOutput <- msg
 
 			if msg.IsShard() {

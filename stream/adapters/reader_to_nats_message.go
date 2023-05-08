@@ -26,7 +26,8 @@ func ReaderOutputToNatsMessages(input <-chan *reader.Output, parseTolerance uint
 
 			if k.Error != nil {
 				logrus.Errorf("Reader adapter: %v", k.Error)
-				continue
+				errorsOutput <- k.Error
+				break
 			}
 
 			if len(k.Msg.Data) == 0 {

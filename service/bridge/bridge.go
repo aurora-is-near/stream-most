@@ -90,6 +90,7 @@ func (b *Bridge) Run(ctx context.Context) error {
 		err := writer.Write(ctx, results)
 		if err != nil {
 			logrus.Errorf("Error while writing a message to output stream: %v", err)
+			return err
 		} else {
 			processor.Emit(observer.Write, results)
 		}
@@ -107,7 +108,7 @@ func (b *Bridge) Run(ctx context.Context) error {
 		return err
 	}
 
-	logrus.Info("Finished without error")
+	logrus.Info("Finished without driver error")
 	return nil
 }
 
