@@ -1,6 +1,7 @@
 package block_processor
 
 import (
+	"context"
 	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/near_v3"
@@ -49,7 +50,7 @@ func TestBlockProcessor(t *testing.T) {
 		)
 	})
 
-	output := processor.Run()
+	output := processor.Run(context.TODO())
 	outputStream := fake.NewStream()
 	for msg := range output {
 		outputStream.Add(msg.(messages.NatsMessage))

@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"github.com/aurora-is-near/stream-backup/chunks"
 	"github.com/aurora-is-near/stream-most/configs"
 	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/monitor"
 	"github.com/aurora-is-near/stream-most/service/stream_restore"
+	"github.com/aurora-is-near/stream-most/support/when_interrupted"
 	"github.com/sirupsen/logrus"
 	"os"
 )
@@ -31,13 +33,16 @@ func run(config Config) error {
 }
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	when_interrupted.Call(cancel)
+
 	config := Config{}
 	configs.ReadTo("cmd/restore/config.json", &config)
 	config.Output.Nats.Name = "stream-most"
 
 	formats.UseFormat(config.MessagesFormat)
 
-	go monitor.NewMetricsServer(config.Monitoring).Serve(true)
+	go monitor.NewMetricsServer(config.Monitoring).Serve(ctx, true)
 
 	err := run(config)
 	if err != nil {

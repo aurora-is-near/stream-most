@@ -1,6 +1,7 @@
 package block_processor
 
 import (
+	"context"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers"
 	"github.com/aurora-is-near/stream-most/service/block_processor/monitoring"
@@ -24,27 +25,33 @@ func (g *Processor) work() {
 	g.driver.Run()
 }
 
-func (g *Processor) proxyMessages() {
+func (g *Processor) proxyMessages(ctx context.Context) {
 	defer close(g.myOutput)
-	for msg := range g.driverOutput {
-		g.myOutput <- msg
+loop:
+	for {
+		select {
+		case msg := <-g.driverOutput:
+			g.myOutput <- msg
 
-		if msg.IsShard() {
-			g.Observer.Emit(observer.NewShard, msg.GetShard())
-		}
-		if msg.IsAnnouncement() {
-			g.Observer.Emit(observer.NewAnnouncement, msg.GetAnnouncement())
+			if msg.IsShard() {
+				g.Observer.Emit(observer.NewShard, msg.GetShard())
+			}
+			if msg.IsAnnouncement() {
+				g.Observer.Emit(observer.NewAnnouncement, msg.GetAnnouncement())
+			}
+		case <-ctx.Done():
+			break loop
 		}
 	}
 }
 
-func (g *Processor) Run() chan messages.AbstractNatsMessage {
+func (g *Processor) Run(ctx context.Context) chan messages.AbstractNatsMessage {
 	g.driverOutput = make(chan messages.AbstractNatsMessage, 1024)
 	g.myOutput = make(chan messages.AbstractNatsMessage, 1024)
 	monitoring.RegisterObservations(g.Observer)
 
 	go g.work()
-	go g.proxyMessages()
+	go g.proxyMessages(ctx)
 	return g.myOutput
 }
 

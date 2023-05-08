@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"context"
 	"github.com/aurora-is-near/stream-most/service/block_processor"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/validator"
 	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
@@ -24,7 +25,7 @@ type Validator struct {
 	InputEndSequence   uint64
 }
 
-func (b *Validator) Run() error {
+func (b *Validator) Run(ctx context.Context) error {
 	logrus.Info("Determining the best sequence to start reading from the input stream...")
 	streamStats, _, err := b.Input.GetInfo(0)
 	if err != nil {
@@ -61,7 +62,7 @@ func (b *Validator) Run() error {
 		logrus.Errorf("Error in data on sequence %d: %v", d.Message.GetSequence(), d.Wraps)
 	})
 
-	<-processor.Run() // Validation driver doesn't write anything and then closes
+	<-processor.Run(ctx) // Validation driver doesn't write anything and then closes
 
 	err = <-readerErrors
 	if err != nil {

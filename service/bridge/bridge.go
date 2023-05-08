@@ -26,7 +26,7 @@ type Bridge struct {
 	handlers map[observer.EventType][]func(any)
 }
 
-func (b *Bridge) Run() error {
+func (b *Bridge) Run(ctx context.Context) error {
 	// Determine height on the output stream
 	height, err := stream_peek.NewStreamPeek(b.Output).GetTipHeight()
 	if err != nil {
@@ -86,8 +86,8 @@ func (b *Bridge) Run() error {
 		processor.Kill()
 	})
 
-	for results := range processor.Run() {
-		err := writer.Write(context.Background(), results)
+	for results := range processor.Run(ctx) {
+		err := writer.Write(ctx, results)
 		if err != nil {
 			logrus.Errorf("Error while writing a message to output stream: %v", err)
 		} else {

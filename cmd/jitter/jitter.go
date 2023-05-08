@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/aurora-is-near/stream-most/configs"
 	"github.com/aurora-is-near/stream-most/domain/formats"
@@ -8,11 +9,12 @@ import (
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/jitter"
 	"github.com/aurora-is-near/stream-most/service/bridge"
 	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/aurora-is-near/stream-most/support/when_interrupted"
 	"github.com/sirupsen/logrus"
 	"os"
 )
 
-func run(config Config) error {
+func run(ctx context.Context, config Config) error {
 	driver := jitter.NewJitter(config.Jitter.Validated())
 
 	input, err := stream.Connect(config.Input)
@@ -35,13 +37,16 @@ func run(config Config) error {
 		config.Writer,
 		config.Reader,
 	)
-	if err := b.Run(); err != nil {
+	if err := b.Run(ctx); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 	}
 	return nil
 }
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	when_interrupted.Call(cancel)
+
 	config := Config{}
 	configs.ReadTo("cmd/jitter/config.json", &config)
 	config.Input.Nats.Name = "stream-most-jitter"
@@ -49,12 +54,12 @@ func main() {
 
 	formats.UseFormat(config.MessagesFormat)
 
-	go monitor.NewMetricsServer(config.Monitoring).Serve(true)
+	go monitor.NewMetricsServer(config.Monitoring).Serve(ctx, true)
 
 	for i := uint64(0); i < config.RestartAttempts; i++ {
-		err := run(config)
+		err := run(ctx, config)
 		if err != nil {
-			panic(err)
+			logrus.Error(err)
 		}
 	}
 	os.Exit(1)

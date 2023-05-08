@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"context"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/near_v3"
 	"github.com/aurora-is-near/stream-most/service/block_writer"
 	"github.com/aurora-is-near/stream-most/service/fakes"
@@ -51,7 +52,7 @@ func TestBridge(t *testing.T) {
 		&reader.Options{},
 	)
 
-	err := bridge.Run()
+	err := bridge.Run(context.TODO())
 	if err != nil {
 		panic(err)
 	}

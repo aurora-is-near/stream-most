@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"github.com/aurora-is-near/stream-most/configs"
 	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/monitor"
@@ -8,12 +9,13 @@ import (
 	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
 	"github.com/aurora-is-near/stream-most/service/bridge"
 	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/aurora-is-near/stream-most/support/when_interrupted"
 	"github.com/sirupsen/logrus"
 	"os"
 )
 
 // run returns true if any write happened while running
-func run(config Config) (bool, error) {
+func run(ctx context.Context, config Config) (bool, error) {
 	input, err := stream.Connect(config.Input)
 	if err != nil {
 		logrus.Error(err)
@@ -41,13 +43,16 @@ func run(config Config) (bool, error) {
 		writeHappened = true
 	})
 
-	if err := b.Run(); err != nil {
+	if err := b.Run(ctx); err != nil {
 		return writeHappened, err
 	}
 	return writeHappened, nil
 }
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	when_interrupted.Call(cancel)
+
 	config := Config{}
 	configs.ReadTo("cmd/bridge/config.json", &config)
 	config.Input.Nats.Name = "stream-most"
@@ -55,12 +60,12 @@ func main() {
 
 	formats.UseFormat(config.MessagesFormat)
 
-	go monitor.NewMetricsServer(config.Monitoring).Serve(true)
+	go monitor.NewMetricsServer(config.Monitoring).Serve(ctx, true)
 
 	toleranceAttempts := config.ToleranceWindow
 
 	for toleranceAttempts > 0 {
-		writeHappened, err := run(config)
+		writeHappened, err := run(ctx, config)
 		if err != nil {
 			logrus.Error(err)
 			if !writeHappened {

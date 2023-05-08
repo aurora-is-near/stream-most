@@ -1,13 +1,16 @@
 package monitor
 
 import (
+	"context"
 	"github.com/aurora-is-near/stream-most/monitor/monitor_options"
 	blockProcessorMonitoring "github.com/aurora-is-near/stream-most/service/block_processor/monitoring"
 	blockWriterMonitoring "github.com/aurora-is-near/stream-most/service/block_writer/monitoring"
 	readerMonitoring "github.com/aurora-is-near/stream-most/stream/reader/monitoring"
+	"github.com/aurora-is-near/stream-most/support/when_interrupted"
 	"github.com/olekukonko/tablewriter"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sirupsen/logrus"
 	"net/http"
 	"os"
 	"strings"
@@ -19,7 +22,6 @@ type MetricsServer struct {
 	options  *monitor_options.Options
 
 	stdoutStop chan struct{}
-	ticker     *time.Ticker
 }
 
 func (m *MetricsServer) registerExports() {
@@ -30,22 +32,35 @@ func (m *MetricsServer) registerExports() {
 
 // Serve serves a server for Prometheus to scrape metrics from.
 // If logMilestones is set to true, it periodically dumps metrics to stdout
-func (m *MetricsServer) Serve(logMilestones bool) {
+func (m *MetricsServer) Serve(ctx context.Context, logMilestones bool) {
 	defer func() {
+		server := &http.Server{Addr: m.options.ListenAddress}
 		http.Handle("/metrics", promhttp.Handler())
-		_ = http.ListenAndServe(m.options.ListenAddress, nil)
+		if err := server.ListenAndServe(); err != http.ErrServerClosed {
+			logrus.Fatalf("Monitoring server ListenAndServe(): %v", err)
+		}
+		when_interrupted.Call(func() {
+			_ = server.Shutdown(ctx)
+		})
 	}()
 
 	if logMilestones {
-		ticker := time.NewTicker(time.Duration(m.options.StdoutIntervalSeconds) * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-m.stdoutStop:
-				return
-			case <-ticker.C:
-				m.spewStdout()
-			}
+		go m.serveStdout(ctx)
+	}
+}
+
+func (m *MetricsServer) serveStdout(ctx context.Context) {
+	ticker := time.NewTicker(time.Duration(m.options.StdoutIntervalSeconds) * time.Second)
+
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-m.stdoutStop:
+			return
+		case <-ticker.C:
+			m.spewStdout()
 		}
 	}
 }
@@ -59,7 +74,8 @@ func (m *MetricsServer) spewStdout() {
 
 	metricFamilies, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
-		panic(err)
+		logrus.Error(err)
+		return
 	}
 
 	for _, mf := range metricFamilies {

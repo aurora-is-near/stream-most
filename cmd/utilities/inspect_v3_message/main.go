@@ -62,7 +62,9 @@ func main() {
 		file := "./out/local/read_v3_message_" + strconv.Itoa(startSeq) + ".out"
 		logrus.Info("Reading ", file)
 		fileReader, err := os.Open(file)
-		defer fileReader.Close()
+		defer func() {
+			_ = fileReader.Close()
+		}()
 
 		if err != nil {
 			panic(err)
