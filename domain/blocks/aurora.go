@@ -10,3 +10,11 @@ type AuroraBlock struct {
 func DecodeAuroraBlock(data []byte) (*AuroraBlock, error) {
 	return DecodeBorealisPayload[AuroraBlock](data)
 }
+
+func (ab *AuroraBlock) ToAbstractBlock() *AbstractBlock {
+	return &AbstractBlock{
+		Hash:     ab.Hash,
+		PrevHash: ab.ParentHash,
+		Height:   ab.Height,
+	}
+}

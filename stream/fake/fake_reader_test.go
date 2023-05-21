@@ -2,7 +2,7 @@ package fake
 
 import (
 	reader2 "github.com/aurora-is-near/stream-most/stream/reader"
-	"github.com/aurora-is-near/stream-most/u"
+	"github.com/aurora-is-near/stream-most/testing/u"
 	"testing"
 )
 

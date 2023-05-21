@@ -16,6 +16,14 @@ type NearBlock struct {
 	Height   uint64
 }
 
+func (ab *NearBlock) ToAbstractBlock() *AbstractBlock {
+	return &AbstractBlock{
+		Hash:     ab.Hash,
+		PrevHash: ab.PrevHash,
+		Height:   ab.Height,
+	}
+}
+
 var nearBlockSchema = [][]string{
 	{"block", "header", "hash"},
 	{"block", "header", "prev_hash"},

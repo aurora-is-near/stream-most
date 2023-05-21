@@ -7,7 +7,7 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/formats/v3"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream"
-	"github.com/aurora-is-near/stream-most/u"
+	"github.com/aurora-is-near/stream-most/testing/u"
 	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 	"testing"

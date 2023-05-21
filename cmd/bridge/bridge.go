@@ -66,7 +66,7 @@ func main() {
 
 	for toleranceAttempts > 0 {
 		writeHappened, err := run(ctx, config)
-		logrus.Info("Write happened? ", writeHappened)
+		logrus.Info("Run's write status: ", writeHappened)
 		if err != nil {
 			logrus.Error(err)
 			if !writeHappened {

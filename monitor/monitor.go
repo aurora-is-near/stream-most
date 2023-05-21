@@ -17,6 +17,8 @@ import (
 	"time"
 )
 
+// MetricsServer serves metrics for Prometheus to scrape.
+// Metrics are pluggable: add your own at registerExports() function below
 type MetricsServer struct {
 	Registry *prometheus.Registry
 	options  *monitor_options.Options
@@ -24,6 +26,7 @@ type MetricsServer struct {
 	stdoutStop chan struct{}
 }
 
+// registerExports is a place where you register all your additional metrics
 func (m *MetricsServer) registerExports() {
 	readerMonitoring.Export(m.options)
 	blockProcessorMonitoring.Export(m.options)
@@ -49,6 +52,7 @@ func (m *MetricsServer) Serve(ctx context.Context, logMilestones bool) {
 	}
 }
 
+// serveStdout spits metrics to stdout every stdoutIntervalSeconds
 func (m *MetricsServer) serveStdout(ctx context.Context) {
 	ticker := time.NewTicker(time.Duration(m.options.StdoutIntervalSeconds) * time.Second)
 

@@ -10,7 +10,6 @@ import (
 	"github.com/aurora-is-near/stream-most/service/stream_seek"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/reader"
-	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -31,8 +30,7 @@ func (b *Bridge) Run(ctx context.Context) error {
 	height, err := stream_peek.NewStreamPeek(b.Output).GetTipHeight()
 	if err != nil {
 		logrus.Error(errors.Wrap(err, "cannot determine the height of the output stream"))
-		// TODO: wrap to a custom error type
-		if errors.Is(err, nats.ErrMsgNotFound) {
+		if errors.Is(err, stream_peek.ErrEmptyStream) {
 			height = 0
 		} else {
 			return err
@@ -89,6 +87,10 @@ func (b *Bridge) Run(ctx context.Context) error {
 	})
 
 	for results := range processor.Run(ctx) {
+		if ctx.Err() != nil {
+			break
+		}
+
 		err := writer.Write(ctx, results)
 		if err != nil {
 			logrus.Errorf("Error while writing a message to output stream: %v", err)

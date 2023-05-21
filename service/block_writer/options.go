@@ -22,7 +22,7 @@ type Options struct {
 	DisableExpectedCheckHeight uint64 // Height of next message
 }
 
-func (o *Options) WithDefaults() *Options {
+func (o Options) WithDefaults() *Options {
 	if o.LowHeightTolerance == 0 {
 		o.LowHeightTolerance = 20
 	}
@@ -36,10 +36,10 @@ func (o *Options) WithDefaults() *Options {
 		o.TipTtl = 15 * time.Second
 	}
 
-	return o
+	return &o
 }
 
-func (o *Options) Validated() *Options {
+func (o Options) Validated() *Options {
 	if o.MaxWriteAttempts == 0 {
 		panic("MaxWriteAttempts must be set")
 	}
@@ -52,7 +52,7 @@ func (o *Options) Validated() *Options {
 		logrus.Warn("[block_writer] BypassValidation is set to true, all validations are disabled!")
 	}
 
-	return o
+	return &o
 }
 
 func NewOptions() *Options {

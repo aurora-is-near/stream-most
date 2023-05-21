@@ -20,7 +20,7 @@ type StreamSeek struct {
 	stream stream.Interface
 }
 
-// SeekShards TODO: fetch multiple messages at once instead
+// SeekShards
 func (p *StreamSeek) SeekShards(from, to uint64, forBlock *string) ([]messages.AbstractNatsMessage, error) {
 	var shards []messages.AbstractNatsMessage
 
@@ -265,7 +265,7 @@ func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint6
 		d, err := p.stream.Get(seq)
 		if err != nil {
 			if errors.Is(err, nats.ErrMsgNotFound) {
-				logrus.Warn("Stream is deleting messages too fast, skipping 2%")
+				logrus.Warn("Stream is deleting old messages too fast, skipping 2%")
 				seq += (to - from) / 50
 				continue
 			}

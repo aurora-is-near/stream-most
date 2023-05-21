@@ -7,7 +7,7 @@ import (
 	"github.com/aurora-is-near/stream-most/service/fakes"
 	"github.com/aurora-is-near/stream-most/stream/fake"
 	"github.com/aurora-is-near/stream-most/stream/reader"
-	"github.com/aurora-is-near/stream-most/u"
+	"github.com/aurora-is-near/stream-most/testing/u"
 	"testing"
 )
 

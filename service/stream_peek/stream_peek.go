@@ -5,10 +5,13 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/nats-io/nats.go"
+	errors2 "github.com/pkg/errors"
 )
 
 var (
 	ErrCorruptedTip = errors.New("corrupted tip")
+	ErrEmptyStream  = errors.New("empty output stream")
 )
 
 // StreamPeek provides methods to peek onto the tip of the given stream
@@ -45,18 +48,22 @@ func (p *StreamPeek) GetTipHeight() (uint64, error) {
 	}
 
 	if info.State.LastSeq == 0 {
-		return 0, nil
+		return 0, ErrEmptyStream
 	}
 
 	msg, err := p.stream.Get(info.State.LastSeq)
 	if err != nil {
+		if errors.Is(err, nats.ErrMsgNotFound) {
+			return 0, ErrEmptyStream
+		}
+
 		return 0, err
 	}
 
 	// We need to inspect the message to see its height
 	message, err := formats.Active().ParseRawMsg(msg)
 	if err != nil {
-		return 0, err
+		return 0, errors2.Wrap(ErrCorruptedTip, err.Error())
 	}
 
 	return message.GetBlock().Height, nil
