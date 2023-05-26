@@ -60,6 +60,7 @@ func Start(opts *Options, input stream.Interface, startSeq uint64, endSeq uint64
 		stopped:  make(chan bool),
 		output:   make(chan *Output, opts.BufferSize),
 	}
+	r.Level = logrus.DebugLevel
 
 	err := r.startConsumer()
 	if err != nil {
@@ -122,14 +123,19 @@ func (r *Reader) run() {
 		return
 	}
 
+	logrus.Debug("Fetching last seq...")
 	curSeq := r.startSeq - 1
 	lastSeq, err := r.getLastSeq()
 	if err != nil {
 		r.finish("unable to fetch LastSeq", err)
 		return
 	}
+	logrus.Debug("Last seq is ", lastSeq)
 
-	requestTicker := time.NewTicker(time.Duration(float64(time.Second) / r.opts.MaxRps))
+	logrus.Debug("Opts MaxRPS is ", r.opts.MaxRps)
+	tickDuration := time.Duration(float64(time.Second) / r.opts.MaxRps)
+	logrus.Debug("Ticker will tick every ", tickDuration)
+	requestTicker := time.NewTicker(tickDuration)
 	defer requestTicker.Stop()
 
 	fetchWait := nats.MaxWait(time.Millisecond * time.Duration(r.opts.FetchTimeoutMs))

@@ -137,7 +137,12 @@ func (s *Stream) Write(data []byte, header nats.Header, publishAckWait nats.AckW
 
 	if s.deduplicate {
 		if _, ok := s.deduplicationHashes[header.Get(nats.MsgIdHdr)]; ok {
-			return nil, nil
+			return &nats.PubAck{
+				Stream:    "fakey-fakey",
+				Sequence:  seq,
+				Duplicate: true,
+				Domain:    "",
+			}, nil
 		}
 	}
 
@@ -172,7 +177,11 @@ func (s *Stream) Write(data []byte, header nats.Header, publishAckWait nats.AckW
 	if s.deduplicate {
 		s.deduplicationHashes[header.Get(nats.MsgIdHdr)] = struct{}{}
 	}
-	return nil, nil
+	return &nats.PubAck{
+		Stream:    "fakey-fakey",
+		Sequence:  seq,
+		Duplicate: false,
+	}, nil
 }
 
 func (s *Stream) Stats() *nats.Statistics {

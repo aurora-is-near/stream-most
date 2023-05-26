@@ -45,13 +45,18 @@ func (n *NearV3) Run() {
 			break
 		}
 
+		logrus.Debug("Received message on the input queue")
+
 		n.clock++
 
 		if msg.IsAnnouncement() {
+			logrus.Debug("Received message is an announcement")
 			n.processAnnouncement(msg)
-		}
-		if msg.IsShard() {
+		} else if msg.IsShard() {
+			logrus.Debug("Received message is block")
 			n.processShard(msg)
+		} else {
+			logrus.Warn("Unknown message type for nearv3 driver :/")
 		}
 
 		err := n.popReadyBlocks()

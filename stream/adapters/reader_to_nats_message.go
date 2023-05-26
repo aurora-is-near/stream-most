@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"context"
 	"errors"
 	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/domain/messages"
@@ -8,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func ReaderOutputToNatsMessages(input <-chan *reader.Output, parseTolerance uint64) (chan messages.AbstractNatsMessage, chan error) {
+func ReaderOutputToNatsMessages(ctx context.Context, input <-chan *reader.Output, parseTolerance uint64) (chan messages.AbstractNatsMessage, chan error) {
 	in := make(chan messages.AbstractNatsMessage, 1024)
 	errorsOutput := make(chan error, 1)
 
@@ -17,32 +18,42 @@ func ReaderOutputToNatsMessages(input <-chan *reader.Output, parseTolerance uint
 		defer close(in)
 		defer close(errorsOutput)
 
-		for k := range input {
-			if parsesFailedInRow > parseTolerance {
-				logrus.Error("Reader adapter: too many parse errors in a row, exiting")
-				errorsOutput <- errors.New("too many parse errors in a row")
-				break
-			}
+		for {
+			select {
+			case <-ctx.Done():
+				logrus.Info("Reader adapter: context cancelled, exiting")
+				return
+			case k, open := <-input:
+				if !open {
+					return
+				}
 
-			if k.Error != nil {
-				logrus.Errorf("Reader adapter: %v", k.Error)
-				errorsOutput <- k.Error
-				break
-			}
+				if parsesFailedInRow > parseTolerance {
+					logrus.Error("Reader adapter: too many parse errors in a row, exiting")
+					errorsOutput <- errors.New("too many parse errors in a row")
+					break
+				}
 
-			if len(k.Msg.Data) == 0 {
-				logrus.Warnf("Empty message at sequence %d", k.Metadata.Sequence.Stream)
-				continue
-			}
+				if k.Error != nil {
+					logrus.Errorf("Reader adapter: %v", k.Error)
+					errorsOutput <- k.Error
+					break
+				}
 
-			message, err := formats.Active().ParseWithMetadata(k.Msg, k.Metadata)
-			if err != nil {
-				logrus.Error(err)
-				parsesFailedInRow++
-				continue
-			}
+				if len(k.Msg.Data) == 0 {
+					logrus.Warnf("Empty message at sequence %d", k.Metadata.Sequence.Stream)
+					continue
+				}
 
-			in <- message
+				message, err := formats.Active().ParseWithMetadata(k.Msg, k.Metadata)
+				if err != nil {
+					logrus.Error(err)
+					parsesFailedInRow++
+					continue
+				}
+
+				in <- message
+			}
 		}
 	}()
 

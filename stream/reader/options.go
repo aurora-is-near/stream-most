@@ -15,8 +15,8 @@ type Options struct {
 }
 
 func (opts Options) WithDefaults() *Options {
-	if opts.MaxRps < 0.001 {
-		opts.MaxRps = 0.001
+	if opts.MaxRps < 1000 {
+		opts.MaxRps = 1000
 	}
 	if opts.MaxRequestBatchSize == 0 {
 		opts.MaxRequestBatchSize = 100

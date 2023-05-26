@@ -26,7 +26,10 @@ type Bridge struct {
 }
 
 func (b *Bridge) Run(ctx context.Context) error {
+	logrus.Debug("Starting the bridge")
+
 	// Determine height on the output stream
+	logrus.Debug("Starting stream peek on the output")
 	height, err := stream_peek.NewStreamPeek(b.Output).GetTipHeight()
 	if err != nil {
 		logrus.Error(errors.Wrap(err, "cannot determine the height of the output stream"))
@@ -36,6 +39,7 @@ func (b *Bridge) Run(ctx context.Context) error {
 			return err
 		}
 	}
+	logrus.Debug("Stream peek on the output finished, height is ", height)
 
 	logrus.Infof("Starting with height of %d", height)
 
@@ -56,27 +60,35 @@ func (b *Bridge) Run(ctx context.Context) error {
 	}
 	logrus.Infof("Starting from the sequence %d", startSequence)
 
+	logrus.Debug("Starting the reader...")
 	rdr, err := reader.Start(b.ReaderOptions, b.Input, startSequence, b.options.InputEndSequence)
 	if err != nil {
 		return errors.Wrap(err, "cannot start the reader")
 	}
 	defer rdr.Stop()
+	logrus.Debug("Reader started")
 
 	// Create a block writer
+	logrus.Debug("Starting the writer...")
 	writer := block_writer.NewWriter(
 		b.WriterOptions.WithDefaults().Validated(),
 		b.Output,
 		stream_peek.NewStreamPeek(b.Output),
 	)
+	logrus.Debug("Writer started")
 
 	// Pass messages through the block processor, and write them out
+	logrus.Debug("Starting the processor...")
 	processor, readerErrors := block_processor.NewProcessorWithReader(
+		ctx,
 		rdr.Output(),
 		b.Driver,
 		b.options.ParseTolerance,
 	)
+	logrus.Debug("Processor started")
 
 	processor.Observer.Register(b.handlers)
+	logrus.Debug("Observer registered")
 
 	var writerError error
 	writer.OnClose(func(err error) {
@@ -86,18 +98,22 @@ func (b *Bridge) Run(ctx context.Context) error {
 		processor.Kill()
 	})
 
+	logrus.Debug("Starting processor loop...")
 	for results := range processor.Run(ctx) {
 		if ctx.Err() != nil {
 			break
 		}
 
+		logrus.Debug("Received results from the processor: ", results.GetBlock().Height)
 		err := writer.Write(ctx, results)
 		if err != nil {
 			logrus.Errorf("Error while writing a message to output stream: %v", err)
 			continue
 		}
+		logrus.Debug("Message written to the output stream")
 
 		processor.Emit(observer.Write, results)
+		logrus.Debug("Emitted write event")
 	}
 
 	err = <-readerErrors

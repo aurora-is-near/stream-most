@@ -3,10 +3,12 @@ package runner
 import (
 	"context"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers"
+	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
 	"github.com/aurora-is-near/stream-most/service/block_writer"
 	"github.com/aurora-is-near/stream-most/service/bridge"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/reader"
+	"github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -26,6 +28,9 @@ type Runner struct {
 	outputStream  stream.Interface
 	driver        drivers.Driver
 	bridgeOptions *bridge.Options
+	readerOptions *reader.Options
+	maxWrites     uint64
+	writes        uint64
 }
 
 func (r *Runner) Run() error {
@@ -51,12 +56,20 @@ func (r *Runner) runBridge() error {
 		reader.Options{}.WithDefaults(),
 	)
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 	if !r.deadline.IsZero() {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithDeadline(ctx, r.deadline)
 		defer cancel()
 	}
+
+	b.On(observer.Write, func(_ any) {
+		if r.maxWrites > 0 && r.writes >= r.maxWrites {
+			logrus.Info("Runner is cancelling context...")
+			cancel()
+		}
+		r.writes++
+	})
 
 	return b.Run(ctx)
 }
