@@ -36,6 +36,13 @@ func WithDeadline(deadline time.Time) Option {
 	}
 }
 
+func WithValidatorOptions(fromSequence, toSequence uint64) Option {
+	return func(r *Runner) {
+		r.validatorFrom = fromSequence
+		r.validatorTo = toSequence
+	}
+}
+
 func WithInputStream(s stream.Interface) Option {
 	return func(r *Runner) {
 		r.inputStream = s

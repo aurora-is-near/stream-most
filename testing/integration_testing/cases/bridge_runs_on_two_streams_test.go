@@ -7,7 +7,6 @@ import (
 	"github.com/aurora-is-near/stream-most/monitor/monitor_options"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers"
 	"github.com/aurora-is-near/stream-most/service/bridge"
-	"github.com/aurora-is-near/stream-most/service/fakes"
 	"github.com/aurora-is-near/stream-most/stream/fake"
 	"github.com/aurora-is-near/stream-most/stream/reader"
 	"github.com/aurora-is-near/stream-most/testing/integration_testing/runner"
@@ -18,34 +17,39 @@ import (
 	"time"
 )
 
-func TestBridgeRunsOnProductionStream(t *testing.T) {
+func TestBridgeRunsOnTwoStreams(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
 	formats.UseFormat(formats.NearV3)
-	fakes.UseDefaultOnes()
 
 	driver := drivers.Infer(drivers.NearV3, nil, fake.NewFakeStream())
 	logrus.Debug("Driver inferred: ", reflect.TypeOf(driver).String())
 
 	inputStream, err := u.DefaultProductionStream()
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
+	}
+	info, _, _ := inputStream.GetInfo(0)
+
+	outputStream, err := u.DefaultLocalStream()
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	logrus.Debug("Getting input stream info...")
-	info, _, _ := inputStream.GetInfo(0)
-	logrus.Debug("Input stream info received")
+	err = outputStream.Js().PurgeStream("testing_stream")
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	go monitor.NewMetricsServer(&monitor_options.Options{
+	monitoring := monitor.NewMetricsServer(&monitor_options.Options{
 		ListenAddress:         "localhost:9999",
 		Namespace:             "testing",
 		Subsystem:             "testing",
 		StdoutIntervalSeconds: 10,
-	}).Serve(context.Background(), true)
-
-	fakeOutputStream := fake.NewStream()
+	})
+	go monitoring.Serve(context.Background(), true)
 
 	err = runner.NewRunner(runner.Bridge,
-		runner.WithDeadline(time.Now().Add(10*time.Second)),
+		//runner.WithDeadline(time.Now().Add(1*time.Second)),
 		runner.WithBridgeOptions(&bridge.Options{
 			InputStartSequence: info.State.FirstSeq,
 			InputEndSequence:   info.State.LastSeq,
@@ -55,18 +59,13 @@ func TestBridgeRunsOnProductionStream(t *testing.T) {
 			WrongSeqToleranceWindow: 1000,
 		}).WithDefaults()),
 		runner.WithInputStream(inputStream),
-		runner.WithOutputStream(fakeOutputStream),
+		runner.WithOutputStream(outputStream),
 		runner.WithDriver(driver),
-		runner.WithWritesLimit(1),
+		runner.WithWritesLimit(100),
 	).Run()
 
 	if err != nil {
 		t.Error(err)
-	}
-
-	// Output stream must contain more than one message
-	if len(fakeOutputStream.GetArray()) == 0 {
-		t.Error("Wrong number of messages in output stream, expected more than 0")
 	}
 
 	// Validate the output stream
@@ -76,11 +75,13 @@ func TestBridgeRunsOnProductionStream(t *testing.T) {
 			WrongSeqToleranceWindow: 1000,
 		}).WithDefaults()),
 		runner.WithValidatorOptions(0, 0),
-		runner.WithInputStream(fakeOutputStream),
+		runner.WithInputStream(outputStream),
 	).Run()
 	logrus.Info("Validator finished")
 
 	if err != nil {
 		t.Error(err)
 	}
+
+	monitoring.Spew()
 }

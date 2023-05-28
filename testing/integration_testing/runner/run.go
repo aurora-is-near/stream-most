@@ -6,6 +6,7 @@ import (
 	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
 	"github.com/aurora-is-near/stream-most/service/block_writer"
 	"github.com/aurora-is-near/stream-most/service/bridge"
+	"github.com/aurora-is-near/stream-most/service/validator"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/reader"
 	"github.com/sirupsen/logrus"
@@ -31,6 +32,8 @@ type Runner struct {
 	readerOptions *reader.Options
 	maxWrites     uint64
 	writes        uint64
+	validatorTo   uint64
+	validatorFrom uint64
 }
 
 func (r *Runner) Run() error {
@@ -38,7 +41,7 @@ func (r *Runner) Run() error {
 	case Bridge:
 		return r.runBridge()
 	case Validator:
-		r.runValidator()
+		return r.runValidator()
 	default:
 		panic("Unknown mode")
 	}
@@ -74,8 +77,16 @@ func (r *Runner) runBridge() error {
 	return b.Run(ctx)
 }
 
-func (r *Runner) runValidator() {
-	panic("Validator is not supported yet")
+func (r *Runner) runValidator() error {
+	v := validator.NewValidator(r.inputStream, r.readerOptions, r.validatorFrom, r.validatorTo)
+	ctx := context.Background()
+	if !r.deadline.IsZero() {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, r.deadline)
+		defer cancel()
+	}
+
+	return v.Run(ctx)
 }
 
 func NewRunner(mode Mode, options ...Option) *Runner {

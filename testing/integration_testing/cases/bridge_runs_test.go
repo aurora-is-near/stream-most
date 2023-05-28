@@ -22,5 +22,7 @@ func TestBridgeRuns(t *testing.T) {
 		if !errors.Is(err, stream_seek.ErrNotFound) {
 			t.Error(err)
 		}
+	} else {
+		t.Error("expected an error of empty input stream")
 	}
 }

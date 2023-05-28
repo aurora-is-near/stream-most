@@ -99,6 +99,10 @@ func (m *MetricsServer) spewStdout() {
 	table.Render()
 }
 
+func (m *MetricsServer) Spew() {
+	m.spewStdout()
+}
+
 func NewMetricsServer(options *monitor_options.Options) *MetricsServer {
 	m := &MetricsServer{
 		options:  options,

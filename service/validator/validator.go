@@ -41,6 +41,9 @@ func (b *Validator) Run(ctx context.Context) error {
 	if b.InputEndSequence < endingSequence {
 		endingSequence = b.InputEndSequence
 	}
+	if endingSequence == 0 {
+		endingSequence = streamStats.State.LastSeq
+	}
 
 	logrus.Infof("Starting from the sequence %d, finishing at %d", startingSequence, endingSequence)
 	rdr, err := reader.Start(b.ReaderOptions, b.Input, startingSequence, b.InputEndSequence)
@@ -52,7 +55,7 @@ func (b *Validator) Run(ctx context.Context) error {
 	driver := validator.NewValidator()
 
 	// Pass messages through the block processor
-	processor, readerErrors := block_processor.NewProcessorWithReader(rdr.Output(), driver, 30)
+	processor, readerErrors := block_processor.NewProcessorWithReader(ctx, rdr.Output(), driver, 30)
 	processor.On(observer.ErrorInData, func(data interface{}) {
 		d, ok := data.(*observer.WrappedMessage)
 		if !ok {
