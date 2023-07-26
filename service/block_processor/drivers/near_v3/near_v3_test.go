@@ -1,6 +1,9 @@
 package near_v3
 
 import (
+	"context"
+	"testing"
+
 	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/fakes"
@@ -8,7 +11,6 @@ import (
 	"github.com/aurora-is-near/stream-most/stream/fake"
 	"github.com/aurora-is-near/stream-most/stream/reader"
 	"github.com/aurora-is-near/stream-most/testing/u"
-	"testing"
 )
 
 func TestNearV3_Basic(t *testing.T) {
@@ -44,7 +46,7 @@ func TestNearV3_Basic(t *testing.T) {
 		BlocksCacheSize:         10,
 	})
 
-	input, _ := adapters.ReaderOutputToNatsMessages(rdr.Output(), 10)
+	input, _ := adapters.ReaderOutputToNatsMessages(context.Background(), rdr.Output(), 10)
 	output := make(chan messages.AbstractNatsMessage, 100)
 	driver.Bind(input, output)
 
@@ -101,7 +103,7 @@ func TestNearV3_Stuck(t *testing.T) {
 		BlocksCacheSize:         10,
 	})
 
-	input, _ := adapters.ReaderOutputToNatsMessages(rdr.Output(), 10)
+	input, _ := adapters.ReaderOutputToNatsMessages(context.Background(), rdr.Output(), 10)
 	output := make(chan messages.AbstractNatsMessage, 100)
 	driver.Bind(input, output)
 

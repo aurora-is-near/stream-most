@@ -1,13 +1,15 @@
 package jitter
 
 import (
+	"context"
+	"testing"
+
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/fakes"
 	"github.com/aurora-is-near/stream-most/stream/adapters"
 	"github.com/aurora-is-near/stream-most/stream/fake"
 	"github.com/aurora-is-near/stream-most/stream/reader"
 	"github.com/aurora-is-near/stream-most/testing/u"
-	"testing"
 )
 
 func TestJitter_NoDropout(t *testing.T) {
@@ -41,7 +43,7 @@ func TestJitter_NoDropout(t *testing.T) {
 		DropoutChance: 0.0,
 	})
 
-	input, _ := adapters.ReaderOutputToNatsMessages(rdr.Output(), 10)
+	input, _ := adapters.ReaderOutputToNatsMessages(context.Background(), rdr.Output(), 10)
 	output := make(chan messages.AbstractNatsMessage, 100)
 	driver.Bind(input, output)
 

@@ -2,6 +2,8 @@ package block_processor
 
 import (
 	"context"
+	"testing"
+
 	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/near_v3"
@@ -12,7 +14,6 @@ import (
 	"github.com/aurora-is-near/stream-most/stream/reader"
 	"github.com/aurora-is-near/stream-most/testing/u"
 	"github.com/sirupsen/logrus"
-	"testing"
 )
 
 func TestBlockProcessor(t *testing.T) {
@@ -34,7 +35,7 @@ func TestBlockProcessor(t *testing.T) {
 		return
 	}
 
-	inputStream, _ := adapters.ReaderOutputToNatsMessages(reader.Output(), 10)
+	inputStream, _ := adapters.ReaderOutputToNatsMessages(context.Background(), reader.Output(), 10)
 
 	processor := NewProcessor(inputStream, near_v3.NewNearV3((&near_v3.Options{
 		StuckTolerance:          10,
