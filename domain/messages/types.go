@@ -2,7 +2,7 @@ package messages
 
 type MessageType uint64
 
-func (t MessageType) String() interface{} {
+func (t MessageType) String() string {
 	switch t {
 	case Announcement:
 		return "[H]"
