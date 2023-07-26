@@ -1,11 +1,5 @@
 package blocks
 
-type Block interface {
-	GetHash() string
-	GetPrevHash() string
-	GetHeight() uint64
-}
-
 type AbstractBlock struct {
 	// CBOR annotations are needed for parsing of v2 aurora block
 	Hash     string `cbor:"hash"`
