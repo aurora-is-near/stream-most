@@ -2,13 +2,14 @@ package v3
 
 import (
 	"fmt"
+	"io"
+
 	borealisproto "github.com/aurora-is-near/borealis-prototypes/go"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/domain/zstd"
-	"io"
 )
 
-func ProtoDecode(d []byte) (*borealisproto.Message, error) {
+func DecodeProto(d []byte) (*borealisproto.Message, error) {
 	if len(d) == 0 {
 		return nil, io.EOF
 	}
@@ -25,8 +26,8 @@ func ProtoDecode(d []byte) (*borealisproto.Message, error) {
 	return &msg, nil
 }
 
-func ProtoToMessage(d []byte) (interface{}, error) {
-	decoded, err := ProtoDecode(d)
+func DecodeProtoPayload(d []byte) (interface{}, error) {
+	decoded, err := DecodeProto(d)
 	if err != nil {
 		return nil, err
 	}

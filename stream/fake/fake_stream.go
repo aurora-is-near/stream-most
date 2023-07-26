@@ -3,15 +3,16 @@ package fake
 import (
 	"errors"
 	"fmt"
+	"testing"
+	"time"
+
 	borealisproto "github.com/aurora-is-near/borealis-prototypes/go"
-	"github.com/aurora-is-near/stream-most/domain/formats/v3"
+	v3 "github.com/aurora-is-near/stream-most/domain/formats/v3"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/testing/u"
 	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
-	"testing"
-	"time"
 )
 
 // Stream is a default fake for a stream.Interface
@@ -160,7 +161,7 @@ func (s *Stream) Write(data []byte, header nats.Header, publishAckWait nats.AckW
 		Shard:        nil,
 	}
 
-	message, err := v3.ProtoDecode(data)
+	message, err := v3.DecodeProto(data)
 	if err != nil {
 		logrus.Error("cannot decode proto")
 		return nil, err

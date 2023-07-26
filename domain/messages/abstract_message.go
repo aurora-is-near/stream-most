@@ -66,10 +66,10 @@ func (f NatsMessage) GetMetadata() *nats.MsgMetadata {
 
 func (f NatsMessage) GetBlock() *blocks.AbstractBlock {
 	if f.Announcement != nil {
-		return f.GetAnnouncement().Block.ToAbstractBlock()
+		return &f.GetAnnouncement().Block
 	}
 	if f.Shard != nil {
-		return f.GetShard().Block.ToAbstractBlock()
+		return &f.GetShard().Block
 	}
 	panic("Invalid message")
 }

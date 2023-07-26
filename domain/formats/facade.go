@@ -22,11 +22,11 @@ func (f *Facade) UseFormat(format FormatType) {
 func (f *Facade) ParseAbstractBlock(data []byte) (*blocks.AbstractBlock, error) {
 	switch f.format {
 	case NearV2:
-		return v2_near.ParseNearBlock(data, map[string][]string{})
+		return v2_near.DecodeNearBlock(data, map[string][]string{})
 	case AuroraV2:
-		return v2_aurora.ParseAuroraBlock(data, map[string][]string{})
+		return v2_aurora.DecodeAuroraBlock(data, map[string][]string{})
 	case NearV3:
-		message, err := v3.ProtoToMessage(data)
+		message, err := v3.DecodeProtoPayload(data)
 		if err != nil {
 			return nil, err
 		}
@@ -63,7 +63,7 @@ func (f *Facade) ParseRawMsg(msg *nats.RawStreamMsg) (messages.AbstractNatsMessa
 
 	switch f.format {
 	case NearV2:
-		parsed, err := v2_near.ParseNearBlock(msg.Data, msg.Header)
+		parsed, err := v2_near.DecodeNearBlock(msg.Data, msg.Header)
 		if err != nil {
 			return nil, err
 		}
@@ -75,7 +75,7 @@ func (f *Facade) ParseRawMsg(msg *nats.RawStreamMsg) (messages.AbstractNatsMessa
 			Shard:        nil,
 		}, nil
 	case AuroraV2:
-		parsed, err := v2_aurora.ParseAuroraBlock(msg.Data, msg.Header)
+		parsed, err := v2_aurora.DecodeAuroraBlock(msg.Data, msg.Header)
 		if err != nil {
 			return nil, err
 		}
@@ -87,7 +87,7 @@ func (f *Facade) ParseRawMsg(msg *nats.RawStreamMsg) (messages.AbstractNatsMessa
 			Shard:        nil,
 		}, nil
 	case NearV3:
-		natsMessage, err := v3.ProtoToMessage(msg.Data)
+		natsMessage, err := v3.DecodeProtoPayload(msg.Data)
 		if err != nil {
 			return nil, err
 		}
@@ -123,7 +123,7 @@ func (f *Facade) ParseWithMetadata(msg *nats.Msg, metadata *nats.MsgMetadata) (m
 
 	switch f.format {
 	case NearV2:
-		parsed, err := v2_near.ParseNearBlock(msg.Data, header)
+		parsed, err := v2_near.DecodeNearBlock(msg.Data, header)
 		if err != nil {
 			return nil, err
 		}
@@ -135,7 +135,7 @@ func (f *Facade) ParseWithMetadata(msg *nats.Msg, metadata *nats.MsgMetadata) (m
 			Shard:        nil,
 		}, nil
 	case AuroraV2:
-		parsed, err := v2_aurora.ParseAuroraBlock(msg.Data, header)
+		parsed, err := v2_aurora.DecodeAuroraBlock(msg.Data, header)
 		if err != nil {
 			return nil, err
 		}
@@ -147,7 +147,7 @@ func (f *Facade) ParseWithMetadata(msg *nats.Msg, metadata *nats.MsgMetadata) (m
 			Shard:        nil,
 		}, nil
 	case NearV3:
-		message, err := v3.ProtoDecode(msg.Data)
+		message, err := v3.DecodeProto(msg.Data)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to decode message: ")
 		}

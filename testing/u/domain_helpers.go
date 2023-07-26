@@ -1,13 +1,14 @@
 package u
 
 import (
+	"time"
+
 	borealisproto "github.com/aurora-is-near/borealis-prototypes/go"
 	near_block "github.com/aurora-is-near/borealis-prototypes/go/payloads/near_block"
 	"github.com/aurora-is-near/stream-most/domain/blocks"
-	"github.com/aurora-is-near/stream-most/domain/formats/v3"
+	v3 "github.com/aurora-is-near/stream-most/domain/formats/v3"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/nats-io/nats.go"
-	"time"
 )
 
 /*
@@ -120,7 +121,7 @@ func NewSimpleBlockAnnouncement(shardsMap []bool, height uint64, hash string, pr
 				},
 			},
 		},
-		Block: blocks.NearBlock{
+		Block: blocks.AbstractBlock{
 			Hash:     hash,
 			PrevHash: prevHash,
 			Height:   height,
@@ -144,7 +145,7 @@ func NewSimpleBlockShard(shardsMap []bool, height uint64, hash string, prevHash 
 				ShardId: shardId,
 			},
 		},
-		Block: blocks.NearBlock{
+		Block: blocks.AbstractBlock{
 			Hash:     hash,
 			PrevHash: prevHash,
 			Height:   height,

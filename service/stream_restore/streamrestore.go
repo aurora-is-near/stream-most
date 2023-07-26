@@ -4,6 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"os"
+	"os/signal"
+	"sort"
+	"syscall"
+	"time"
+
 	"github.com/aurora-is-near/stream-most/domain/blocks"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/block_writer"
@@ -11,12 +18,6 @@ import (
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
-	"log"
-	"os"
-	"os/signal"
-	"sort"
-	"syscall"
-	"time"
 
 	"github.com/aurora-is-near/stream-backup/chunks"
 )
@@ -174,7 +175,7 @@ func (sr *StreamRestore) push() error {
 						Stream: bb.Block.Height,
 					},
 				},
-				Announcement: &messages.BlockAnnouncement{Block: blocks.NearBlock{
+				Announcement: &messages.BlockAnnouncement{Block: blocks.AbstractBlock{
 					Hash:     bb.Block.Hash,
 					PrevHash: bb.Block.PrevHash,
 					Height:   bb.Block.Height,

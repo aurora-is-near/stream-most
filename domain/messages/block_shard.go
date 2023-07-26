@@ -10,7 +10,7 @@ import (
 type BlockShard struct {
 	Parent  *borealisproto.Message_NearBlockShard
 	ShardID uint8
-	Block   blocks.NearBlock
+	Block   blocks.AbstractBlock
 }
 
 func NewBlockShard(parent *borealisproto.Message_NearBlockShard) *BlockShard {
@@ -18,7 +18,7 @@ func NewBlockShard(parent *borealisproto.Message_NearBlockShard) *BlockShard {
 	return &BlockShard{
 		Parent:  parent,
 		ShardID: uint8(parent.NearBlockShard.ShardId),
-		Block: blocks.NearBlock{
+		Block: blocks.AbstractBlock{
 			Hash:     string(header.Header.H256Hash),
 			PrevHash: string(header.Header.H256PrevHash),
 			Height:   header.Header.Height,

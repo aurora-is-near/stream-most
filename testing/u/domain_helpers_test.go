@@ -1,10 +1,11 @@
 package u
 
 import (
-	borealisproto "github.com/aurora-is-near/borealis-prototypes/go"
-	"github.com/aurora-is-near/stream-most/domain/formats/v3"
-	"github.com/aurora-is-near/stream-most/domain/messages"
 	"testing"
+
+	borealisproto "github.com/aurora-is-near/borealis-prototypes/go"
+	v3 "github.com/aurora-is-near/stream-most/domain/formats/v3"
+	"github.com/aurora-is-near/stream-most/domain/messages"
 )
 
 // TestBuildMessageToRawStreamMsg tests that BuildMessageToRawStreamMsg correctly converts
@@ -38,7 +39,7 @@ func TestBuildMessageToRawStreamMsg(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := BuildMessageToRawStreamMsg(tt.args.message)
 
-			decode, err := v3.ProtoDecode(got.Data)
+			decode, err := v3.DecodeProto(got.Data)
 			if err != nil {
 				panic(err)
 			}
