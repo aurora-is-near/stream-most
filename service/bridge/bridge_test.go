@@ -2,18 +2,21 @@ package bridge
 
 import (
 	"context"
+	"testing"
+
+	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/near_v3"
 	"github.com/aurora-is-near/stream-most/service/block_writer"
 	"github.com/aurora-is-near/stream-most/service/fakes"
 	"github.com/aurora-is-near/stream-most/stream/fake"
 	"github.com/aurora-is-near/stream-most/stream/reader"
 	"github.com/aurora-is-near/stream-most/testing/u"
-	"testing"
 )
 
 func TestBridge(t *testing.T) {
 	// Use default fakes for reader and streams
 	fakes.UseDefaultOnes()
+	formats.UseFormat(formats.NearV3)
 
 	inputStream := fake.NewStream()
 	outputStream := fake.NewStream() //.WithDeduplication()

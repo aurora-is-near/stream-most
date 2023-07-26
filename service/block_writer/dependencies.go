@@ -5,5 +5,5 @@ import (
 )
 
 type TipPeeker interface {
-	GetTip() (messages.AbstractNatsMessage, error)
+	GetTip() (messages.Message, error)
 }

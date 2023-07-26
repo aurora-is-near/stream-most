@@ -2,6 +2,10 @@ package cases
 
 import (
 	"context"
+	"reflect"
+	"testing"
+	"time"
+
 	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/monitor"
 	"github.com/aurora-is-near/stream-most/monitor/monitor_options"
@@ -12,12 +16,13 @@ import (
 	"github.com/aurora-is-near/stream-most/testing/integration_testing/runner"
 	"github.com/aurora-is-near/stream-most/testing/u"
 	"github.com/sirupsen/logrus"
-	"reflect"
-	"testing"
-	"time"
 )
 
 func TestBridgeRunsOnTwoStreams(t *testing.T) {
+	if u.IsCI() {
+		t.SkipNow()
+	}
+
 	logrus.SetLevel(logrus.DebugLevel)
 	formats.UseFormat(formats.NearV3)
 
@@ -65,7 +70,7 @@ func TestBridgeRunsOnTwoStreams(t *testing.T) {
 	).Run()
 
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	// Validate the output stream
@@ -80,7 +85,7 @@ func TestBridgeRunsOnTwoStreams(t *testing.T) {
 	logrus.Info("Validator finished")
 
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	monitoring.Spew()

@@ -3,6 +3,7 @@ package fake
 import (
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/reader"
+	"github.com/nats-io/nats.go"
 )
 
 // Reader is a simple fake for reader.IReader, that only works in pair with fake.Stream
@@ -53,9 +54,21 @@ func (r *Reader) run() {
 	for _, item := range array {
 		if item.GetSequence() >= from && item.GetSequence() <= to {
 			r.output <- &reader.Output{
-				Msg:      item.GetMsg(),
-				Metadata: item.GetMetadata(),
-				Error:    nil,
+				Msg: &nats.Msg{
+					Subject: item.GetSubject(),
+					Header:  item.GetHeader(),
+					Data:    item.GetData(),
+				},
+				Metadata: &nats.MsgMetadata{
+					Sequence: nats.SequencePair{
+						Stream: item.GetSequence(),
+					},
+					NumPending: item.GetNumPending(),
+					Timestamp:  item.GetTimestamp(),
+					Stream:     item.GetStream(),
+					Consumer:   item.GetConsumer(),
+				},
+				Error: nil,
 			}
 		}
 	}

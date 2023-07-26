@@ -3,6 +3,9 @@ package block_writer
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"time"
+
 	"github.com/aurora-is-near/stream-bridge/util"
 	"github.com/aurora-is-near/stream-most/domain/blocks"
 	"github.com/aurora-is-near/stream-most/domain/messages"
@@ -11,8 +14,6 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"strconv"
-	"time"
 )
 
 type Writer struct {
@@ -21,12 +22,12 @@ type Writer struct {
 	outputStream   stream.Interface
 	lowHeightInRow uint64
 
-	lastWritten      messages.AbstractNatsMessage
+	lastWritten      messages.Message
 	closed           bool
 	onCloseListeners []func(err error)
 }
 
-func (w *Writer) write(ctx context.Context, msg messages.AbstractNatsMessage) (*nats.PubAck, error) {
+func (w *Writer) write(ctx context.Context, msg messages.Message) (*nats.PubAck, error) {
 	if w.closed {
 		return nil, ErrClosed
 	}
@@ -37,27 +38,29 @@ func (w *Writer) write(ctx context.Context, msg messages.AbstractNatsMessage) (*
 		return nil, err
 	}
 
-	headers := w.enrichHeaders(msg, msg.GetMsg().Header)
+	headers := w.enrichHeaders(msg, msg.GetHeader())
 
 	var lastError error
 	var puback *nats.PubAck
 
 	for attempts := w.options.MaxWriteAttempts; attempts >= 1; attempts-- {
 		puback, lastError = w.outputStream.Write(
-			msg.GetMsg().Data,
+			msg.GetData(),
 			headers,
 			nats.AckWait(1*time.Second),
 		)
 		if lastError == nil {
 			w.lastWritten = msg
-			monitoring.LastWriteHeight.Set(float64(block.Height))
+			if monitoring.LastWriteHeight != nil { // TODO: resolve normally
+				monitoring.LastWriteHeight.Set(float64(block.GetHeight()))
+			}
 
 			if puback.Duplicate {
-				logrus.Debugf("Duplicate message for a block with height %d", msg.GetBlock().Height)
+				logrus.Debugf("Duplicate message for a block with height %d", msg.GetHeight())
 				return nil, ErrDuplicate
 			}
 
-			logrus.Debugf("Wrote a message for a block with height %d", msg.GetBlock().Height)
+			logrus.Debugf("Wrote a message for a block with height %d", msg.GetHeight())
 			w.lowHeightInRow = 0
 			return puback, nil
 		}
@@ -77,32 +80,34 @@ func (w *Writer) write(ctx context.Context, msg messages.AbstractNatsMessage) (*
 	return nil, lastError
 }
 
-func (w *Writer) WriteWithAck(ctx context.Context, msg messages.AbstractNatsMessage) (*nats.PubAck, error) {
+func (w *Writer) WriteWithAck(ctx context.Context, msg messages.Message) (*nats.PubAck, error) {
 	return w.write(ctx, msg)
 }
 
-func (w *Writer) Write(ctx context.Context, msg messages.AbstractNatsMessage) error {
+func (w *Writer) Write(ctx context.Context, msg messages.Message) error {
 	_, err := w.write(ctx, msg)
 	return err
 }
 
-func (w *Writer) getTip() (messages.AbstractNatsMessage, error) {
+func (w *Writer) getTip() (messages.Message, error) {
 	tip, err := w.TipCached.GetTip()
 	if err != nil {
 		return nil, err
 	}
 
 	if tip != nil {
-		monitoring.TipHeight.Set(float64(tip.GetBlock().Height))
+		if monitoring.TipHeight != nil { // TODO: resolve normally
+			monitoring.TipHeight.Set(float64(tip.GetHeight()))
+		}
 	}
 
-	if w.lastWritten != nil && tip.GetBlock().Height < w.lastWritten.GetBlock().Height {
+	if w.lastWritten != nil && tip.GetHeight() < w.lastWritten.GetHeight() {
 		return w.lastWritten, nil
 	}
 	return tip, err
 }
 
-func (w *Writer) validate(block *blocks.AbstractBlock) error {
+func (w *Writer) validate(block blocks.Block) error {
 	if w.options.BypassValidation {
 		return nil
 	}
@@ -117,23 +122,23 @@ func (w *Writer) validate(block *blocks.AbstractBlock) error {
 	}
 
 	if tip != nil {
-		if block.Height < tip.GetBlock().Height {
+		if block.GetHeight() < tip.GetHeight() {
 			return ErrLowHeight
 		}
-		if block.PrevHash != tip.GetBlock().Hash && block.Hash != tip.GetBlock().Hash {
+		if block.GetPrevHash() != tip.GetBlock().GetHash() && block.GetHash() != tip.GetHash() {
 			return ErrHashMismatch
 		}
 	}
 	return nil
 }
 
-func (w *Writer) enrichHeaders(message messages.AbstractNatsMessage, header nats.Header) nats.Header {
+func (w *Writer) enrichHeaders(message messages.Message, header nats.Header) nats.Header {
 	var uniqueId string
-	if message.IsAnnouncement() {
-		uniqueId = strconv.FormatUint(message.GetBlock().Height, 10)
-	}
-	if message.IsShard() {
-		uniqueId = fmt.Sprintf("%d:%d", message.GetBlock().Height, message.GetShard().ShardID)
+	switch message.GetType() {
+	case messages.Announcement:
+		uniqueId = strconv.FormatUint(message.GetHeight(), 10)
+	case messages.Shard:
+		uniqueId = fmt.Sprintf("%d:%d", message.GetHeight(), message.GetShard().GetShardID())
 	}
 
 	if header == nil {

@@ -8,11 +8,13 @@ func (t MessageType) String() string {
 		return "[H]"
 	case Shard:
 		return "[B]"
+	default:
+		return "Unknown"
 	}
-	return "[Unknown]"
 }
 
 const (
 	Announcement MessageType = iota
 	Shard
+	Unknown
 )

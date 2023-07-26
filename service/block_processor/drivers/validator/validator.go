@@ -6,11 +6,11 @@ import (
 )
 
 type Validator struct {
-	input  chan messages.AbstractNatsMessage
-	output chan messages.AbstractNatsMessage
+	input  chan messages.Message
+	output chan messages.Message
 	obs    *observer.Observer
 
-	currentAnnouncement messages.AbstractNatsMessage
+	currentAnnouncement messages.Message
 	shardsLeft          map[uint8]struct{}
 
 	killed bool
@@ -20,7 +20,7 @@ func (n *Validator) BindObserver(obs *observer.Observer) {
 	n.obs = obs
 }
 
-func (n *Validator) Bind(input chan messages.AbstractNatsMessage, output chan messages.AbstractNatsMessage) {
+func (n *Validator) Bind(input chan messages.Message, output chan messages.Message) {
 	n.input = input
 	n.output = output
 }
@@ -35,12 +35,13 @@ func (n *Validator) Run() {
 	}
 }
 
-func (n *Validator) process(message messages.AbstractNatsMessage) {
-	if message.IsAnnouncement() {
+func (n *Validator) process(message messages.Message) {
+	switch message.GetType() {
+	case messages.Announcement:
 		n.processAnnouncement(message)
-	} else if message.IsShard() {
+	case messages.Shard:
 		n.processShard(message)
-	} else {
+	default:
 		n.obs.Emit(
 			observer.ErrorInData,
 			observer.WrapMessage(message, ErrUnknownMessageType),
@@ -56,7 +57,7 @@ func (n *Validator) Kill() {
 	n.killed = true
 }
 
-func (n *Validator) processAnnouncement(msg messages.AbstractNatsMessage) {
+func (n *Validator) processAnnouncement(msg messages.Message) {
 	if !n.previousCompleted() {
 		n.obs.Emit(
 			observer.ErrorInData,
@@ -65,7 +66,7 @@ func (n *Validator) processAnnouncement(msg messages.AbstractNatsMessage) {
 	}
 
 	if n.currentAnnouncement != nil &&
-		msg.GetBlock().Height <= n.currentAnnouncement.GetBlock().Height {
+		msg.GetHeight() <= n.currentAnnouncement.GetHeight() {
 		n.obs.Emit(observer.ErrorInData,
 			observer.WrapMessage(msg, ErrHeightUnordered),
 		)
@@ -73,7 +74,7 @@ func (n *Validator) processAnnouncement(msg messages.AbstractNatsMessage) {
 
 	n.currentAnnouncement = msg
 	n.shardsLeft = map[uint8]struct{}{}
-	for k, v := range msg.GetAnnouncement().ParticipatingShardsMap {
+	for k, v := range msg.GetAnnouncement().GetShardMask() {
 		if v {
 			n.shardsLeft[uint8(k)] = struct{}{}
 		}
@@ -81,7 +82,7 @@ func (n *Validator) processAnnouncement(msg messages.AbstractNatsMessage) {
 	n.obs.Emit(observer.ValidationOK, observer.WrapMessage(msg, nil))
 }
 
-func (n *Validator) processShard(msg messages.AbstractNatsMessage) {
+func (n *Validator) processShard(msg messages.Message) {
 	if n.currentAnnouncement == nil {
 		n.obs.Emit(
 			observer.ErrorInData,
@@ -90,7 +91,7 @@ func (n *Validator) processShard(msg messages.AbstractNatsMessage) {
 		return
 	}
 
-	if msg.GetBlock().Hash != n.currentAnnouncement.GetBlock().Hash {
+	if msg.GetHash() != n.currentAnnouncement.GetHash() {
 		n.obs.Emit(
 			observer.ErrorInData,
 			observer.WrapMessage(msg, ErrPrecedingShards),
@@ -98,7 +99,7 @@ func (n *Validator) processShard(msg messages.AbstractNatsMessage) {
 		return
 	}
 
-	if _, exists := n.shardsLeft[msg.GetShard().ShardID]; !exists {
+	if _, exists := n.shardsLeft[uint8(msg.GetShard().GetShardID())]; !exists {
 		n.obs.Emit(
 			observer.ErrorInData,
 			observer.WrapMessage(msg, ErrUndesiredShard),
@@ -106,7 +107,7 @@ func (n *Validator) processShard(msg messages.AbstractNatsMessage) {
 		return
 	}
 
-	delete(n.shardsLeft, msg.GetShard().ShardID)
+	delete(n.shardsLeft, uint8(msg.GetShard().GetShardID()))
 	n.obs.Emit(observer.ValidationOK, observer.WrapMessage(msg, nil))
 }
 

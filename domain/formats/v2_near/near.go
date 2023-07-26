@@ -9,7 +9,6 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/blocks"
 	v2 "github.com/aurora-is-near/stream-most/domain/formats/v2"
 	"github.com/buger/jsonparser"
-	"github.com/nats-io/nats.go"
 	"github.com/pierrec/lz4/v4"
 )
 
@@ -22,20 +21,20 @@ var nearBlockSchema = [][]string{
 func DecodeNearBlockJSON(data []byte) ([]byte, error) {
 	payload, err := v2.DecodeBorealisPayload[[]byte](data)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to decode near v2 block from borealis cbor: %w", err)
 	}
 
 	var buf bytes.Buffer
 	if _, err := io.Copy(&buf, lz4.NewReader(bytes.NewReader(*payload))); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to decode near v2 block from lz4 array: %w", err)
 	}
 	return buf.Bytes(), nil
 }
 
-func DecodeNearBlock(data []byte, _ nats.Header) (*blocks.AbstractBlock, error) {
+func DecodeNearBlock(data []byte) (blocks.Block, error) {
 	blockJSON, err := DecodeNearBlockJSON(data)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to decode near v2 block JSON from payload: %w", err)
 	}
 
 	block := &blocks.AbstractBlock{}
@@ -80,8 +79,8 @@ func DecodeNearBlock(data []byte, _ nats.Header) (*blocks.AbstractBlock, error) 
 	)
 
 	if anyErr != nil {
-		return nil, anyErr
+		return nil, fmt.Errorf("unable to parse near v2 block json, invalid json: %w", err)
 	}
 
-	return block, nil
+	return blocks.LegacyBlockAnnouncement{AbstractBlock: block}, nil
 }

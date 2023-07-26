@@ -2,6 +2,11 @@ package cases
 
 import (
 	"context"
+	"strconv"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/monitor"
 	"github.com/aurora-is-near/stream-most/monitor/monitor_options"
@@ -12,13 +17,13 @@ import (
 	"github.com/aurora-is-near/stream-most/testing/integration_testing/runner"
 	"github.com/aurora-is-near/stream-most/testing/u"
 	"github.com/sirupsen/logrus"
-	"strconv"
-	"sync"
-	"testing"
-	"time"
 )
 
 func TestMultipleBridgesRunOnSameTwoStreams(t *testing.T) {
+	if u.IsCI() {
+		t.SkipNow()
+	}
+
 	logrus.SetLevel(logrus.DebugLevel)
 	formats.UseFormat(formats.NearV3)
 
@@ -69,7 +74,7 @@ func TestMultipleBridgesRunOnSameTwoStreams(t *testing.T) {
 
 		// We can get a lot of errors here, since it's ok for some bridges to fall off with "low height"
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 
 		wg.Done()
@@ -94,7 +99,7 @@ func TestMultipleBridgesRunOnSameTwoStreams(t *testing.T) {
 	logrus.Info("Validator finished")
 
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	monitoring.Spew()

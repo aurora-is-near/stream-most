@@ -1,9 +1,10 @@
 package transport
 
 import (
-	"github.com/sirupsen/logrus"
 	"strings"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/nats-io/nats.go"
 )
@@ -73,8 +74,10 @@ func NewConnection(opts *Options, errorChan chan<- error) (*NatsConnection, erro
 	}
 
 	err := conn.connect()
-
-	return conn, err
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
 }
 
 func (c *NatsConnection) Drain() error {

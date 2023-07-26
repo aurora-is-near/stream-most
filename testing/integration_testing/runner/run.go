@@ -2,6 +2,8 @@ package runner
 
 import (
 	"context"
+	"time"
+
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers"
 	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
 	"github.com/aurora-is-near/stream-most/service/block_writer"
@@ -10,7 +12,6 @@ import (
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/reader"
 	"github.com/sirupsen/logrus"
-	"time"
 )
 
 type Mode string
@@ -45,8 +46,6 @@ func (r *Runner) Run() error {
 	default:
 		panic("Unknown mode")
 	}
-
-	return nil
 }
 
 func (r *Runner) runBridge() error {

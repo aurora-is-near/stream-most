@@ -108,7 +108,7 @@ func (sr *StreamRestore) push() error {
 		return errConnectionProblem
 	}
 
-	var tipBlock *blocks.AbstractBlock
+	var tipBlock blocks.Block
 	if tip != nil {
 		tipBlock = tip.GetBlock()
 	}
@@ -165,21 +165,14 @@ func (sr *StreamRestore) push() error {
 			}
 			bb := out.blockBackup
 			lastReadSeq = bb.Sequence
-			switch ack, err := writer.WriteWithAck(context.Background(), messages.NatsMessage{
+			switch ack, err := writer.WriteWithAck(context.Background(), &messages.AbstractMessage{
+				TypedMessage: messages.TypedMessage{
+					Block: bb.Block,
+				},
 				Msg: &nats.Msg{
-					Subject: bb.Block.Hash,
-					Data:    bb.MessageBackup.Data,
+					Data: bb.MessageBackup.Data,
+					// TODO: headers
 				},
-				Metadata: &nats.MsgMetadata{
-					Sequence: nats.SequencePair{
-						Stream: bb.Block.Height,
-					},
-				},
-				Announcement: &messages.BlockAnnouncement{Block: blocks.AbstractBlock{
-					Hash:     bb.Block.Hash,
-					PrevHash: bb.Block.PrevHash,
-					Height:   bb.Block.Height,
-				}},
 			}); err {
 			case nil:
 				if ack != nil {
@@ -199,10 +192,10 @@ func (sr *StreamRestore) push() error {
 	}
 }
 
-func (sr *StreamRestore) findStartChunkSeq(tip *blocks.AbstractBlock) (uint64, error) {
+func (sr *StreamRestore) findStartChunkSeq(tip blocks.Block) (uint64, error) {
 	tipHeight := uint64(0)
 	if tip != nil {
-		tipHeight = tip.Height
+		tipHeight = tip.GetHeight()
 	}
 
 	log.Printf("Getting chunks info...")
@@ -238,7 +231,7 @@ func (sr *StreamRestore) findStartChunkSeq(tip *blocks.AbstractBlock) (uint64, e
 		if bb.Sequence != chunkStarts[m] {
 			return 0, fmt.Errorf("binsearch: bb.Sequence != chunkStarts[m]")
 		}
-		if bb.Block.Height <= tipHeight {
+		if bb.Block.GetHeight() <= tipHeight {
 			l = m
 		} else {
 			r = m

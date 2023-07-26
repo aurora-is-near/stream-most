@@ -35,7 +35,7 @@ func TestNearV3_Basic(t *testing.T) {
 
 	rdr, err := reader.Start(&reader.Options{}, fakeInput, 0, 0)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	driver := NewNearV3(&Options{
@@ -47,7 +47,7 @@ func TestNearV3_Basic(t *testing.T) {
 	})
 
 	input, _ := adapters.ReaderOutputToNatsMessages(context.Background(), rdr.Output(), 10)
-	output := make(chan messages.AbstractNatsMessage, 100)
+	output := make(chan messages.Message, 100)
 	driver.Bind(input, output)
 
 	go func() {
@@ -55,12 +55,12 @@ func TestNearV3_Basic(t *testing.T) {
 	}()
 
 	for x := range output {
-		fakeOutput.Add(x.(messages.NatsMessage))
+		fakeOutput.Add(x)
 	}
 
 	err = driver.FinishError()
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	fakeOutput.Display()
@@ -92,7 +92,7 @@ func TestNearV3_Stuck(t *testing.T) {
 
 	rdr, err := reader.Start(&reader.Options{}, fakeInput, 0, 0)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	driver := NewNearV3(&Options{
@@ -104,7 +104,7 @@ func TestNearV3_Stuck(t *testing.T) {
 	})
 
 	input, _ := adapters.ReaderOutputToNatsMessages(context.Background(), rdr.Output(), 10)
-	output := make(chan messages.AbstractNatsMessage, 100)
+	output := make(chan messages.Message, 100)
 	driver.Bind(input, output)
 
 	go func() {
@@ -112,14 +112,14 @@ func TestNearV3_Stuck(t *testing.T) {
 	}()
 
 	for x := range output {
-		fakeOutput.Add(x.(messages.NatsMessage))
+		fakeOutput.Add(x)
 	}
 
 	fakeOutput.Display()
 
 	err = driver.FinishError()
 	if err == nil {
-		t.Error("error is nil, expected stuck")
+		t.Fatal("error is nil, expected stuck")
 	}
 	if err.Error() != "stuck" {
 		t.Error("error is not stuck")

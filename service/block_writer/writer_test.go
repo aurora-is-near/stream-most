@@ -2,20 +2,24 @@ package block_writer
 
 import (
 	"context"
+	"testing"
+
+	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/stream_peek"
 	"github.com/aurora-is-near/stream-most/stream/fake"
 	"github.com/aurora-is-near/stream-most/testing/u"
-	"testing"
 )
 
 func TestWriter(t *testing.T) {
+	formats.UseFormat(formats.NearV3)
+
 	outputStream := fake.NewStream()
 	peeker := stream_peek.NewStreamPeek(outputStream)
 
 	writer := NewWriter(NewOptions().WithDefaults().Validated(), outputStream, peeker)
 
-	msgs := []messages.AbstractNatsMessage{
+	msgs := []messages.Message{
 		u.Announcement(1, []bool{true, true, true}, 1, "AAA", "000"),
 		u.Shard(2, 1, "AAA", "000", 1),
 		u.Shard(3, 1, "AAA", "000", 2),

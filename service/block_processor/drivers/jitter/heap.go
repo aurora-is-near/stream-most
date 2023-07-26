@@ -2,11 +2,12 @@ package jitter
 
 import (
 	"container/heap"
+
 	"github.com/aurora-is-near/stream-most/domain/messages"
 )
 
 type DelayedMessage struct {
-	Message       messages.AbstractNatsMessage
+	Message       messages.Message
 	ReturnAtClock uint64
 }
 

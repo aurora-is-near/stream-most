@@ -2,6 +2,7 @@ package stream_peek
 
 import (
 	"errors"
+
 	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream"
@@ -19,7 +20,7 @@ type StreamPeek struct {
 	stream stream.Interface
 }
 
-func (p *StreamPeek) GetTip() (messages.AbstractNatsMessage, error) {
+func (p *StreamPeek) GetTip() (messages.Message, error) {
 	info, _, err := p.stream.GetInfo(0)
 	if err != nil {
 		return nil, err
@@ -66,7 +67,7 @@ func (p *StreamPeek) GetTipHeight() (uint64, error) {
 		return 0, errors2.Wrap(ErrCorruptedTip, err.Error())
 	}
 
-	return message.GetBlock().Height, nil
+	return message.GetHeight(), nil
 }
 
 func NewStreamPeek(streamInterface stream.Interface) *StreamPeek {

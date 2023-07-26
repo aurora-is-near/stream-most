@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"context"
+
 	"github.com/aurora-is-near/stream-most/service/block_processor"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers"
 	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
@@ -104,7 +105,7 @@ func (b *Bridge) Run(ctx context.Context) error {
 			break
 		}
 
-		logrus.Debug("Received results from the processor: ", results.GetBlock().Height)
+		logrus.Debug("Received results from the processor: ", results.GetHeight())
 		err := writer.Write(ctx, results)
 		if err != nil {
 			logrus.Errorf("Error while writing a message to output stream: %v", err)

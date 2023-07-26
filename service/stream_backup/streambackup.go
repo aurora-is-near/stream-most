@@ -3,15 +3,16 @@ package stream_backup
 import (
 	"errors"
 	"fmt"
-	"github.com/aurora-is-near/stream-most/domain/blocks"
-	"github.com/aurora-is-near/stream-most/domain/formats"
-	"github.com/aurora-is-near/stream-most/stream/autoreader"
-	"github.com/sirupsen/logrus"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/aurora-is-near/stream-most/domain/blocks"
+	"github.com/aurora-is-near/stream-most/domain/formats"
+	"github.com/aurora-is-near/stream-most/stream/autoreader"
+	"github.com/sirupsen/logrus"
 
 	"github.com/aurora-is-near/stream-backup/chunks"
 	"github.com/aurora-is-near/stream-backup/messagebackup"
@@ -72,7 +73,7 @@ func (sb *StreamBackup) Run() error {
 }
 
 func (sb *StreamBackup) pullSegment(l, r uint64) error {
-	var prevBlock *blocks.AbstractBlock
+	var prevBlock blocks.Block
 	if l > sb.StartSeq {
 		if err := sb.Chunks.SeekReader(l - 1); err != nil {
 			return fmt.Errorf("can't seek to prev block: %w", err)
@@ -122,7 +123,7 @@ func (sb *StreamBackup) pullSegment(l, r uint64) error {
 			if err != nil {
 				return fmt.Errorf("can't decode new block on seq %v: %w", cur.Metadata.Sequence.Stream, err)
 			}
-			if prevBlock != nil && prevBlock.Hash != block.PrevHash && prevBlock.Hash != block.Hash {
+			if prevBlock != nil && prevBlock.GetHash() != block.GetPrevHash() && prevBlock.GetHash() != block.GetHash() {
 				return fmt.Errorf("hash mismatch on seq %v", cur.Metadata.Sequence.Stream)
 			}
 			mb := &messagebackup.MessageBackup{
@@ -147,6 +148,6 @@ func (sb *StreamBackup) pullSegment(l, r uint64) error {
 	}
 }
 
-func (sb *StreamBackup) decodeBlock(data []byte) (*blocks.AbstractBlock, error) {
-	return formats.Active().ParseAbstractBlock(data)
+func (sb *StreamBackup) decodeBlock(data []byte) (blocks.Block, error) {
+	return formats.Active().ParseBlock(data)
 }

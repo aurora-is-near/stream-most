@@ -3,14 +3,15 @@ package adapters
 import (
 	"context"
 	"errors"
+
 	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream/reader"
 	"github.com/sirupsen/logrus"
 )
 
-func ReaderOutputToNatsMessages(ctx context.Context, input <-chan *reader.Output, parseTolerance uint64) (chan messages.AbstractNatsMessage, chan error) {
-	in := make(chan messages.AbstractNatsMessage, 1024)
+func ReaderOutputToNatsMessages(ctx context.Context, input <-chan *reader.Output, parseTolerance uint64) (chan messages.Message, chan error) {
+	in := make(chan messages.Message, 1024)
 	errorsOutput := make(chan error, 1)
 
 	parsesFailedInRow := uint64(0)
@@ -45,7 +46,7 @@ func ReaderOutputToNatsMessages(ctx context.Context, input <-chan *reader.Output
 					continue
 				}
 
-				message, err := formats.Active().ParseWithMetadata(k.Msg, k.Metadata)
+				message, err := formats.Active().ParseMsg(k.Msg, k.Metadata)
 				if err != nil {
 					logrus.Error(err)
 					parsesFailedInRow++

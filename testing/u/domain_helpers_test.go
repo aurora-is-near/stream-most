@@ -12,7 +12,7 @@ import (
 // a data-less message to a RawStreamMsg.
 func TestBuildMessageToRawStreamMsg(t *testing.T) {
 	type args struct {
-		message messages.NatsMessage
+		message messages.Message
 	}
 	tests := []struct {
 		name string
@@ -21,7 +21,7 @@ func TestBuildMessageToRawStreamMsg(t *testing.T) {
 		{
 			name: "announcement",
 			args: args{
-				message: AnnouncementToNats(100, NewSimpleBlockAnnouncement(
+				message: BlockToNats(100, NewSimpleBlockAnnouncement(
 					[]bool{true, true, true}, 1, "hash", "prev_hash"),
 				),
 			},
@@ -29,8 +29,8 @@ func TestBuildMessageToRawStreamMsg(t *testing.T) {
 		{
 			name: "shard",
 			args: args{
-				message: ShardToNats(100, NewSimpleBlockShard(
-					[]bool{true, true, true}, 1, "hash", "prev_hash", 1,
+				message: BlockToNats(100, NewSimpleBlockShard(
+					1, "hash", "prev_hash", 1,
 				)),
 			},
 		},
@@ -46,17 +46,17 @@ func TestBuildMessageToRawStreamMsg(t *testing.T) {
 
 			switch msg := decode.Payload.(type) {
 			case *borealisproto.Message_NearBlockHeader:
-				if !tt.args.message.IsAnnouncement() {
+				if tt.args.message.GetType() != messages.Announcement {
 					t.Errorf("Type decode failed")
 				}
-				if string(msg.NearBlockHeader.GetHeader().H256Hash) != tt.args.message.GetAnnouncement().Block.Hash {
+				if string(msg.NearBlockHeader.GetHeader().H256Hash) != tt.args.message.GetHash() {
 					t.Errorf("Hash decode failed")
 				}
 			case *borealisproto.Message_NearBlockShard:
-				if !tt.args.message.IsShard() {
+				if tt.args.message.GetType() != messages.Shard {
 					t.Errorf("Type decode failed")
 				}
-				if string(msg.NearBlockShard.GetHeader().Header.H256Hash) != tt.args.message.GetShard().Block.Hash {
+				if string(msg.NearBlockShard.GetHeader().Header.H256Hash) != tt.args.message.GetHash() {
 					t.Errorf("Hash decode failed")
 				}
 			}

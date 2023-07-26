@@ -2,10 +2,11 @@ package stream_restore
 
 import (
 	"fmt"
-	"github.com/aurora-is-near/stream-most/domain/blocks"
-	"github.com/aurora-is-near/stream-most/domain/formats"
 	"log"
 	"sync"
+
+	"github.com/aurora-is-near/stream-most/domain/blocks"
+	"github.com/aurora-is-near/stream-most/domain/formats"
 
 	"github.com/aurora-is-near/stream-backup/chunks"
 	"github.com/aurora-is-near/stream-backup/messagebackup"
@@ -15,7 +16,7 @@ import (
 type BlockBackup struct {
 	Sequence      uint64
 	MessageBackup *messagebackup.MessageBackup
-	Block         *blocks.AbstractBlock
+	Block         blocks.Block
 }
 
 type readingResult struct {
@@ -108,7 +109,7 @@ func (sr *StreamRestore) parseBlockBackup(sequence uint64, data []byte) (*BlockB
 	for key, values := range bb.MessageBackup.Headers {
 		headers[key] = values.Values
 	}
-	bb.Block, err = formats.Active().ParseAbstractBlock(bb.MessageBackup.Data)
+	bb.Block, err = formats.Active().ParseBlock(bb.MessageBackup.Data)
 	if err != nil {
 		return nil, fmt.Errorf("can't parse Block from message backup (seq=%v): %w", sequence, err)
 	}

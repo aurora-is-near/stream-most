@@ -2,6 +2,7 @@ package block_processor
 
 import (
 	"context"
+
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers"
 	"github.com/aurora-is-near/stream-most/service/block_processor/monitoring"
@@ -13,9 +14,9 @@ import (
 // processed them using a given driver, monitors them and outputs
 type Processor struct {
 	*observer.Observer
-	input        chan messages.AbstractNatsMessage
-	driverOutput chan messages.AbstractNatsMessage
-	myOutput     chan messages.AbstractNatsMessage
+	input        chan messages.Message
+	driverOutput chan messages.Message
+	myOutput     chan messages.Message
 	driver       drivers.Driver
 }
 
@@ -37,22 +38,26 @@ loop:
 
 			g.myOutput <- msg
 
-			if msg.IsShard() {
+			switch msg.GetType() {
+			case messages.Shard:
 				g.Observer.Emit(observer.NewShard, msg.GetShard())
-			}
-			if msg.IsAnnouncement() {
+			case messages.Announcement:
 				g.Observer.Emit(observer.NewAnnouncement, msg.GetAnnouncement())
 			}
+
 		case <-ctx.Done():
 			break loop
 		}
 	}
 }
 
-func (g *Processor) Run(ctx context.Context) chan messages.AbstractNatsMessage {
-	g.driverOutput = make(chan messages.AbstractNatsMessage, 1024)
-	g.myOutput = make(chan messages.AbstractNatsMessage, 1024)
-	monitoring.RegisterObservations(g.Observer)
+func (g *Processor) Run(ctx context.Context) chan messages.Message {
+	g.driverOutput = make(chan messages.Message, 1024)
+	g.myOutput = make(chan messages.Message, 1024)
+
+	if monitoring.AnnouncementsProcessed != nil { // TODO: handle normally
+		monitoring.RegisterObservations(g.Observer)
+	}
 
 	go g.work()
 	go g.proxyMessages(ctx)
@@ -64,7 +69,7 @@ func (g *Processor) Kill() {
 	logrus.Info("Processor is shutting down")
 }
 
-func NewProcessor(input chan messages.AbstractNatsMessage, driver drivers.Driver) *Processor {
+func NewProcessor(input chan messages.Message, driver drivers.Driver) *Processor {
 	return &Processor{
 		input:    input,
 		driver:   driver,

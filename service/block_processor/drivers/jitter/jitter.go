@@ -1,16 +1,16 @@
 package jitter
 
-import "github.com/aurora-is-near/stream-most/domain/messages"
-
 import (
 	"container/heap"
-	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
 	"math/rand"
+
+	"github.com/aurora-is-near/stream-most/domain/messages"
+	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
 )
 
 type Jitter struct {
-	input    chan messages.AbstractNatsMessage
-	output   chan messages.AbstractNatsMessage
+	input    chan messages.Message
+	output   chan messages.Message
 	observer *observer.Observer
 
 	delayedMessages *DelayedMessagesHeap
@@ -32,7 +32,7 @@ func (j *Jitter) BindObserver(obs *observer.Observer) {
 	j.observer = obs
 }
 
-func (j *Jitter) Bind(input chan messages.AbstractNatsMessage, output chan messages.AbstractNatsMessage) {
+func (j *Jitter) Bind(input chan messages.Message, output chan messages.Message) {
 	j.input = input
 	j.output = output
 }
@@ -63,11 +63,11 @@ func (j *Jitter) Run() {
 	}
 }
 
-func (j *Jitter) shouldDropout(_ messages.AbstractNatsMessage) bool {
+func (j *Jitter) shouldDropout(_ messages.Message) bool {
 	return rand.Float64() < j.opts.DropoutChance
 }
 
-func (j *Jitter) shouldDelay(_ messages.AbstractNatsMessage) (bool, uint64) {
+func (j *Jitter) shouldDelay(_ messages.Message) (bool, uint64) {
 	should := rand.Float64() < j.opts.DelayChance
 	if !should {
 		return false, 0

@@ -1,12 +1,16 @@
 package stream_seek
 
 import (
+	"testing"
+
+	"github.com/aurora-is-near/stream-most/domain/formats"
+	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream/fake"
 	"github.com/aurora-is-near/stream-most/testing/u"
-	"testing"
 )
 
 func TestStreamSeek_SeekLastFullyWrittenBlock(t *testing.T) {
+	formats.UseFormat(formats.NearV3)
 	testInput := fake.NewStream()
 	testInput.Add(
 		u.Announcement(1, []bool{true, true, true}, 1, "AAA", "000"),
@@ -18,10 +22,10 @@ func TestStreamSeek_SeekLastFullyWrittenBlock(t *testing.T) {
 	seeker := NewStreamSeek(testInput)
 	announcement, shards, err := seeker.SeekLastFullyWrittenBlock()
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
-	if !announcement.IsAnnouncement() {
+	if announcement.GetType() != messages.Announcement {
 		t.Error("not an announcement")
 	}
 
@@ -33,6 +37,8 @@ func TestStreamSeek_SeekLastFullyWrittenBlock(t *testing.T) {
 }
 
 func TestStreamSeek_SeekShards(t *testing.T) {
+	formats.UseFormat(formats.NearV3)
+
 	testInput := fake.NewStream()
 	testInput.Add(
 		u.Announcement(1, []bool{true, true, true}, 1, "AAA", "000"),
@@ -44,7 +50,7 @@ func TestStreamSeek_SeekShards(t *testing.T) {
 	seeker := NewStreamSeek(testInput)
 	shards, err := seeker.SeekShards(1, 3, &[]string{"AAA"}[0])
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	if len(shards) != 2 {
@@ -52,7 +58,7 @@ func TestStreamSeek_SeekShards(t *testing.T) {
 	}
 
 	for _, v := range shards {
-		if !v.IsShard() {
+		if v.GetType() != messages.Shard {
 			t.Error("not a shard")
 		}
 		if !(v.GetSequence() == 2) && !(v.GetSequence() == 3) {

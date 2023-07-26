@@ -1,12 +1,13 @@
 package observer
 
 import (
-	"github.com/aurora-is-near/stream-most/domain/messages"
 	"strings"
+
+	"github.com/aurora-is-near/stream-most/domain/messages"
 )
 
 type WrappedMessage struct {
-	Message messages.AbstractNatsMessage
+	Message messages.Message
 	Wraps   []error
 }
 
@@ -26,6 +27,6 @@ func (m *WrappedMessage) Wrap(wrap error) *WrappedMessage {
 	return &WrappedMessage{Wraps: append(m.Wraps, wrap), Message: m.Message}
 }
 
-func WrapMessage(message messages.AbstractNatsMessage, err error) *WrappedMessage {
+func WrapMessage(message messages.Message, err error) *WrappedMessage {
 	return &WrappedMessage{Wraps: []error{err}, Message: message}
 }

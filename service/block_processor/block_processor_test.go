@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/aurora-is-near/stream-most/domain/blocks"
 	"github.com/aurora-is-near/stream-most/domain/formats"
-	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/near_v3"
 	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
 	"github.com/aurora-is-near/stream-most/service/fakes"
@@ -47,14 +47,14 @@ func TestBlockProcessor(t *testing.T) {
 	processor.On(observer.RescueNeeded, func(currentAnnouncement interface{}) {
 		logrus.Warnf(
 			"We had a need for a rescue operation on the block %s",
-			currentAnnouncement.(*messages.BlockAnnouncement).Block.Hash,
+			currentAnnouncement.(blocks.Block).GetHash(),
 		)
 	})
 
 	output := processor.Run(context.TODO())
 	outputStream := fake.NewStream()
 	for msg := range output {
-		outputStream.Add(msg.(messages.NatsMessage))
+		outputStream.Add(msg)
 	}
 
 	outputStream.DisplayRows()

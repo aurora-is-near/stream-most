@@ -2,6 +2,7 @@ package near_v3
 
 import (
 	"errors"
+
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
 	"github.com/sirupsen/logrus"
@@ -17,8 +18,8 @@ type NearV3 struct {
 
 	lastWrittenBlockHash *string
 
-	input  chan messages.AbstractNatsMessage
-	output chan messages.AbstractNatsMessage
+	input  chan messages.Message
+	output chan messages.Message
 
 	observer *observer.Observer
 
@@ -29,7 +30,7 @@ type NearV3 struct {
 	killed bool
 }
 
-func (n *NearV3) Bind(input chan messages.AbstractNatsMessage, output chan messages.AbstractNatsMessage) {
+func (n *NearV3) Bind(input chan messages.Message, output chan messages.Message) {
 	n.input = input
 	n.output = output
 }
@@ -49,13 +50,14 @@ func (n *NearV3) Run() {
 
 		n.clock++
 
-		if msg.IsAnnouncement() {
+		switch msg.GetType() {
+		case messages.Announcement:
 			logrus.Debug("Received message is an announcement")
 			n.processAnnouncement(msg)
-		} else if msg.IsShard() {
+		case messages.Shard:
 			logrus.Debug("Received message is block")
 			n.processShard(msg)
-		} else {
+		default:
 			logrus.Warn("Unknown message type for nearv3 driver :/")
 		}
 
@@ -81,9 +83,9 @@ func (n *NearV3) FinishError() error {
 }
 
 func (n *NearV3) pop(block *storedBlock) {
-	n.lastWrittenBlockHash = &block.announcement.GetBlock().Hash
-	delete(n.blocks, block.announcement.GetBlock().Hash)
-	delete(n.blocksByPreviousHash, block.announcement.GetBlock().PrevHash)
+	n.lastWrittenBlockHash = &[]string{block.announcement.GetHash()}[0]
+	delete(n.blocks, block.announcement.GetHash())
+	delete(n.blocksByPreviousHash, block.announcement.GetPrevHash())
 	block.writeTo(n.output)
 
 	n.messagesSinceLastWrite = 0
@@ -101,7 +103,7 @@ func (n *NearV3) popReadyBlocks() error {
 			if minBlock == nil {
 				minBlock = block
 			}
-			if block.getAbstractBlock().Height < minBlock.getAbstractBlock().Height {
+			if block.getAbstractBlock().GetHeight() < minBlock.getAbstractBlock().GetHeight() {
 				minBlock = block
 			}
 		}
@@ -124,18 +126,19 @@ func (n *NearV3) popReadyBlocks() error {
 	return nil
 }
 
-func (n *NearV3) newBlockFrom(message messages.AbstractNatsMessage) *storedBlock {
-	hash := message.GetBlock().Hash
+func (n *NearV3) newBlockFrom(message messages.Message) *storedBlock {
+	hash := message.GetHash()
 
 	block := newStoredBlock(n.clock + n.opts.BlocksCacheSize)
-	if message.IsAnnouncement() {
+	switch message.GetType() {
+	case messages.Announcement:
 		block.addAnnouncement(message)
-	} else if message.IsShard() {
+	case messages.Shard:
 		block.stashShard(message)
 	}
 
 	n.blocks[hash] = block
-	n.blocksByPreviousHash[block.getAbstractBlock().PrevHash] = block
+	n.blocksByPreviousHash[block.getAbstractBlock().GetPrevHash()] = block
 	n.blocksExpirationQueue = append(n.blocksExpirationQueue, block)
 	n.prolongCache(block)
 
@@ -146,8 +149,8 @@ func (n *NearV3) prolongCache(block *storedBlock) {
 	block.expiresAt = n.clock + n.opts.BlocksCacheSize
 }
 
-func (n *NearV3) processAnnouncement(message messages.AbstractNatsMessage) {
-	hash := message.GetAnnouncement().Block.Hash
+func (n *NearV3) processAnnouncement(message messages.Message) {
+	hash := message.GetHash()
 
 	if block, exists := n.blocks[hash]; !exists {
 		n.newBlockFrom(message)
@@ -159,8 +162,8 @@ func (n *NearV3) processAnnouncement(message messages.AbstractNatsMessage) {
 	}
 }
 
-func (n *NearV3) processShard(shard messages.AbstractNatsMessage) {
-	if block, exists := n.blocks[shard.GetBlock().Hash]; !exists {
+func (n *NearV3) processShard(shard messages.Message) {
+	if block, exists := n.blocks[shard.GetHash()]; !exists {
 		n.newBlockFrom(shard)
 	} else if block.missingAnnouncement() {
 		block.stashShard(shard)
@@ -198,8 +201,8 @@ func (n *NearV3) clearCache() {
 		block := n.blocksExpirationQueue[0]
 
 		if n.clock > block.expiresAt {
-			delete(n.blocks, block.getAbstractBlock().Hash)
-			delete(n.blocksByPreviousHash, block.getAbstractBlock().PrevHash)
+			delete(n.blocks, block.getAbstractBlock().GetHash())
+			delete(n.blocksByPreviousHash, block.getAbstractBlock().GetPrevHash())
 			n.blocksExpirationQueue = n.blocksExpirationQueue[1:]
 		} else {
 			break

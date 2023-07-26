@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/fakes"
 	"github.com/aurora-is-near/stream-most/stream/adapters"
@@ -14,6 +15,7 @@ import (
 
 func TestJitter_NoDropout(t *testing.T) {
 	fakes.UseDefaultOnes()
+	formats.UseFormat(formats.NearV3)
 
 	fakeInput := fake.NewStream()
 	fakeOutput := fake.NewStream()
@@ -33,7 +35,7 @@ func TestJitter_NoDropout(t *testing.T) {
 
 	rdr, err := reader.Start(&reader.Options{}, fakeInput, 0, 0)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	driver := NewJitter(&Options{
@@ -44,16 +46,15 @@ func TestJitter_NoDropout(t *testing.T) {
 	})
 
 	input, _ := adapters.ReaderOutputToNatsMessages(context.Background(), rdr.Output(), 10)
-	output := make(chan messages.AbstractNatsMessage, 100)
+	output := make(chan messages.Message, 100)
 	driver.Bind(input, output)
 
 	go func() {
 		driver.Run()
-		close(output)
 	}()
 
 	for x := range output {
-		fakeOutput.Add(x.(messages.NatsMessage))
+		fakeOutput.Add(x)
 	}
 
 	fakeOutput.Display()

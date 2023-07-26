@@ -1,25 +1,26 @@
 package block_writer
 
 import (
-	"github.com/aurora-is-near/stream-most/domain/messages"
 	"time"
+
+	"github.com/aurora-is-near/stream-most/domain/messages"
 )
 
 type TipCached struct {
 	ttl          time.Duration
 	lastlyCached time.Time
-	tip          messages.AbstractNatsMessage
+	tip          messages.Message
 	peeker       TipPeeker
 }
 
-func (t *TipCached) GetTip() (messages.AbstractNatsMessage, error) {
+func (t *TipCached) GetTip() (messages.Message, error) {
 	if t.lastlyCached.Add(t.ttl).Before(time.Now()) {
 		return t.getTip()
 	}
 	return t.tip, nil
 }
 
-func (t *TipCached) getTip() (messages.AbstractNatsMessage, error) {
+func (t *TipCached) getTip() (messages.Message, error) {
 	return t.peeker.GetTip()
 }
 

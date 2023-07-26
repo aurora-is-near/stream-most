@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	borealisproto "github.com/aurora-is-near/borealis-prototypes/go"
 	v3 "github.com/aurora-is-near/stream-most/domain/formats/v3"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream"
@@ -19,13 +18,13 @@ import (
 // It wraps an array and allows for easy behaviour testing,
 // but no complex interactions with the stream are testable with it
 type Stream struct {
-	stream []messages.AbstractNatsMessage
+	stream []messages.Message
 
 	deduplicate         bool
 	deduplicationHashes map[string]struct{}
 }
 
-func (s *Stream) GetArray() []messages.AbstractNatsMessage {
+func (s *Stream) GetArray() []messages.Message {
 	return s.stream
 }
 
@@ -78,8 +77,8 @@ func (s *Stream) Get(seq uint64) (*nats.RawStreamMsg, error) {
 		if msg.GetSequence() == seq {
 			return &nats.RawStreamMsg{
 				Sequence: msg.GetSequence(),
-				Header:   msg.GetMsg().Header,
-				Data:     msg.GetMsg().Data,
+				Header:   msg.GetHeader(),
+				Data:     msg.GetData(),
 			}, nil
 		}
 
@@ -88,7 +87,7 @@ func (s *Stream) Get(seq uint64) (*nats.RawStreamMsg, error) {
 	return nil, errors.New("not found in the fake stream")
 }
 
-func (s *Stream) Add(msgs ...messages.NatsMessage) {
+func (s *Stream) Add(msgs ...messages.Message) {
 	for _, msg := range msgs {
 		data := u.BuildMessageToRawStreamMsg(msg)
 		_, err := s.Write(data.Data, data.Header, nats.AckWait(0))
@@ -98,7 +97,7 @@ func (s *Stream) Add(msgs ...messages.NatsMessage) {
 	}
 }
 
-func (s *Stream) ExpectExactly(t *testing.T, msgs ...messages.NatsMessage) {
+func (s *Stream) ExpectExactly(t *testing.T, msgs ...messages.Message) {
 	if len(msgs) != len(s.stream) {
 		t.Errorf("Different count of messages. Expected: %d, found: %d", len(msgs), len(s.stream))
 		return
@@ -113,18 +112,23 @@ func (s *Stream) ExpectExactly(t *testing.T, msgs ...messages.NatsMessage) {
 		if expected.GetSequence() != found.GetSequence() {
 			t.Errorf("Different message sequences. Expected: %d, found: %d", expected.GetSequence(), found.GetSequence())
 		}
-		if expected.GetBlock().Hash != found.GetBlock().Hash {
-			t.Errorf("Different block hashes. Expected: %s, found: %s", expected.GetBlock().Hash, found.GetBlock().Hash)
+		if expected.GetHash() != found.GetHash() {
+			t.Errorf("Different block hashes. Expected: %s, found: %s", expected.GetHash(), found.GetHash())
 		}
-		if expected.GetBlock().Height != found.GetBlock().Height {
-			t.Errorf("Different block heights. Expected: %d, found: %d", expected.GetBlock().Height, found.GetBlock().Height)
+		if expected.GetHeight() != found.GetHeight() {
+			t.Errorf("Different block heights. Expected: %d, found: %d", expected.GetHeight(), found.GetHeight())
 		}
-		if expected.GetBlock().PrevHash != found.GetBlock().PrevHash {
-			t.Errorf("Different block prev hashes. Expected: %s, found: %s", expected.GetBlock().PrevHash, found.GetBlock().PrevHash)
+		if expected.GetPrevHash() != found.GetPrevHash() {
+			t.Errorf("Different block prev hashes. Expected: %s, found: %s", expected.GetPrevHash(), found.GetPrevHash())
 		}
-		if expected.IsShard() {
-			if expected.GetShard().ShardID != found.GetShard().ShardID {
-				t.Errorf("Different shard numbers. Expected: %d, found: %d", expected.GetShard().ShardID, found.GetShard().ShardID)
+		if expected.GetType() != found.GetType() {
+			t.Errorf("Different block types. Expected: %s, found: %s", expected.GetType().String(), found.GetType().String())
+		}
+		if expected.GetType() == messages.Shard {
+			expectedShardID := expected.GetShard().GetShardID()
+			foundShardID := found.GetShard().GetShardID()
+			if expectedShardID != foundShardID {
+				t.Errorf("Different shard numbers. Expected: %d, found: %d", expectedShardID, foundShardID)
 			}
 		}
 	}
@@ -147,31 +151,25 @@ func (s *Stream) Write(data []byte, header nats.Header, publishAckWait nats.AckW
 		}
 	}
 
-	m := messages.NatsMessage{
-		Msg: &nats.Msg{Data: data, Header: header},
-		Metadata: &nats.MsgMetadata{
+	block, err := v3.DecodeProtoBlock(data)
+	if err != nil {
+		return nil, err
+	}
+	m := &messages.AbstractMessage{
+		TypedMessage: messages.TypedMessage{
+			Block: block,
+		},
+		Msg: &nats.Msg{
+			Data:   data,
+			Header: header,
+		},
+		Meta: &nats.MsgMetadata{
 			Sequence: nats.SequencePair{
-				Consumer: seq,
-				Stream:   seq,
+				Stream: seq,
 			},
 			Timestamp: time.Now(),
 			Stream:    "fakey-fakey",
 		},
-		Announcement: nil,
-		Shard:        nil,
-	}
-
-	message, err := v3.DecodeProto(data)
-	if err != nil {
-		logrus.Error("cannot decode proto")
-		return nil, err
-	}
-
-	switch k := message.Payload.(type) {
-	case *borealisproto.Message_NearBlockHeader:
-		m.Announcement = messages.NewBlockAnnouncementV3(k)
-	case *borealisproto.Message_NearBlockShard:
-		m.Shard = messages.NewBlockShard(k)
 	}
 
 	s.stream = append(s.stream, m)
@@ -197,10 +195,10 @@ func (s *Stream) Stats() *nats.Statistics {
 
 func (s *Stream) Display() {
 	for _, msg := range s.stream {
-		if msg.IsAnnouncement() {
-			fmt.Printf("%s:%s ", msg.GetType().String(), msg.GetAnnouncement().Block.Hash[:3])
+		if msg.GetType() == messages.Shard {
+			fmt.Printf("%s:%s:%d ", msg.GetType().String(), msg.GetHash()[:3], msg.GetShard().GetShardID())
 		} else {
-			fmt.Printf("%s:%s:%d ", msg.GetType().String(), msg.GetShard().Block.Hash[:3], msg.GetShard().ShardID)
+			fmt.Printf("%s:%s ", msg.GetType().String(), msg.GetHash()[:3])
 		}
 	}
 	fmt.Println()
@@ -208,30 +206,30 @@ func (s *Stream) Display() {
 
 func (s *Stream) DisplayRows() {
 	for _, msg := range s.stream {
-		if msg.IsAnnouncement() {
-			fmt.Printf("%s:%s\n", msg.GetType().String(), msg.GetAnnouncement().Block.Hash[:3])
+		if msg.GetType() == messages.Shard {
+			fmt.Printf("%s:%s:%d\n", msg.GetType().String(), msg.GetHash()[:3], msg.GetShard().GetShardID())
 		} else {
-			fmt.Printf("%s:%s:%d\n", msg.GetType().String(), msg.GetShard().Block.Hash[:3], msg.GetShard().ShardID)
+			fmt.Printf("%s:%s\n", msg.GetType().String(), msg.GetHash()[:3])
 		}
 	}
 }
 
 func (s *Stream) DisplayWithHeaders() {
 	for _, msg := range s.stream {
-		if msg.IsAnnouncement() {
-			fmt.Printf(
-				"%s:%s [%v]\n",
-				msg.GetType().String(),
-				msg.GetAnnouncement().Block.Hash[:3],
-				msg.GetMsg().Header,
-			)
-		} else {
+		if msg.GetType() == messages.Shard {
 			fmt.Printf(
 				"%s:%s:%d [%v]\n",
 				msg.GetType().String(),
-				msg.GetShard().Block.Hash[:3],
-				msg.GetShard().ShardID,
-				msg.GetMsg().Header,
+				msg.GetHash()[:3],
+				msg.GetShard().GetShardID(),
+				msg.GetHeader(),
+			)
+		} else {
+			fmt.Printf(
+				"%s:%s: [%v]\n",
+				msg.GetType().String(),
+				msg.GetHash()[:3],
+				msg.GetHeader(),
 			)
 		}
 	}
@@ -239,7 +237,7 @@ func (s *Stream) DisplayWithHeaders() {
 
 func NewStream() *Stream {
 	return &Stream{
-		stream: make([]messages.AbstractNatsMessage, 0),
+		stream: make([]messages.Message, 0),
 	}
 }
 
