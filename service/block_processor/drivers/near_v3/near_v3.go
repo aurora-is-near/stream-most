@@ -5,6 +5,7 @@ import (
 
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
+	"github.com/aurora-is-near/stream-most/util"
 	"github.com/sirupsen/logrus"
 )
 
@@ -83,7 +84,7 @@ func (n *NearV3) FinishError() error {
 }
 
 func (n *NearV3) pop(block *storedBlock) {
-	n.lastWrittenBlockHash = &[]string{block.announcement.GetHash()}[0]
+	n.lastWrittenBlockHash = util.Ptr(block.announcement.GetHash())
 	delete(n.blocks, block.announcement.GetHash())
 	delete(n.blocksByPreviousHash, block.announcement.GetPrevHash())
 	block.writeTo(n.output)

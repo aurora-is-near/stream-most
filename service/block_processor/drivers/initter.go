@@ -4,6 +4,7 @@ import (
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/near_v3"
 	"github.com/aurora-is-near/stream-most/service/stream_seek"
 	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/aurora-is-near/stream-most/util"
 	"github.com/sirupsen/logrus"
 )
 
@@ -18,7 +19,7 @@ func Infer(tp DriverType, _, output stream.Interface) Driver {
 			}
 		} else {
 			logrus.Info("Last fully written block's height is ", lastWrittenBlock.GetHeight())
-			lastWrittenHash = &[]string{lastWrittenBlock.GetHash()}[0]
+			lastWrittenHash = util.Ptr(lastWrittenBlock.GetHash())
 		}
 
 		return near_v3.NewNearV3((&near_v3.Options{

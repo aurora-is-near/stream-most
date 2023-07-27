@@ -7,6 +7,7 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream/fake"
 	"github.com/aurora-is-near/stream-most/testing/u"
+	"github.com/aurora-is-near/stream-most/util"
 )
 
 func TestStreamSeek_SeekLastFullyWrittenBlock(t *testing.T) {
@@ -48,7 +49,7 @@ func TestStreamSeek_SeekShards(t *testing.T) {
 	)
 
 	seeker := NewStreamSeek(testInput)
-	shards, err := seeker.SeekShards(1, 3, &[]string{"AAA"}[0])
+	shards, err := seeker.SeekShards(1, 3, util.Ptr("AAA"))
 	if err != nil {
 		t.Fatal(err)
 	}
