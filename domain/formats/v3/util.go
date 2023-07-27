@@ -1,7 +1,17 @@
 package v3
 
-import "unsafe"
+import (
+	"sync"
+)
 
-func b2s(b []byte) string {
-	return unsafe.String(unsafe.SliceData(b), len(b))
+type cachedString struct {
+	value    string
+	saveOnce sync.Once
+}
+
+func (c *cachedString) get(b []byte) string {
+	c.saveOnce.Do(func() {
+		c.value = string(b)
+	})
+	return c.value
 }

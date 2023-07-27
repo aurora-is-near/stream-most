@@ -6,20 +6,23 @@ import (
 
 type NearBlockShard struct {
 	BlockShard *nearblock.BlockShard
+
+	hash     cachedString
+	prevHash cachedString
 }
 
-func (s NearBlockShard) GetHash() string {
-	return b2s(s.BlockShard.Header.Header.H256Hash)
+func (s *NearBlockShard) GetHash() string {
+	return s.hash.get(s.BlockShard.Header.Header.H256Hash)
 }
 
-func (s NearBlockShard) GetPrevHash() string {
-	return b2s(s.BlockShard.Header.Header.H256PrevHash)
+func (s *NearBlockShard) GetPrevHash() string {
+	return s.prevHash.get(s.BlockShard.Header.Header.H256PrevHash)
 }
 
-func (s NearBlockShard) GetHeight() uint64 {
+func (s *NearBlockShard) GetHeight() uint64 {
 	return s.BlockShard.Header.Header.Height
 }
 
-func (s NearBlockShard) GetShardID() uint64 {
+func (s *NearBlockShard) GetShardID() uint64 {
 	return s.BlockShard.ShardId
 }

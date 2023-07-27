@@ -43,7 +43,7 @@ func DecodeProtoBlock(d []byte) (blocks.Block, error) {
 		case msgT.NearBlockHeader.Header == nil:
 			return nil, fmt.Errorf("unable to decode borealisproto message: NearBlockHeader.Header is nil")
 		default:
-			return NearBlockAnnouncement{BlockHeaderView: msgT.NearBlockHeader}, nil
+			return &NearBlockAnnouncement{BlockHeaderView: msgT.NearBlockHeader}, nil
 		}
 
 	case *borealisproto.Message_NearBlockShard:
@@ -57,7 +57,7 @@ func DecodeProtoBlock(d []byte) (blocks.Block, error) {
 		case msgT.NearBlockShard.Header.Header == nil:
 			return nil, fmt.Errorf("unable to decode borealisproto message: NearBlockShard.Header.Header is nil")
 		default:
-			return NearBlockShard{BlockShard: msgT.NearBlockShard}, nil
+			return &NearBlockShard{BlockShard: msgT.NearBlockShard}, nil
 		}
 
 	default:

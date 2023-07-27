@@ -67,7 +67,7 @@ func BuildMessageToRawStreamMsg(message messages.Message) *nats.RawStreamMsg {
 }
 
 func NewSimpleBlockAnnouncement(shardsMap []bool, height uint64, hash string, prevHash string) blocks.BlockAnnouncement {
-	return v3.NearBlockAnnouncement{
+	return &v3.NearBlockAnnouncement{
 		BlockHeaderView: &near_block.BlockHeaderView{
 			Header: &near_block.IndexerBlockHeaderView{
 				Height:       height,
@@ -80,7 +80,7 @@ func NewSimpleBlockAnnouncement(shardsMap []bool, height uint64, hash string, pr
 }
 
 func NewSimpleBlockShard(height uint64, hash string, prevHash string, shardId uint64) blocks.BlockShard {
-	return v3.NearBlockShard{
+	return &v3.NearBlockShard{
 		BlockShard: &near_block.BlockShard{
 			ShardId: shardId,
 			Header: &near_block.PartialBlockHeaderView{
@@ -95,14 +95,14 @@ func NewSimpleBlockShard(height uint64, hash string, prevHash string, shardId ui
 }
 
 func RecoverBlockPayload(block blocks.Block) ([]byte, error) {
-	if block, ok := block.(v3.NearBlockAnnouncement); ok {
+	if block, ok := block.(*v3.NearBlockAnnouncement); ok {
 		return v3.ProtoEncode(&borealisproto.Message{
 			Payload: &borealisproto.Message_NearBlockHeader{
 				NearBlockHeader: block.BlockHeaderView,
 			},
 		})
 	}
-	if block, ok := block.(v3.NearBlockShard); ok {
+	if block, ok := block.(*v3.NearBlockShard); ok {
 		return v3.ProtoEncode(&borealisproto.Message{
 			Payload: &borealisproto.Message_NearBlockShard{
 				NearBlockShard: block.BlockShard,

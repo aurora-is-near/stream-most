@@ -6,20 +6,23 @@ import (
 
 type NearBlockAnnouncement struct {
 	BlockHeaderView *nearblock.BlockHeaderView
+
+	hash     cachedString
+	prevHash cachedString
 }
 
-func (a NearBlockAnnouncement) GetHash() string {
-	return b2s(a.BlockHeaderView.Header.H256Hash)
+func (a *NearBlockAnnouncement) GetHash() string {
+	return a.hash.get(a.BlockHeaderView.Header.H256Hash)
 }
 
-func (a NearBlockAnnouncement) GetPrevHash() string {
-	return b2s(a.BlockHeaderView.Header.H256PrevHash)
+func (a *NearBlockAnnouncement) GetPrevHash() string {
+	return a.prevHash.get(a.BlockHeaderView.Header.H256PrevHash)
 }
 
-func (a NearBlockAnnouncement) GetHeight() uint64 {
+func (a *NearBlockAnnouncement) GetHeight() uint64 {
 	return a.BlockHeaderView.Header.Height
 }
 
-func (a NearBlockAnnouncement) GetShardMask() []bool {
+func (a *NearBlockAnnouncement) GetShardMask() []bool {
 	return a.BlockHeaderView.Header.ChunkMask
 }
