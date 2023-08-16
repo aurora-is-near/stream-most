@@ -14,9 +14,6 @@ import (
 
 // TestBridgeRuns is a default test that checks that bridge is bootable
 func TestBridgeRuns(t *testing.T) {
-	// This test is broken right now
-	return
-
 	if u.IsCI() {
 		t.SkipNow()
 	}

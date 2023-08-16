@@ -1,12 +1,13 @@
 package stream_seek
 
 import (
+	"context"
 	"io"
 
 	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream"
-	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -22,20 +23,20 @@ type StreamSeek struct {
 }
 
 // SeekShards
-func (p *StreamSeek) SeekShards(from, to uint64, forBlock *string) ([]messages.Message, error) {
-	var shards []messages.Message
+func (p *StreamSeek) SeekShards(from, to uint64, forBlock *string) ([]messages.BlockMessage, error) {
+	var shards []messages.BlockMessage
 
 	if from == 0 {
 		from = 1
 	}
 
 	for seq := to; seq >= from; seq-- {
-		d, err := p.stream.Get(seq)
+		d, err := p.stream.Get(context.Background(), seq)
 		if err != nil {
 			continue
 		}
 
-		message, err := formats.Active().ParseRawMsg(d)
+		message, err := formats.Active().ParseMsg(d)
 		if err != nil {
 			return shards, err
 		}
@@ -54,12 +55,12 @@ func (p *StreamSeek) SeekShards(from, to uint64, forBlock *string) ([]messages.M
 // is below a given one. notBefore and notAfter are given in sequence numbers and are used to limit the search range.
 // Set notAfter to 0 to search until the end of the stream.
 func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore uint64, notAfter uint64) (uint64, error) {
-	info, _, err := p.stream.GetInfo(0)
+	info, err := p.stream.GetInfo(context.Background())
 	if err != nil {
 		return 0, p.wrapNatsError(err)
 	}
 
-	if info.State.LastSeq == 0 {
+	if info.State.Msgs == 0 || info.State.LastSeq == 0 || info.State.FirstSeq > info.State.LastSeq {
 		return 0, p.wrapNatsError(ErrNotFound)
 	}
 
@@ -93,9 +94,9 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 
 		logrus.Infof("Searching at sequence %d...", seq)
 
-		d, err := p.stream.Get(seq)
+		d, err := p.stream.Get(context.Background(), seq)
 		if err != nil {
-			if errors.Is(err, nats.ErrMsgNotFound) {
+			if errors.Is(err, jetstream.ErrMsgNotFound) {
 				l = (l + r) / 2
 				shift = 0
 				continue
@@ -108,15 +109,15 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 			return 0, p.wrapNatsError(err)
 		}
 
-		if len(d.Data) == 0 {
+		if len(d.GetData()) == 0 {
 			// Empty message :(
 			shift++
 			continue
 		}
 
-		message, err := formats.Active().ParseRawMsg(d)
+		message, err := formats.Active().ParseMsg(d)
 		if err != nil {
-			logrus.Info("Corrupted message")
+			logrus.Errorf("Stream seek: corrupted message on seq=%d: %v", seq, err)
 			return 0, err
 		}
 
@@ -134,13 +135,13 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 	}
 
 	for shift := uint64(0); shift < 10; shift++ {
-		d, err := p.stream.Get(l + shift)
+		d, err := p.stream.Get(context.Background(), l+shift)
 		if err != nil {
 			logrus.Error(errors.Wrap(err, "cannot read message: "))
 			continue
 		}
 
-		message, err := formats.Active().ParseRawMsg(d)
+		message, err := formats.Active().ParseMsg(d)
 		if err != nil {
 			logrus.Error(errors.Wrap(err, "corrupted message: "))
 			continue
@@ -148,7 +149,7 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 
 		switch message.GetType() {
 		case messages.Announcement:
-			logrus.Infof("Found block announcement with height %d at sequence %d", message.GetHeight(), l)
+			logrus.Infof("Stream Seek: found block announcement with height %d at sequence %d", message.GetHeight(), l)
 			return l + shift, nil
 		}
 	}
@@ -157,16 +158,16 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 }
 
 func (p *StreamSeek) SeekLastFullyWrittenBlock() (
-	announcement messages.Message,
-	shards []messages.Message,
+	announcement messages.BlockMessage,
+	shards []messages.BlockMessage,
 	err error,
 ) {
-	info, _, err := p.stream.GetInfo(0)
+	info, err := p.stream.GetInfo(context.Background())
 	if err != nil {
 		return nil, nil, p.wrapNatsError(err)
 	}
 
-	if info.State.LastSeq == 0 {
+	if info.State.Msgs == 0 || info.State.LastSeq == 0 || info.State.FirstSeq > info.State.LastSeq {
 		return nil, nil, ErrEmptyStream
 	}
 
@@ -179,16 +180,16 @@ func (p *StreamSeek) SeekLastFullyWrittenBlock() (
 		lowerBound = 1
 	}
 
-	var shardsStash []messages.Message
+	var shardsStash []messages.BlockMessage
 
 	for seq := upperBound; seq >= lowerBound; seq-- {
-		msg, err := p.stream.Get(seq)
+		msg, err := p.stream.Get(context.Background(), seq)
 		if err != nil {
 			return nil, nil, p.wrapNatsError(err)
 		}
 
 		// We need to inspect the message to see its height
-		message, err := formats.Active().ParseRawMsg(msg)
+		message, err := formats.Active().ParseMsg(msg)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -231,7 +232,7 @@ func (p *StreamSeek) SeekLastFullyWrittenBlock() (
 // For example, it will most likely return non-first announcement if it searches from the beginning of the actively
 // written stream with discard policy set to old, and the latency to the NATS cluster is high.
 func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint64, error) {
-	info, _, err := p.stream.GetInfo(0)
+	info, err := p.stream.GetInfo(context.Background())
 	if err != nil {
 		return 0, errors.Wrap(err, "cannot get stream info")
 	}
@@ -263,9 +264,9 @@ func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint6
 
 	for seq := from; seq <= to; seq++ {
 		logrus.Info("Looking at sequence ", seq)
-		d, err := p.stream.Get(seq)
+		d, err := p.stream.Get(context.Background(), seq)
 		if err != nil {
-			if errors.Is(err, nats.ErrMsgNotFound) {
+			if errors.Is(err, jetstream.ErrMsgNotFound) {
 				logrus.Warn("Stream is deleting old messages too fast, skipping 2%")
 				seq += (to - from) / 50
 				continue
@@ -273,7 +274,7 @@ func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint6
 			return 0, errors.Wrap(err, "cannot get message at the given sequence")
 		}
 
-		message, err := formats.Active().ParseRawMsg(d)
+		message, err := formats.Active().ParseMsg(d)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				// Those are truncated messages, just skip
@@ -292,7 +293,7 @@ func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint6
 }
 
 func (p *StreamSeek) wrapNatsError(err error) error {
-	if errors.Is(err, nats.ErrMsgNotFound) {
+	if errors.Is(err, jetstream.ErrMsgNotFound) {
 		return ErrNotFound
 	}
 

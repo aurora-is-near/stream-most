@@ -6,11 +6,11 @@ import (
 )
 
 type Validator struct {
-	input  chan messages.Message
-	output chan messages.Message
+	input  chan messages.BlockMessage
+	output chan messages.BlockMessage
 	obs    *observer.Observer
 
-	currentAnnouncement messages.Message
+	currentAnnouncement messages.BlockMessage
 	shardsLeft          map[uint8]struct{}
 
 	killed bool
@@ -20,7 +20,7 @@ func (n *Validator) BindObserver(obs *observer.Observer) {
 	n.obs = obs
 }
 
-func (n *Validator) Bind(input chan messages.Message, output chan messages.Message) {
+func (n *Validator) Bind(input chan messages.BlockMessage, output chan messages.BlockMessage) {
 	n.input = input
 	n.output = output
 }
@@ -35,7 +35,7 @@ func (n *Validator) Run() {
 	}
 }
 
-func (n *Validator) process(message messages.Message) {
+func (n *Validator) process(message messages.BlockMessage) {
 	switch message.GetType() {
 	case messages.Announcement:
 		n.processAnnouncement(message)
@@ -57,7 +57,7 @@ func (n *Validator) Kill() {
 	n.killed = true
 }
 
-func (n *Validator) processAnnouncement(msg messages.Message) {
+func (n *Validator) processAnnouncement(msg messages.BlockMessage) {
 	if !n.previousCompleted() {
 		n.obs.Emit(
 			observer.ErrorInData,
@@ -82,7 +82,7 @@ func (n *Validator) processAnnouncement(msg messages.Message) {
 	n.obs.Emit(observer.ValidationOK, observer.WrapMessage(msg, nil))
 }
 
-func (n *Validator) processShard(msg messages.Message) {
+func (n *Validator) processShard(msg messages.BlockMessage) {
 	if n.currentAnnouncement == nil {
 		n.obs.Emit(
 			observer.ErrorInData,

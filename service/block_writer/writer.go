@@ -12,6 +12,7 @@ import (
 	"github.com/aurora-is-near/stream-most/service/block_writer/monitoring"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -22,12 +23,12 @@ type Writer struct {
 	outputStream   stream.Interface
 	lowHeightInRow uint64
 
-	lastWritten      messages.Message
+	lastWritten      messages.BlockMessage
 	closed           bool
 	onCloseListeners []func(err error)
 }
 
-func (w *Writer) write(ctx context.Context, msg messages.Message) (*nats.PubAck, error) {
+func (w *Writer) write(ctx context.Context, msg messages.BlockMessage) (*jetstream.PubAck, error) {
 	if w.closed {
 		return nil, ErrClosed
 	}
@@ -41,13 +42,17 @@ func (w *Writer) write(ctx context.Context, msg messages.Message) (*nats.PubAck,
 	headers := w.enrichHeaders(msg, msg.GetHeader())
 
 	var lastError error
-	var puback *nats.PubAck
+	var puback *jetstream.PubAck
 
 	for attempts := w.options.MaxWriteAttempts; attempts >= 1; attempts-- {
 		puback, lastError = w.outputStream.Write(
-			msg.GetData(),
-			headers,
-			nats.AckWait(1*time.Second),
+			context.Background(), // TODO
+			&nats.Msg{
+				Subject: "", // TODO!!!
+				Header:  headers,
+				Data:    msg.GetData(),
+			},
+			// TODO
 		)
 		if lastError == nil {
 			w.lastWritten = msg
@@ -80,16 +85,16 @@ func (w *Writer) write(ctx context.Context, msg messages.Message) (*nats.PubAck,
 	return nil, lastError
 }
 
-func (w *Writer) WriteWithAck(ctx context.Context, msg messages.Message) (*nats.PubAck, error) {
+func (w *Writer) WriteWithAck(ctx context.Context, msg messages.BlockMessage) (*jetstream.PubAck, error) {
 	return w.write(ctx, msg)
 }
 
-func (w *Writer) Write(ctx context.Context, msg messages.Message) error {
+func (w *Writer) Write(ctx context.Context, msg messages.BlockMessage) error {
 	_, err := w.write(ctx, msg)
 	return err
 }
 
-func (w *Writer) getTip() (messages.Message, error) {
+func (w *Writer) getTip() (messages.BlockMessage, error) {
 	tip, err := w.TipCached.GetTip()
 	if err != nil {
 		return nil, err
@@ -114,7 +119,7 @@ func (w *Writer) validate(block blocks.Block) error {
 
 	tip, err := w.getTip()
 	if err != nil {
-		if errors.Is(err, nats.ErrMsgNotFound) {
+		if errors.Is(err, jetstream.ErrMsgNotFound) {
 			// Output stream is empty, so we can write any block
 			return nil
 		}
@@ -132,13 +137,13 @@ func (w *Writer) validate(block blocks.Block) error {
 	return nil
 }
 
-func (w *Writer) enrichHeaders(message messages.Message, header nats.Header) nats.Header {
+func (w *Writer) enrichHeaders(message messages.BlockMessage, header nats.Header) nats.Header {
 	var uniqueId string
 	switch message.GetType() {
 	case messages.Announcement:
 		uniqueId = strconv.FormatUint(message.GetHeight(), 10)
 	case messages.Shard:
-		uniqueId = fmt.Sprintf("%d:%d", message.GetHeight(), message.GetShard().GetShardID())
+		uniqueId = fmt.Sprintf("%d.%d", message.GetHeight(), message.GetShard().GetShardID())
 	}
 
 	if header == nil {

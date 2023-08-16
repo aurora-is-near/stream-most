@@ -8,7 +8,7 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/blocks"
 	v3 "github.com/aurora-is-near/stream-most/domain/formats/v3"
 	"github.com/aurora-is-near/stream-most/domain/messages"
-	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 /*
@@ -16,53 +16,28 @@ import (
 	Removing this file will not affect anything but tests
 */
 
-func Announcement(sequence uint64, shardsMap []bool, height uint64, hash string, prevHash string) messages.Message {
-	return BTN(sequence, NewSimpleBlockAnnouncement(shardsMap, height, hash, prevHash))
+func Announcement(sequence uint64, shardsMap []bool, height uint64, hash string, prevHash string) messages.BlockMessage {
+	return MessageFromBlock(sequence, NewSimpleBlockAnnouncement(shardsMap, height, hash, prevHash))
 }
 
-func Shard(sequence uint64, height uint64, hash string, prevHash string, shardId uint64) messages.Message {
-	return BTN(sequence, NewSimpleBlockShard(height, hash, prevHash, shardId))
+func Shard(sequence uint64, height uint64, hash string, prevHash string, shardId uint64) messages.BlockMessage {
+	return MessageFromBlock(sequence, NewSimpleBlockShard(height, hash, prevHash, shardId))
 }
 
-func BTN(sequence uint64, block blocks.Block) messages.Message {
-	return BlockToNats(sequence, block)
-}
-
-func BlockToNats(sequence uint64, block blocks.Block) messages.Message {
+func MessageFromBlock(sequence uint64, block blocks.Block) messages.BlockMessage {
 	data, err := RecoverBlockPayload(block)
 	if err != nil {
 		panic(err)
 	}
 
-	return &messages.AbstractRawMessage{
-		TypedMessage: messages.TypedMessage{
-			Block: block,
+	return &messages.AbstractBlockMessage{
+		Block: block,
+		NatsMessage: messages.RawStreamMessage{
+			RawStreamMsg: &jetstream.RawStreamMsg{
+				Sequence: sequence,
+				Data:     data,
+			},
 		},
-		RawMsg: &nats.RawStreamMsg{
-			Sequence: sequence,
-			Header:   make(nats.Header),
-			Data:     data,
-		},
-	}
-}
-
-// BuildMessageToRawStreamMsg converts a message to a RawStreamMsg.
-// If message itself doesn't have Data []byte (most likely hand-crafted object),
-// then it will be created manually
-func BuildMessageToRawStreamMsg(message messages.Message) *nats.RawStreamMsg {
-	var err error
-	data := message.GetData()
-	if len(data) == 0 {
-		if data, err = RecoverBlockPayload(message.GetBlock()); err != nil {
-			panic(err)
-		}
-	}
-	return &nats.RawStreamMsg{
-		Subject:  message.GetSubject(),
-		Sequence: message.GetSequence(),
-		Header:   message.GetHeader(),
-		Data:     data,
-		Time:     message.GetTimestamp(),
 	}
 }
 

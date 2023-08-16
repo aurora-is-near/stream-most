@@ -30,12 +30,12 @@ func TestBlockProcessor(t *testing.T) {
 		u.Announcement(5, []bool{true, true, true}, 2, "BBB", "AAA"),
 	)
 
-	reader, err := reader.Start(&reader.Options{}, input, 2, 0)
+	reader, err := reader.Start(context.Background(), &reader.Options{}, input, nil, 2, 0)
 	if err != nil {
 		return
 	}
 
-	inputStream, _ := adapters.ReaderOutputToNatsMessages(context.Background(), reader.Output(), 10)
+	inputStream, _ := adapters.ReaderToBlockMessage(context.Background(), reader, 10)
 
 	processor := NewProcessor(inputStream, near_v3.NewNearV3((&near_v3.Options{
 		StuckTolerance:          10,

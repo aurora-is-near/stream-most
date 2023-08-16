@@ -7,7 +7,7 @@ import (
 
 type Driver interface {
 	FinishError() error
-	Bind(input chan messages.Message, output chan messages.Message)
+	Bind(input chan messages.BlockMessage, output chan messages.BlockMessage)
 	BindObserver(observer *observer.Observer)
 	Run()
 	Kill()

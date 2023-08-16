@@ -7,7 +7,7 @@ import (
 )
 
 type WrappedMessage struct {
-	Message messages.Message
+	Message messages.BlockMessage
 	Wraps   []error
 }
 
@@ -24,9 +24,10 @@ func (m *WrappedMessage) String() string {
 }
 
 func (m *WrappedMessage) Wrap(wrap error) *WrappedMessage {
+	// TODO: check if slice is reused safely
 	return &WrappedMessage{Wraps: append(m.Wraps, wrap), Message: m.Message}
 }
 
-func WrapMessage(message messages.Message, err error) *WrappedMessage {
+func WrapMessage(message messages.BlockMessage, err error) *WrappedMessage {
 	return &WrappedMessage{Wraps: []error{err}, Message: message}
 }

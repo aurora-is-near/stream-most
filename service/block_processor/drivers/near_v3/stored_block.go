@@ -11,9 +11,9 @@ import (
 type storedBlock struct {
 	expiresAt uint64
 
-	announcement messages.Message
-	shards       []messages.Message
-	shardsStash  []messages.Message
+	announcement messages.BlockMessage
+	shards       []messages.BlockMessage
+	shardsStash  []messages.BlockMessage
 
 	shardsRequired []bool
 }
@@ -22,7 +22,7 @@ func (b *storedBlock) missingAnnouncement() bool {
 	return b.announcement == nil
 }
 
-func (b *storedBlock) addAnnouncement(announcement messages.Message) {
+func (b *storedBlock) addAnnouncement(announcement messages.BlockMessage) {
 	b.announcement = announcement
 	b.shardsRequired = announcement.GetAnnouncement().GetShardMask()
 
@@ -31,7 +31,7 @@ func (b *storedBlock) addAnnouncement(announcement messages.Message) {
 	}
 }
 
-func (b *storedBlock) addShard(shard messages.Message) (isNew bool) {
+func (b *storedBlock) addShard(shard messages.BlockMessage) (isNew bool) {
 	if b.missingAnnouncement() {
 		b.stashShard(shard)
 		return true
@@ -54,11 +54,11 @@ func (b *storedBlock) addShard(shard messages.Message) (isNew bool) {
 	return false
 }
 
-func (b *storedBlock) stashShard(shard messages.Message) {
+func (b *storedBlock) stashShard(shard messages.BlockMessage) {
 	b.shardsStash = append(b.shardsStash, shard)
 }
 
-func (b *storedBlock) shardsSorted() []messages.Message {
+func (b *storedBlock) shardsSorted() []messages.BlockMessage {
 	sort.Slice(b.shards, func(i, j int) bool {
 		return b.shards[i].GetShard().GetShardID() < b.shards[j].GetShard().GetShardID()
 	})
@@ -76,7 +76,7 @@ func (b *storedBlock) isComplete() bool {
 	return b.announcement != nil && shardsCompleted
 }
 
-func (b *storedBlock) writeTo(output chan messages.Message) {
+func (b *storedBlock) writeTo(output chan messages.BlockMessage) {
 	output <- b.announcement
 	for _, shard := range b.shardsSorted() {
 		output <- shard
@@ -96,6 +96,6 @@ func (b *storedBlock) getAbstractBlock() blocks.Block {
 func newStoredBlock(expiresAt uint64) *storedBlock {
 	return &storedBlock{
 		expiresAt: expiresAt,
-		shards:    make([]messages.Message, 0),
+		shards:    make([]messages.BlockMessage, 0),
 	}
 }

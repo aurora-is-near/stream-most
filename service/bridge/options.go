@@ -5,5 +5,5 @@ type Options struct {
 	InputEndSequence   uint64
 
 	// How many parses should fail in a row so that we exit the program?
-	ParseTolerance uint64
+	ParseTolerance uint
 }

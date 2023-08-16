@@ -11,8 +11,9 @@ import (
 
 	"github.com/aurora-is-near/stream-most/domain/blocks"
 	"github.com/aurora-is-near/stream-most/domain/formats"
+	v3 "github.com/aurora-is-near/stream-most/domain/formats/v3"
+	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream/autoreader"
-	"github.com/sirupsen/logrus"
 
 	"github.com/aurora-is-near/stream-backup/chunks"
 	"github.com/aurora-is-near/stream-backup/messagebackup"
@@ -23,7 +24,6 @@ const stdoutInterval = time.Second * 5
 var errInterrupted = errors.New("interrupted")
 
 type StreamBackup struct {
-	Mode     string
 	Chunks   chunks.ChunksInterface
 	Reader   *autoreader.AutoReader
 	StartSeq uint64
@@ -59,7 +59,6 @@ func (sb *StreamBackup) Run() error {
 		if err != nil {
 			return fmt.Errorf("can't figure out next range: %w", err)
 		}
-		logrus.Info("LMAO")
 
 		log.Printf("Pulling segment [%d, %d]", l, r)
 		err = sb.pullSegment(l, r)
@@ -90,13 +89,13 @@ func (sb *StreamBackup) pullSegment(l, r uint64) error {
 		if err := mb.UnmarshalVT(prevData); err != nil {
 			return fmt.Errorf("can't unmarshal prev block: %w", err)
 		}
-		prevBlock, err = sb.decodeBlock(mb.Data)
+		prevBlock, err = formats.Active().ParseBlock(mb.Data)
 		if err != nil {
 			return fmt.Errorf("can't decode prev block: %v", err)
 		}
 	}
 
-	sb.Reader.Start(l)
+	sb.Reader.Start(l, r+1)
 	defer sb.Reader.Stop()
 
 	stdoutTicker := time.NewTicker(stdoutInterval)
@@ -118,36 +117,66 @@ func (sb *StreamBackup) pullSegment(l, r uint64) error {
 			return errInterrupted
 		case <-stdoutTicker.C:
 			fmt.Printf("%v [STATE] curSeq=%v\n", time.Now().Format(time.RFC3339), l)
-		case cur := <-sb.Reader.Output():
-			block, err := sb.decodeBlock(cur.Msg.Data)
-			if err != nil {
-				return fmt.Errorf("can't decode new block on seq %v: %w", cur.Metadata.Sequence.Stream, err)
+		case curMsg, ok := <-sb.Reader.Output():
+			if !ok {
+				return nil
 			}
-			if prevBlock != nil && prevBlock.GetHash() != block.GetPrevHash() && prevBlock.GetHash() != block.GetHash() {
-				return fmt.Errorf("hash mismatch on seq %v", cur.Metadata.Sequence.Stream)
+			curBlock, err := formats.Active().ParseMsg(curMsg)
+			if err != nil {
+				return fmt.Errorf("can't decode new block on seq %v: %w", curMsg.GetSequence(), err)
+			}
+			if prevBlock != nil {
+				switch formats.Active().GetFormat() {
+				// TODO: add "simple" format
+				case formats.AuroraV2, formats.NearV2:
+					if prevBlock.GetHash() != curBlock.GetPrevHash() {
+						return fmt.Errorf("hash mismatch on seq %v", curBlock.GetSequence())
+					}
+					if prevBlock.GetHeight() >= curBlock.GetHeight() {
+						return fmt.Errorf("height mismatch on seq %v", curBlock.GetSequence())
+					}
+				case formats.NearV3:
+					if prevBlock.GetHash() == curBlock.GetHash() {
+						if _, ok := prevBlock.(*v3.NearBlockAnnouncement); !ok {
+							return fmt.Errorf("unexpected near v3 block on seq %d after shard on prev block", curBlock.GetSequence())
+						}
+						if curBlock.GetType() != messages.Shard {
+							return fmt.Errorf("near v3 block on seq %d expected to be shard but it's not", curBlock.GetSequence())
+						}
+						if prevBlock.GetHeight() != curBlock.GetHeight() {
+							return fmt.Errorf("height mismatch on seq %v", curBlock.GetSequence())
+						}
+					} else {
+						if prevBlock.GetHash() != curBlock.GetPrevHash() {
+							return fmt.Errorf("hash mismatch on seq %v", curBlock.GetSequence())
+						}
+						if prevBlock.GetHeight() >= curBlock.GetHeight() {
+							return fmt.Errorf("height mismatch on seq %v", curBlock.GetSequence())
+						}
+						if curBlock.GetType() != messages.Announcement {
+							return fmt.Errorf("near v3 block on seq %d expected to be announcement but it's not", curBlock.GetSequence())
+						}
+					}
+				}
 			}
 			mb := &messagebackup.MessageBackup{
 				Headers:  make(map[string]*messagebackup.HeaderValues),
-				UnixNano: uint64(cur.Metadata.Timestamp.UnixNano()),
-				Data:     cur.Msg.Data,
-				Sequence: cur.Metadata.Sequence.Stream,
+				UnixNano: uint64(curBlock.GetTimestamp().UnixNano()),
+				Data:     curBlock.GetData(),
+				Sequence: curBlock.GetSequence(),
 			}
-			for header, values := range cur.Msg.Header {
+			for header, values := range curBlock.GetHeader() {
 				mb.Headers[header] = &messagebackup.HeaderValues{Values: values}
 			}
 			data, err := mb.MarshalVT()
 			if err != nil {
-				return fmt.Errorf("can't marshal new block on seq %v: %w", cur.Metadata.Sequence.Stream, err)
+				return fmt.Errorf("can't marshal new block on seq %v: %w", curBlock.GetSequence(), err)
 			}
 			if err := sb.Chunks.Write(l, data); err != nil {
-				return fmt.Errorf("can't write new block on seq %v: %w", cur.Metadata.Sequence.Stream, err)
+				return fmt.Errorf("can't write new block on seq %v: %w", curBlock.GetSequence(), err)
 			}
-			prevBlock = block
+			prevBlock = curBlock.GetBlock()
 			l++
 		}
 	}
-}
-
-func (sb *StreamBackup) decodeBlock(data []byte) (blocks.Block, error) {
-	return formats.Active().ParseBlock(data)
 }

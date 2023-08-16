@@ -2,6 +2,7 @@ package validator
 
 import (
 	"context"
+
 	"github.com/aurora-is-near/stream-most/service/block_processor"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/validator"
 	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
@@ -27,7 +28,7 @@ type Validator struct {
 
 func (b *Validator) Run(ctx context.Context) error {
 	logrus.Info("Determining the best sequence to start reading from the input stream...")
-	streamStats, _, err := b.Input.GetInfo(0)
+	streamStats, err := b.Input.GetInfo(context.Background())
 	if err != nil {
 		return errors.Wrap(err, "cannot get stream stats: ")
 	}
@@ -46,7 +47,7 @@ func (b *Validator) Run(ctx context.Context) error {
 	}
 
 	logrus.Infof("Starting from the sequence %d, finishing at %d", startingSequence, endingSequence)
-	rdr, err := reader.Start(b.ReaderOptions, b.Input, startingSequence, b.InputEndSequence)
+	rdr, err := reader.Start(context.Background(), b.ReaderOptions, b.Input, nil, startingSequence, endingSequence)
 	if err != nil {
 		return errors.Wrap(err, "cannot start the reader")
 	}
@@ -55,7 +56,7 @@ func (b *Validator) Run(ctx context.Context) error {
 	driver := validator.NewValidator()
 
 	// Pass messages through the block processor
-	processor, readerErrors := block_processor.NewProcessorWithReader(ctx, rdr.Output(), driver, 30)
+	processor, readerErrors := block_processor.NewProcessorWithReader(ctx, rdr, driver, 30)
 	processor.On(observer.ErrorInData, func(data interface{}) {
 		d, ok := data.(*observer.WrappedMessage)
 		if !ok {

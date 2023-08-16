@@ -1,12 +1,14 @@
 package autoreader
 
 import (
+	"context"
+	"sync"
+	"time"
+
+	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/reader"
 	"github.com/sirupsen/logrus"
-	"log"
-	"sync"
-	"time"
 )
 
 type AutoReader struct {
@@ -16,31 +18,32 @@ type AutoReader struct {
 	readerOpts      *reader.Options
 	ReconnectWaitMs uint
 
-	output chan *reader.Output
+	output chan messages.NatsMessage
 	stop   chan struct{}
 	wg     sync.WaitGroup
 }
 
-func NewAutoReader(startSeq uint64, endSeq uint64, readerOpts *reader.Options, streamOptions *stream.Options) *AutoReader {
+func NewAutoReader(streamOptions *stream.Options, readerOpts *reader.Options) *AutoReader {
 	ar := &AutoReader{
-		readerOpts: readerOpts,
 		Entry: logrus.New().
 			WithField("component", "autoreader").
 			WithField("stream", streamOptions.Stream),
+
 		streamOpts: streamOptions,
+		readerOpts: readerOpts,
 	}
 
 	return ar
 }
 
-func (ar *AutoReader) Start(startSeq uint64) {
-	ar.output = make(chan *reader.Output)
+func (ar *AutoReader) Start(startSeq uint64, endSeq uint64) {
+	ar.output = make(chan messages.NatsMessage)
 	ar.stop = make(chan struct{})
 	ar.wg.Add(1)
-	go ar.run(startSeq)
+	go ar.run(startSeq, endSeq)
 }
 
-func (ar *AutoReader) Output() chan *reader.Output {
+func (ar *AutoReader) Output() <-chan messages.NatsMessage {
 	return ar.output
 }
 
@@ -60,8 +63,9 @@ func (ar *AutoReader) newStream() (stream.Interface, error) {
 	return stream.Connect(ar.streamOpts)
 }
 
-func (ar *AutoReader) run(nextSeq uint64) {
+func (ar *AutoReader) run(nextSeq uint64, endSeq uint64) {
 	defer ar.wg.Done()
+	defer close(ar.output)
 
 	var err error
 	var s stream.Interface
@@ -69,18 +73,27 @@ func (ar *AutoReader) run(nextSeq uint64) {
 
 	disconnect := func() {
 		if r != nil {
+			ar.Info("stopping reader...")
 			r.Stop()
 			r = nil
+			ar.Info("reader stopped")
 		}
 		if s != nil {
+			ar.Info("disconnecting from stream...")
 			_ = s.Disconnect()
 			s = nil
+			ar.Info("disconnected from stream")
 		}
 	}
 	defer disconnect()
 
 	connectionProblem := false
 	for {
+		if endSeq > 0 && nextSeq >= endSeq {
+			ar.Info("reached last sequence, finishing")
+			return
+		}
+
 		select {
 		case <-ar.stop:
 			return
@@ -89,11 +102,13 @@ func (ar *AutoReader) run(nextSeq uint64) {
 
 		if connectionProblem {
 			disconnect()
-			log.Printf("Waiting for %vms before reconnection...", ar.ReconnectWaitMs)
+			ar.Infof("waiting for %vms before reconnection...", ar.ReconnectWaitMs)
 			timer := time.NewTimer(time.Millisecond * time.Duration(ar.ReconnectWaitMs))
 			select {
 			case <-ar.stop:
-				timer.Stop()
+				if !timer.Stop() {
+					<-timer.C
+				}
 				return
 			case <-timer.C:
 			}
@@ -102,9 +117,11 @@ func (ar *AutoReader) run(nextSeq uint64) {
 
 		if s == nil || r == nil {
 			disconnect()
+
+			ar.Infof("connecting to stream...")
 			s, err = ar.newStream()
 			if err != nil {
-				log.Printf("Can't connect stream: %v", err)
+				ar.Errorf("unable to connect to stream: %v", err)
 				connectionProblem = true
 				continue
 			}
@@ -115,9 +132,10 @@ func (ar *AutoReader) run(nextSeq uint64) {
 			default:
 			}
 
-			r, err = reader.Start(ar.readerOpts, s, nextSeq, 0)
+			ar.Infof("starting reader from seq %d...", nextSeq)
+			r, err = reader.Start(context.Background(), ar.readerOpts, s, nil, nextSeq, endSeq)
 			if err != nil {
-				log.Printf("Can't start reader: %v", err)
+				ar.Errorf("unable to start reader: %v", err)
 				connectionProblem = true
 				continue
 			}
@@ -134,26 +152,20 @@ func (ar *AutoReader) run(nextSeq uint64) {
 			return
 		case out, ok := <-r.Output():
 			if !ok {
-				log.Printf("readerOpts was stopped for some reason")
-				connectionProblem = true
-				continue
-			}
-			if out.Error != nil {
-				log.Printf("readerOpts error: %v", out.Error)
-				connectionProblem = true
-				continue
-			}
-			if out.Metadata.Sequence.Stream != nextSeq {
-				log.Printf("Got wrong seq from reader. Expected: %v, found: %v", nextSeq, out.Metadata.Sequence.Stream)
-				connectionProblem = true
-				continue
+				if r.Error() != nil {
+					ar.Errorf("got reader error, will reconnect: %v", err)
+					connectionProblem = true
+					continue
+				}
+				ar.Info("reached last sequence, finishing...")
+				return
 			}
 			select {
 			case <-ar.stop:
 				return
 			case ar.output <- out:
 			}
-			nextSeq++
+			nextSeq = out.GetSequence() + 1
 		}
 	}
 }

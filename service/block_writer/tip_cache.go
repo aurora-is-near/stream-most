@@ -9,18 +9,18 @@ import (
 type TipCached struct {
 	ttl          time.Duration
 	lastlyCached time.Time
-	tip          messages.Message
+	tip          messages.BlockMessage
 	peeker       TipPeeker
 }
 
-func (t *TipCached) GetTip() (messages.Message, error) {
+func (t *TipCached) GetTip() (messages.BlockMessage, error) {
 	if t.lastlyCached.Add(t.ttl).Before(time.Now()) {
 		return t.getTip()
 	}
 	return t.tip, nil
 }
 
-func (t *TipCached) getTip() (messages.Message, error) {
+func (t *TipCached) getTip() (messages.BlockMessage, error) {
 	return t.peeker.GetTip()
 }
 

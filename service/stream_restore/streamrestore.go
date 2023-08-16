@@ -16,7 +16,7 @@ import (
 	"github.com/aurora-is-near/stream-most/service/block_writer"
 	"github.com/aurora-is-near/stream-most/service/stream_peek"
 	"github.com/aurora-is-near/stream-most/stream"
-	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/sirupsen/logrus"
 
 	"github.com/aurora-is-near/stream-backup/chunks"
@@ -165,13 +165,13 @@ func (sr *StreamRestore) push() error {
 			}
 			bb := out.blockBackup
 			lastReadSeq = bb.Sequence
-			switch ack, err := writer.WriteWithAck(context.Background(), &messages.AbstractMessage{
-				TypedMessage: messages.TypedMessage{
-					Block: bb.Block,
-				},
-				Msg: &nats.Msg{
-					Data: bb.MessageBackup.Data,
-					// TODO: headers
+			switch ack, err := writer.WriteWithAck(context.Background(), &messages.AbstractBlockMessage{
+				Block: bb.Block,
+				NatsMessage: &messages.RawStreamMessage{
+					RawStreamMsg: &jetstream.RawStreamMsg{
+						Data: bb.MessageBackup.Data,
+						// TODO: headers
+					},
 				},
 			}); err {
 			case nil:

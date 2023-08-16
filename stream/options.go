@@ -5,7 +5,6 @@ import "github.com/aurora-is-near/stream-most/transport"
 type Options struct {
 	Nats          *transport.Options
 	Stream        string
-	Subject       string `json:",omitempty"`
 	RequestWaitMs uint
 
 	ShouldFake bool

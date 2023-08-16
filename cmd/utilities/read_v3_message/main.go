@@ -2,12 +2,14 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"io"
+	"os"
+
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/transport"
 	"github.com/sirupsen/logrus"
-	"io"
-	"os"
 )
 
 func chooseConfig(env string) *transport.Options {
@@ -46,7 +48,6 @@ func main() {
 		Stream: "myblocks",
 		//Stream:        "v3_mainnet_near_blocks",
 		RequestWaitMs: 5000,
-		Subject:       "*",
 	})
 	if err != nil {
 		panic(err)
@@ -56,18 +57,18 @@ func main() {
 	for i := 0; i < 100; i++ {
 		seq++
 
-		get, err := connectStream.Get(seq)
+		get, err := connectStream.Get(context.Background(), seq)
 		if err != nil {
 			panic(err)
 		}
-		println(get.Sequence)
+		println(get.GetSequence())
 
 		filename := fmt.Sprintf("out/%s/read_v3_message_%d.out", env, seq)
 		fileOut, err := os.Create(filename)
 		if err != nil {
 			panic(err)
 		}
-		_, err = io.Copy(fileOut, bytes.NewReader(get.Data))
+		_, err = io.Copy(fileOut, bytes.NewReader(get.GetData()))
 		if err != nil {
 			panic(err)
 		}

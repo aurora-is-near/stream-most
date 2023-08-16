@@ -6,8 +6,8 @@ import (
 )
 
 type Driver struct {
-	input  chan messages.Message
-	output chan messages.Message
+	input  chan messages.BlockMessage
+	output chan messages.BlockMessage
 
 	killed bool
 }
@@ -20,7 +20,7 @@ func (n *Driver) Kill() {
 	n.killed = true
 }
 
-func (n *Driver) Bind(input chan messages.Message, output chan messages.Message) {
+func (n *Driver) Bind(input chan messages.BlockMessage, output chan messages.BlockMessage) {
 	n.input = input
 	n.output = output
 }

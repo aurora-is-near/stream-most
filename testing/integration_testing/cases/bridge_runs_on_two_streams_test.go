@@ -33,14 +33,14 @@ func TestBridgeRunsOnTwoStreams(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	info, _, _ := inputStream.GetInfo(0)
+	info, _ := inputStream.GetInfo(context.Background())
 
 	outputStream, err := u.DefaultLocalStream()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = outputStream.Js().PurgeStream("testing_stream")
+	err = outputStream.Js().DeleteStream(context.Background(), "testing_stream")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,9 +60,7 @@ func TestBridgeRunsOnTwoStreams(t *testing.T) {
 			InputEndSequence:   info.State.LastSeq,
 			ParseTolerance:     1000,
 		}),
-		runner.WithReaderOptions((&reader.Options{
-			WrongSeqToleranceWindow: 1000,
-		}).WithDefaults()),
+		runner.WithReaderOptions((&reader.Options{}).WithDefaults()),
 		runner.WithInputStream(inputStream),
 		runner.WithOutputStream(outputStream),
 		runner.WithDriver(driver),
@@ -76,9 +74,7 @@ func TestBridgeRunsOnTwoStreams(t *testing.T) {
 	// Validate the output stream
 	err = runner.NewRunner(runner.Validator,
 		runner.WithDeadline(time.Now().Add(5*time.Second)),
-		runner.WithReaderOptions((&reader.Options{
-			WrongSeqToleranceWindow: 1000,
-		}).WithDefaults()),
+		runner.WithReaderOptions((&reader.Options{}).WithDefaults()),
 		runner.WithValidatorOptions(0, 0),
 		runner.WithInputStream(outputStream),
 	).Run()

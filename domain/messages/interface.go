@@ -7,20 +7,22 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-type Message interface {
-	blocks.Block
-
-	GetBlock() blocks.Block
-	GetAnnouncement() blocks.BlockAnnouncement
-	GetShard() blocks.BlockShard
-	GetType() MessageType
-
+type NatsMessage interface {
 	GetData() []byte
 	GetHeader() nats.Header
 	GetSubject() string
 	GetSequence() uint64
-	GetNumPending() uint64
 	GetTimestamp() time.Time
-	GetStream() string
-	GetConsumer() string
+}
+
+type BlockMessage interface {
+	blocks.Block
+	NatsMessage
+
+	GetBlock() blocks.Block
+	GetNatsMessage() NatsMessage
+
+	GetAnnouncement() blocks.BlockAnnouncement
+	GetShard() blocks.BlockShard
+	GetType() MessageType
 }

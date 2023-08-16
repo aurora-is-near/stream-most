@@ -1,6 +1,8 @@
 package u
 
 import (
+	"context"
+
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/transport"
 	"github.com/sirupsen/logrus"
@@ -26,7 +28,7 @@ func DefaultLocalStream() (stream.Interface, error) {
 		logrus.Panic(errorMessage)
 	}
 
-	_, _, err = s.GetInfo(0)
+	_, err = s.GetInfo(context.Background())
 	if err != nil {
 		logrus.Panic(errorMessage)
 	}

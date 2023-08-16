@@ -62,7 +62,7 @@ func (b *Bridge) Run(ctx context.Context) error {
 	logrus.Infof("Starting from the sequence %d", startSequence)
 
 	logrus.Debug("Starting the reader...")
-	rdr, err := reader.Start(b.ReaderOptions, b.Input, startSequence, b.options.InputEndSequence)
+	rdr, err := reader.Start(context.Background(), b.ReaderOptions, b.Input, nil, startSequence, b.options.InputEndSequence)
 	if err != nil {
 		return errors.Wrap(err, "cannot start the reader")
 	}
@@ -82,7 +82,7 @@ func (b *Bridge) Run(ctx context.Context) error {
 	logrus.Debug("Starting the processor...")
 	processor, readerErrors := block_processor.NewProcessorWithReader(
 		ctx,
-		rdr.Output(),
+		rdr,
 		b.Driver,
 		b.options.ParseTolerance,
 	)

@@ -8,7 +8,6 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/formats/v2_near"
 	v3 "github.com/aurora-is-near/stream-most/domain/formats/v3"
 	"github.com/aurora-is-near/stream-most/domain/messages"
-	"github.com/nats-io/nats.go"
 )
 
 type Facade struct {
@@ -17,6 +16,10 @@ type Facade struct {
 
 func (f *Facade) UseFormat(format FormatType) {
 	f.format = format
+}
+
+func (f *Facade) GetFormat() FormatType {
+	return f.format
 }
 
 func (f *Facade) ParseBlock(data []byte) (blocks.Block, error) {
@@ -32,28 +35,15 @@ func (f *Facade) ParseBlock(data []byte) (blocks.Block, error) {
 	}
 }
 
-func (f *Facade) ParseMsg(msg *nats.Msg, meta *nats.MsgMetadata) (messages.Message, error) {
-	block, err := f.ParseBlock(msg.Data)
+func (f *Facade) ParseMsg(msg messages.NatsMessage) (messages.BlockMessage, error) {
+	block, err := f.ParseBlock(msg.GetData())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to parse block from message data: %w", err)
 	}
 
-	return &messages.AbstractMessage{
-		TypedMessage: messages.TypedMessage{Block: block},
-		Msg:          msg,
-		Meta:         meta,
-	}, nil
-}
-
-func (f *Facade) ParseRawMsg(msg *nats.RawStreamMsg) (messages.Message, error) {
-	block, err := f.ParseBlock(msg.Data)
-	if err != nil {
-		return nil, err
-	}
-
-	return &messages.AbstractRawMessage{
-		TypedMessage: messages.TypedMessage{Block: block},
-		RawMsg:       msg,
+	return &messages.AbstractBlockMessage{
+		Block:       block,
+		NatsMessage: msg,
 	}, nil
 }
 

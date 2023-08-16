@@ -11,21 +11,12 @@
       "LogTag": "input"
     },
     "Stream": "myblocks",
-    "Subject": "",
     "RequestWaitMs": 5000
   },
   "Reader": {
-    "MaxRps": 2,
     "BufferSize": 1000,
-    "MaxRequestBatchSize": 250,
-    "SubscribeAckWaitMs": 5000,
-    "InactiveThresholdSeconds": 300,
-    "FetchTimeoutMs": 10000,
-    "SortBatch": true,
-    "LastSeqUpdateIntervalSeconds": 5,
-    "Durable": "myconsumer",
     "StrictStart": false,
-    "WrongSeqToleranceWindow": 50
+    "MaxSilenceMs": 10000
   },
   "FromSeq": 0,
   "ToSeq": 1000,

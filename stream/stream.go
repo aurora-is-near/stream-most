@@ -1,54 +1,118 @@
 package stream
 
 import (
+	"context"
 	"fmt"
-	"github.com/nats-io/nats.go"
-	"github.com/sirupsen/logrus"
-	"sync"
+	"strings"
 	"time"
 
+	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/transport"
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
+	"github.com/sirupsen/logrus"
 )
 
 type Interface interface {
 	Options() *Options
-	Js() nats.JetStreamContext
-	Disconnect() error
-	GetInfo(ttl time.Duration) (*nats.StreamInfo, time.Time, error)
-	Get(seq uint64) (*nats.RawStreamMsg, error)
-	Write(data []byte, header nats.Header, publishAckWait nats.AckWait) (*nats.PubAck, error)
-	Stats() *nats.Statistics
+	Name() string
 	IsFake() bool
+
+	Js() jetstream.JetStream
+	Stats() *nats.Statistics
+	Stream() jetstream.Stream
+
+	GetConfigSubjects(ctx context.Context) ([]string, error)
+	GetInfo(ctx context.Context) (*jetstream.StreamInfo, error)
+	Get(ctx context.Context, seq uint64) (messages.NatsMessage, error)
+	GetLastMsgForSubject(ctx context.Context, subject string) (messages.NatsMessage, error)
+
+	Write(ctx context.Context, msg *nats.Msg, opts ...jetstream.PublishOpt) (*jetstream.PubAck, error)
+
+	Disconnect() error
 }
 
 type Stream struct {
 	*logrus.Entry
 
 	options     *Options
-	requestWait nats.MaxWait
+	requestWait time.Duration
 	nc          *transport.NatsConnection
-	js          nats.JetStreamContext
-
-	info     *nats.StreamInfo
-	infoErr  error
-	infoTime time.Time
-	infoMtx  sync.Mutex
+	js          jetstream.JetStream
+	stream      jetstream.Stream
 }
 
 func (s *Stream) Options() *Options {
 	return s.options
 }
 
-func (s *Stream) Js() nats.JetStreamContext {
-	return s.js
+func (s *Stream) Name() string {
+	return s.options.Stream
 }
 
 func (s *Stream) IsFake() bool {
 	return false
 }
 
-func (s *Stream) GetStream() *Stream {
-	return s
+func (s *Stream) Js() jetstream.JetStream {
+	return s.js
+}
+
+func (s *Stream) Stats() *nats.Statistics {
+	stats := s.nc.Conn().Stats()
+	return &stats
+}
+
+func (s *Stream) Stream() jetstream.Stream {
+	return s.stream
+}
+
+func (s *Stream) GetConfigSubjects(ctx context.Context) ([]string, error) {
+	next := s.Name()
+	for {
+		tctx, cancel := context.WithTimeout(ctx, s.requestWait)
+		str, err := s.js.Stream(tctx, next)
+		cancel()
+		if err != nil {
+			return nil, fmt.Errorf("unable to get stream '%s': %v", next, err)
+		}
+
+		if str.CachedInfo().Config.Mirror == nil {
+			return str.CachedInfo().Config.Subjects, nil
+		}
+
+		next = str.CachedInfo().Config.Mirror.Name
+	}
+}
+
+func (s *Stream) GetInfo(ctx context.Context) (*jetstream.StreamInfo, error) {
+	tctx, cancel := context.WithTimeout(ctx, s.requestWait)
+	defer cancel()
+	return s.stream.Info(tctx)
+}
+
+func (s *Stream) Get(ctx context.Context, seq uint64) (messages.NatsMessage, error) {
+	tctx, cancel := context.WithTimeout(ctx, s.requestWait)
+	defer cancel()
+	msg, err := s.stream.GetMsg(tctx, seq)
+	if err != nil {
+		return nil, err
+	}
+	return messages.RawStreamMessage{RawStreamMsg: msg}, nil
+}
+
+func (s *Stream) GetLastMsgForSubject(ctx context.Context, subject string) (messages.NatsMessage, error) {
+	tctx, cancel := context.WithTimeout(ctx, s.requestWait)
+	defer cancel()
+	msg, err := s.stream.GetLastMsgForSubject(tctx, subject)
+	if err != nil {
+		return nil, err
+	}
+	return messages.RawStreamMessage{RawStreamMsg: msg}, nil
+}
+
+func (s *Stream) Write(ctx context.Context, msg *nats.Msg, opts ...jetstream.PublishOpt) (*jetstream.PubAck, error) {
+	return s.js.PublishMsg(ctx, msg, append(opts, jetstream.WithExpectStream(s.Name()))...)
 }
 
 func (s *Stream) Disconnect() error {
@@ -61,96 +125,56 @@ func (s *Stream) Disconnect() error {
 	return err
 }
 
-func (s *Stream) GetInfo(ttl time.Duration) (*nats.StreamInfo, time.Time, error) {
-	s.infoMtx.Lock()
-	defer s.infoMtx.Unlock()
-	if ttl == 0 || time.Since(s.infoTime) > ttl {
-		s.info, s.infoErr = s.js.StreamInfo(s.options.Stream, s.requestWait)
-		s.infoTime = time.Now()
+func Connect(options *Options) (Interface, error) {
+	if options.ShouldFake {
+		if options.FakeStream != nil {
+			return options.FakeStream, nil
+		}
+		return createFake(), nil
 	}
-	return s.info, s.infoTime, s.infoErr
-}
 
-func (s *Stream) Get(seq uint64) (*nats.RawStreamMsg, error) {
-	return s.js.GetMsg(s.options.Stream, seq, s.requestWait)
-}
+	options = options.WithDefaults()
 
-func (s *Stream) Write(data []byte, header nats.Header, publishAckWait nats.AckWait) (*nats.PubAck, error) {
-	header.Add(nats.ExpectedStreamHdr, s.options.Stream)
-	msg := &nats.Msg{
-		Subject: s.options.Subject,
-		Header:  header,
-		Data:    data,
-	}
-	return s.js.PublishMsg(msg, publishAckWait)
-}
-
-func (s *Stream) Stats() *nats.Statistics {
-	stats := s.nc.Conn().Stats()
-	return &stats
-}
-
-func newStream(options *Options) (Interface, error) {
 	s := &Stream{
-		Entry: logrus.WithField("stream", options.Stream).
-			WithField("subject", options.Subject).
+		Entry: logrus.
+			WithField("stream", options.Stream).
 			WithField("log_tag", options.Nats.LogTag),
 
 		options:     options,
-		requestWait: nats.MaxWait(time.Millisecond * time.Duration(options.RequestWaitMs)),
+		requestWait: time.Millisecond * time.Duration(options.RequestWaitMs),
 	}
 
-	s.Infof("Connecting to NATS at %v", options.Nats.Endpoints)
+	s.Infof("Connecting to NATS at %s", strings.Join(options.Nats.Endpoints, ", "))
 	var err error
 	s.nc, err = transport.NewConnection(options.Nats.WithDefaults(), nil)
 	if err != nil {
-		s.Errorf("Unable to connect to NATS: %v", err)
-		_ = s.Disconnect()
+		err = fmt.Errorf("unable to connect to NATS: %w", err)
+		s.Errorf("%v", err)
 		return nil, err
 	}
+	s.Infof("NATS connected")
 
-	s.Info("Connecting to JetStream")
-	s.js, err = s.nc.Conn().JetStream(s.requestWait)
+	s.Infof("Connecting to JetStream")
+	s.js, err = jetstream.New(s.nc.Conn())
 	if err != nil {
-		s.Infof("Unable to connect to NATS JetStream: %v", err)
-		_ = s.Disconnect()
+		err = fmt.Errorf("unable to connect to JetStream: %w", err)
+		s.Errorf("%v", err)
+		s.nc.Drain()
 		return nil, err
 	}
+	s.Infof("JetStream connected")
 
-	s.Info("Getting stream info...")
-	info, _, err := s.GetInfo(0)
+	s.Infof("Getting stream '%s'", options.Stream)
+	streamRequestCtx, cancelStreamRequest := context.WithTimeout(context.Background(), s.requestWait)
+	defer cancelStreamRequest()
+	s.stream, err = s.js.Stream(streamRequestCtx, options.Stream)
 	if err != nil {
-		s.Infof("Unable to get stream info: %v", err)
-		_ = s.Disconnect()
+		err = fmt.Errorf("unable to connect to stream: %w", err)
+		s.Errorf("%v", err)
+		s.nc.Drain()
 		return nil, err
 	}
-
-	if len(options.Subject) == 0 {
-		s.Info("Subject is not specified, figuring it out automatically...")
-		curInfo := info
-		for curInfo.Config.Mirror != nil {
-			mirrorName := curInfo.Config.Mirror.Name
-			s.Infof("streamOpts '%s' is mirrored from stream '%s', getting it's info...", curInfo.Config.Name, mirrorName)
-			curInfo, err = s.js.StreamInfo(mirrorName, s.requestWait)
-			if err != nil {
-				s.Infof("unable to get stream '%s' info: %v", mirrorName, err)
-				_ = s.Disconnect()
-				return nil, err
-			}
-		}
-
-		if len(curInfo.Config.Subjects) == 0 {
-			err := fmt.Errorf("stream '%s' has no subjects", curInfo.Config.Name)
-			s.Error(err)
-			_ = s.Disconnect()
-			return nil, err
-		}
-
-		options.Subject = curInfo.Config.Subjects[0]
-		s.Infof("Subject '%s' is chosen", options.Subject)
-	}
-
-	s.Info("Connected")
+	s.Infof("Stream connected")
 
 	return s, nil
 }

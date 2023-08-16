@@ -19,8 +19,8 @@ type NearV3 struct {
 
 	lastWrittenBlockHash *string
 
-	input  chan messages.Message
-	output chan messages.Message
+	input  chan messages.BlockMessage
+	output chan messages.BlockMessage
 
 	observer *observer.Observer
 
@@ -31,7 +31,7 @@ type NearV3 struct {
 	killed bool
 }
 
-func (n *NearV3) Bind(input chan messages.Message, output chan messages.Message) {
+func (n *NearV3) Bind(input chan messages.BlockMessage, output chan messages.BlockMessage) {
 	n.input = input
 	n.output = output
 }
@@ -127,7 +127,7 @@ func (n *NearV3) popReadyBlocks() error {
 	return nil
 }
 
-func (n *NearV3) newBlockFrom(message messages.Message) *storedBlock {
+func (n *NearV3) newBlockFrom(message messages.BlockMessage) *storedBlock {
 	hash := message.GetHash()
 
 	block := newStoredBlock(n.clock + n.opts.BlocksCacheSize)
@@ -150,7 +150,7 @@ func (n *NearV3) prolongCache(block *storedBlock) {
 	block.expiresAt = n.clock + n.opts.BlocksCacheSize
 }
 
-func (n *NearV3) processAnnouncement(message messages.Message) {
+func (n *NearV3) processAnnouncement(message messages.BlockMessage) {
 	hash := message.GetHash()
 
 	if block, exists := n.blocks[hash]; !exists {
@@ -163,7 +163,7 @@ func (n *NearV3) processAnnouncement(message messages.Message) {
 	}
 }
 
-func (n *NearV3) processShard(shard messages.Message) {
+func (n *NearV3) processShard(shard messages.BlockMessage) {
 	if block, exists := n.blocks[shard.GetHash()]; !exists {
 		n.newBlockFrom(shard)
 	} else if block.missingAnnouncement() {

@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"os"
+
 	"github.com/aurora-is-near/stream-backup/chunks"
 	"github.com/aurora-is-near/stream-most/configs"
 	"github.com/aurora-is-near/stream-most/domain/formats"
@@ -10,7 +12,6 @@ import (
 	"github.com/aurora-is-near/stream-most/stream/autoreader"
 	"github.com/aurora-is-near/stream-most/support/when_interrupted"
 	"github.com/sirupsen/logrus"
-	"os"
 )
 
 func run(config Config) error {
@@ -23,10 +24,8 @@ func run(config Config) error {
 			MaxChunkSize:       config.MaxChunkSize * 1024 * 1024,
 		},
 		Reader: autoreader.NewAutoReader(
-			config.FromSeq,
-			config.ToSeq,
-			config.Reader,
 			config.Input,
+			config.Reader,
 		),
 		StartSeq: config.FromSeq,
 		EndSeq:   config.ToSeq,
@@ -50,7 +49,7 @@ func main() {
 	err := run(config)
 	if err != nil {
 		logrus.Error(err)
-		return
+		os.Exit(1)
 	}
 	os.Exit(0)
 }

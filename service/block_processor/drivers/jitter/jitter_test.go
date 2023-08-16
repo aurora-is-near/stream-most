@@ -33,7 +33,7 @@ func TestJitter_NoDropout(t *testing.T) {
 
 	fakeInput.Display()
 
-	rdr, err := reader.Start(&reader.Options{}, fakeInput, 0, 0)
+	rdr, err := reader.Start(context.Background(), &reader.Options{}, fakeInput, nil, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,8 +45,8 @@ func TestJitter_NoDropout(t *testing.T) {
 		DropoutChance: 0.0,
 	})
 
-	input, _ := adapters.ReaderOutputToNatsMessages(context.Background(), rdr.Output(), 10)
-	output := make(chan messages.Message, 100)
+	input, _ := adapters.ReaderToBlockMessage(context.Background(), rdr, 10)
+	output := make(chan messages.BlockMessage, 100)
 	driver.Bind(input, output)
 
 	go func() {

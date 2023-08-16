@@ -1,292 +1,298 @@
 package reader
 
 import (
-	"errors"
+	"context"
 	"fmt"
-	"github.com/aurora-is-near/stream-most/stream"
-	"github.com/aurora-is-near/stream-most/stream/reader/monitoring"
-	"github.com/sirupsen/logrus"
-	"sort"
+	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/nats-io/nats.go"
+	"github.com/aurora-is-near/stream-most/domain/messages"
+	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/aurora-is-near/stream-most/stream/reader/monitoring"
+	"github.com/nats-io/nats.go/jetstream"
+	"github.com/sirupsen/logrus"
 )
 
 type IReader interface {
-	Output() <-chan *Output
+	Output() <-chan messages.NatsMessage
+	Error() error
 	Stop()
 	IsFake() bool
-}
-
-type Output struct {
-	Msg      *nats.Msg
-	Metadata *nats.MsgMetadata
-	Error    error
 }
 
 type Reader struct {
 	*logrus.Entry
 
 	opts     *Options
-	stream   stream.Interface
+	input    stream.Interface
+	subjects []string
 	startSeq uint64
 	endSeq   uint64
 
-	stop    chan bool
-	stopped chan bool
-	output  chan *Output
-	sub     *nats.Subscription
+	output chan messages.NatsMessage
+
+	ctx     context.Context
+	cancel  func()
+	err     error
+	errOnce sync.Once
+	wg      sync.WaitGroup
 }
 
-func Start(opts *Options, input stream.Interface, startSeq uint64, endSeq uint64) (IReader, error) {
+func Start(ctx context.Context, opts *Options, input stream.Interface, subjects []string, startSeq uint64, endSeq uint64) (IReader, error) {
 	if input.IsFake() {
-		return createFake(opts, input, startSeq, endSeq)
+		return createFake(ctx, opts, input, subjects, startSeq, endSeq)
 	}
 
-	if startSeq < 1 {
-		startSeq = 1
-	}
 	r := &Reader{
 		Entry: logrus.New().
 			WithField("component", "reader").
-			WithField("stream", input.Options().Stream).
+			WithField("stream", input.Name()).
 			WithField("log_tag", input.Options().Nats.LogTag),
 
-		opts:     opts,
-		stream:   input,
+		opts:     opts.WithDefaults(),
+		input:    input,
+		subjects: subjects,
 		startSeq: startSeq,
 		endSeq:   endSeq,
-		stop:     make(chan bool),
-		stopped:  make(chan bool),
-		output:   make(chan *Output, opts.BufferSize),
+		output:   make(chan messages.NatsMessage, opts.BufferSize),
 	}
-	r.Level = logrus.DebugLevel
+	r.ctx, r.cancel = context.WithCancel(ctx)
 
-	err := r.startConsumer()
-	if err != nil {
-		return nil, err
+	if len(r.subjects) == 1 && r.subjects[0] == ">" {
+		r.subjects = nil
 	}
 
+	if r.startSeq < 1 {
+		r.startSeq = 1
+	}
+
+	r.wg.Add(1)
 	go r.run()
 
 	return r, nil
 }
 
-func (r *Reader) startConsumer() error {
-	r.Info("Making sure that previous consumer is deleted...")
-	err := r.stream.Js().DeleteConsumer(r.stream.Options().Stream, r.opts.Durable)
-	if err != nil && err != nats.ErrConsumerNotFound {
-		r.Infof("Can't delete previous consumer: %v", err)
-	}
+func (r *Reader) Output() <-chan messages.NatsMessage {
+	return r.output
+}
 
-	r.Info("Subscribing...")
-	r.sub, err = r.stream.Js().PullSubscribe(
-		r.stream.Options().Subject,
-		r.opts.Durable,
-		nats.BindStream(r.stream.Options().Stream),
-		//nats.OrderedConsumer(),
-		nats.StartSequence(r.startSeq),
-		nats.InactiveThreshold(time.Second*time.Duration(r.opts.InactiveThresholdSeconds)),
-	)
-	if err != nil {
-		r.Errorf("Unable to subscribe: %v", err)
-		return err
+func (r *Reader) Error() error {
+	select {
+	case <-r.ctx.Done():
+		return r.err
+	default:
+		return nil
 	}
+}
 
-	r.Info("Subscribed!")
-	return nil
+func (r *Reader) Stop() {
+	r.cancel()
+	r.wg.Wait()
 }
 
 func (r *Reader) IsFake() bool {
 	return false
 }
 
-func (r *Reader) Output() <-chan *Output {
-	return r.output
-}
-
-func (r *Reader) Stop() {
-	r.Info("Stopping reader...")
-	for {
-		select {
-		case r.stop <- true:
-		case <-r.stopped:
-			return
-		}
+func (r *Reader) finishWithError(format string, args ...any) {
+	select {
+	case <-r.ctx.Done():
+		// Ignore error if ctx is already canceled
+		return
+	default:
 	}
+	r.errOnce.Do(func() {
+		r.err = fmt.Errorf(format, args...)
+		r.Errorf("finished with error: %v", r.err)
+	})
+	r.cancel()
 }
 
 func (r *Reader) run() {
-	r.Info("Running...")
-	if r.endSeq > 0 && r.startSeq >= r.endSeq {
-		r.finish("finished (r.startSeq >= r.endSeq)", nil)
-		return
-	}
+	defer r.wg.Done()
+	defer close(r.output)
+	defer r.cancel()
 
-	logrus.Debug("Fetching last seq...")
-	curSeq := r.startSeq - 1
-	lastSeq, err := r.getLastSeq()
+	consumer, err := r.input.Stream().OrderedConsumer(r.ctx, jetstream.OrderedConsumerConfig{
+		FilterSubjects: r.subjects,
+		OptStartSeq:    r.startSeq,
+	})
 	if err != nil {
-		r.finish("unable to fetch LastSeq", err)
+		r.finishWithError("unable to create ordered consumer: %w", err)
 		return
 	}
-	logrus.Debug("Last seq is ", lastSeq)
 
-	logrus.Debug("Opts MaxRPS is ", r.opts.MaxRps)
-	tickDuration := time.Duration(float64(time.Second) / r.opts.MaxRps)
-	logrus.Debug("Ticker will tick every ", tickDuration)
-	requestTicker := time.NewTicker(tickDuration)
-	defer requestTicker.Stop()
+	var lastConsumedSeq atomic.Uint64
+	var lastFiredSeq atomic.Uint64
 
-	fetchWait := nats.MaxWait(time.Millisecond * time.Duration(r.opts.FetchTimeoutMs))
+	consume, err := consumer.Consume(
+		func(msg jetstream.Msg) {
+			select {
+			case <-r.ctx.Done():
+				return
+			default:
+			}
 
-	first := true
-	consecutiveWrongSeqCount := 0
+			meta, err := msg.Metadata()
+			if err != nil {
+				r.finishWithError("unable to parse message metadata: %w", err)
+				return
+			}
+
+			if monitoring.LastReadSequence != nil {
+				monitoring.LastReadSequence.Set(float64(meta.Sequence.Stream))
+			}
+
+			if lastConsumedSeq.Load() == 0 {
+				if r.opts.StrictStart && len(r.subjects) == 0 {
+					if meta.Sequence.Stream != r.startSeq {
+						r.finishWithError("unexpected sequence: %d, expected: %d", meta.Sequence.Stream, r.startSeq)
+						return
+					}
+				} else {
+					if meta.Sequence.Stream < r.startSeq {
+						r.finishWithError("unexpected sequence: %d, expected anything greater than or equal to %d", meta.Sequence.Stream, r.startSeq)
+						return
+					}
+				}
+			} else {
+				if len(r.subjects) == 0 {
+					if meta.Sequence.Stream != lastConsumedSeq.Load()+1 {
+						r.finishWithError("unexpected sequence: %d, expected: %d", meta.Sequence.Stream, lastConsumedSeq.Load()+1)
+						return
+					}
+				} else {
+					if meta.Sequence.Stream <= lastConsumedSeq.Load() {
+						r.finishWithError("unexpected sequence: %d, expected anything greater than %d", meta.Sequence.Stream, lastConsumedSeq.Load())
+						return
+					}
+				}
+			}
+			lastConsumedSeq.Store(meta.Sequence.Stream)
+
+			if r.endSeq > 0 && meta.Sequence.Stream >= r.endSeq {
+				r.Info("end sequence reached, finishing")
+				r.cancel()
+				return
+			}
+
+			select {
+			case <-r.ctx.Done():
+				return
+			case r.output <- &messages.StreamMessage{Msg: msg, Meta: meta}:
+			}
+
+			lastFiredSeq.Store(meta.Sequence.Stream)
+
+			if r.endSeq > 0 && meta.Sequence.Stream+1 >= r.endSeq {
+				r.Info("last sequence reached, finishing")
+				r.cancel()
+				return
+			}
+		},
+	)
+	if err != nil {
+		r.finishWithError("unable to start consuming: %w", err)
+		return
+	}
+	defer consume.Stop()
+
+	silenceCheckThrottler := time.NewTicker(time.Second / 20)
+	defer silenceCheckThrottler.Stop()
+
 	for {
 		select {
-		case <-r.stop:
-			r.finish("stopped", nil)
+		case <-r.ctx.Done():
 			return
 		default:
 		}
 
 		select {
-		case <-r.stop:
-			r.finish("stopped", nil)
+		case <-r.ctx.Done():
 			return
-		case <-requestTicker.C:
-			batchSize := r.countBatchSize(curSeq, lastSeq)
-			if batchSize < r.opts.MaxRequestBatchSize {
-				lastSeq, err = r.getLastSeq()
-				if err != nil {
-					r.finish("unable to fetch LastSeq", err)
-					return
-				}
-				batchSize = r.countBatchSize(curSeq, lastSeq)
-			}
+		case <-silenceCheckThrottler.C:
+		}
 
-			logrus.Infof("Fetching %d", batchSize)
-
-			messages, err := r.sub.Fetch(int(batchSize), fetchWait)
-			if err != nil {
-				if curSeq >= lastSeq {
-					continue
-				}
-
-				r.finish(fmt.Sprintf(
-					"unable to fetch messages (batchSize=%d)",
-					batchSize,
-				), err)
-				return
-			}
-
-			logrus.Infof("Received batch of %d", len(messages))
-			result := make([]*Output, 0, len(messages))
-			for _, msg := range messages {
-				if err := msg.Ack(); err != nil {
-					r.Warnf("Can't ack message: %v", err)
-				}
-				meta, err := msg.Metadata()
-				if err != nil {
-					r.finish("unable to parse message metadata", err)
-					return
-				}
-				result = append(result, &Output{
-					Msg:      msg,
-					Metadata: meta,
-				})
-			}
-
-			if r.opts.SortBatch {
-				sort.Slice(result, func(i, j int) bool {
-					return result[i].Metadata.Sequence.Stream < result[j].Metadata.Sequence.Stream
-				})
-			}
-
-			for _, res := range result {
-				if (!first || r.opts.StrictStart) && res.Metadata.Sequence.Stream != curSeq+1 {
-					r.Warnf(
-						"Wrong sequence detected: %v, expected %v",
-						res.Metadata.Sequence.Stream,
-						curSeq+1,
-					)
-					consecutiveWrongSeqCount++
-					if consecutiveWrongSeqCount >= int(r.opts.WrongSeqToleranceWindow) {
-						r.finish("error", errors.New("WrongSeqToleranceWindow exceeded"))
-						return
-					}
-					continue
-				}
-				curSeq = res.Metadata.Sequence.Stream
-				consecutiveWrongSeqCount = 0
-				first = false
-
-				if r.endSeq > 0 && res.Metadata.Sequence.Stream >= r.endSeq {
-					r.finish("finished", nil)
-					return
-				}
-
-				monitoring.LastReadSequence.Set(float64(res.Metadata.Sequence.Stream))
-
-				// Prioritized stop check
-				select {
-				case <-r.stop:
-					r.finish("stopped", nil)
-					return
-				default:
-				}
-
-				select {
-				case <-r.stop:
-					r.finish("stopped", nil)
-					return
-				case r.output <- res:
-				}
-
-				if r.endSeq > 0 && res.Metadata.Sequence.Stream == r.endSeq-1 {
-					r.finish("finished", nil)
-					return
-				}
-			}
+		noSilence, err := r.ensureNoSilence(&lastConsumedSeq, &lastFiredSeq)
+		if err != nil {
+			r.finishWithError("silence check failed: %w", err)
+			return
+		}
+		if !noSilence {
+			r.finishWithError("detected consumer silence :/")
+			return
 		}
 	}
 }
 
-func (r *Reader) countBatchSize(curSeq uint64, lastSeq uint64) uint {
-	border := lastSeq
-	if r.endSeq != 0 && r.endSeq-1 < border {
-		border = r.endSeq - 1
-	}
-	if curSeq >= border {
-		return 1
-	}
-	residue := border - curSeq
-	if residue > uint64(r.opts.MaxRequestBatchSize) {
-		return r.opts.MaxRequestBatchSize
-	}
-	return uint(residue)
-}
+func (r *Reader) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64) (bool, error) {
+	silenceCandidateSeq := lastConsumedSeq.Load()
 
-func (r *Reader) getLastSeq() (uint64, error) {
-	info, _, err := r.stream.GetInfo(time.Second * time.Duration(r.opts.LastSeqUpdateIntervalSeconds))
-	if err != nil {
-		return 0, err
+	if lastFiredSeq.Load() < silenceCandidateSeq {
+		return true, nil
 	}
-	return info.State.LastSeq, nil
-}
 
-func (r *Reader) finish(logMsg string, err error) {
-	r.Infof("Stopped reader. %v: %v", logMsg, err)
-	if err != nil {
-		out := &Output{
-			Error: err,
+	if !r.tryWait(time.Millisecond * time.Duration(r.opts.MaxSilenceMs)) {
+		return true, nil
+	}
+
+	if lastConsumedSeq.Load() > silenceCandidateSeq {
+		return true, nil
+	}
+
+	nextAvailableSeq := lastConsumedSeq.Load()
+
+	if len(r.subjects) == 0 {
+		info, err := r.input.GetInfo(r.ctx)
+		if err != nil {
+			return false, fmt.Errorf("unable to get stream info: %w", err)
 		}
-		select {
-		case <-r.stop:
-		case r.output <- out:
+		if info.State.LastSeq > nextAvailableSeq {
+			nextAvailableSeq = info.State.LastSeq
 		}
 	}
-	close(r.output)
-	_ = r.sub.Unsubscribe()
-	close(r.stopped)
+
+	for _, subj := range r.subjects {
+		if lastConsumedSeq.Load() > silenceCandidateSeq {
+			return true, nil
+		}
+		if nextAvailableSeq > silenceCandidateSeq {
+			break
+		}
+		msg, err := r.input.GetLastMsgForSubject(r.ctx, subj)
+		if err != nil {
+			return false, fmt.Errorf("unable to get last stream message for subject '%s': %w", subj, err)
+		}
+		if msg.GetSequence() > nextAvailableSeq {
+			nextAvailableSeq = msg.GetSequence()
+		}
+	}
+
+	if lastConsumedSeq.Load() > silenceCandidateSeq {
+		return true, nil
+	}
+
+	if nextAvailableSeq <= silenceCandidateSeq {
+		return true, nil
+	}
+
+	if !r.tryWait(time.Millisecond * time.Duration(r.opts.MaxSilenceMs)) {
+		return true, nil
+	}
+
+	return lastConsumedSeq.Load() > silenceCandidateSeq, nil
+}
+
+func (r *Reader) tryWait(d time.Duration) bool {
+	t := time.NewTimer(d)
+	select {
+	case <-r.ctx.Done():
+		if !t.Stop() {
+			<-t.C
+		}
+		return false
+	case <-t.C:
+		return true
+	}
 }

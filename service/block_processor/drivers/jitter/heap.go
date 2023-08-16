@@ -7,7 +7,7 @@ import (
 )
 
 type DelayedMessage struct {
-	Message       messages.Message
+	Message       messages.BlockMessage
 	ReturnAtClock uint64
 }
 

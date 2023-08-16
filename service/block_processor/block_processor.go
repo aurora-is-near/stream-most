@@ -14,9 +14,9 @@ import (
 // processed them using a given driver, monitors them and outputs
 type Processor struct {
 	*observer.Observer
-	input        chan messages.Message
-	driverOutput chan messages.Message
-	myOutput     chan messages.Message
+	input        chan messages.BlockMessage
+	driverOutput chan messages.BlockMessage
+	myOutput     chan messages.BlockMessage
 	driver       drivers.Driver
 }
 
@@ -51,9 +51,9 @@ loop:
 	}
 }
 
-func (g *Processor) Run(ctx context.Context) chan messages.Message {
-	g.driverOutput = make(chan messages.Message, 1024)
-	g.myOutput = make(chan messages.Message, 1024)
+func (g *Processor) Run(ctx context.Context) chan messages.BlockMessage {
+	g.driverOutput = make(chan messages.BlockMessage, 1024)
+	g.myOutput = make(chan messages.BlockMessage, 1024)
 
 	if monitoring.AnnouncementsProcessed != nil { // TODO: handle normally
 		monitoring.RegisterObservations(g.Observer)
@@ -69,7 +69,7 @@ func (g *Processor) Kill() {
 	logrus.Info("Processor is shutting down")
 }
 
-func NewProcessor(input chan messages.Message, driver drivers.Driver) *Processor {
+func NewProcessor(input chan messages.BlockMessage, driver drivers.Driver) *Processor {
 	return &Processor{
 		input:    input,
 		driver:   driver,

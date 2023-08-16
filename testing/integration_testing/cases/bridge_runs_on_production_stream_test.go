@@ -37,7 +37,7 @@ func TestBridgeRunsOnProductionStream(t *testing.T) {
 	}
 
 	logrus.Debug("Getting input stream info...")
-	info, _, _ := inputStream.GetInfo(0)
+	info, _ := inputStream.GetInfo(context.Background())
 	logrus.Debug("Input stream info received")
 
 	go monitor.NewMetricsServer(&monitor_options.Options{
@@ -56,9 +56,7 @@ func TestBridgeRunsOnProductionStream(t *testing.T) {
 			InputEndSequence:   info.State.LastSeq,
 			ParseTolerance:     1000,
 		}),
-		runner.WithReaderOptions((&reader.Options{
-			WrongSeqToleranceWindow: 1000,
-		}).WithDefaults()),
+		runner.WithReaderOptions((&reader.Options{}).WithDefaults()),
 		runner.WithInputStream(inputStream),
 		runner.WithOutputStream(fakeOutputStream),
 		runner.WithDriver(driver),
@@ -77,9 +75,7 @@ func TestBridgeRunsOnProductionStream(t *testing.T) {
 	// Validate the output stream
 	err = runner.NewRunner(runner.Validator,
 		runner.WithDeadline(time.Now().Add(5*time.Second)),
-		runner.WithReaderOptions((&reader.Options{
-			WrongSeqToleranceWindow: 1000,
-		}).WithDefaults()),
+		runner.WithReaderOptions((&reader.Options{}).WithDefaults()),
 		runner.WithValidatorOptions(0, 0),
 		runner.WithInputStream(fakeOutputStream),
 	).Run()

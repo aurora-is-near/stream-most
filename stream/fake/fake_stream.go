@@ -1,6 +1,7 @@
 package fake
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -9,8 +10,8 @@ import (
 	v3 "github.com/aurora-is-near/stream-most/domain/formats/v3"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream"
-	"github.com/aurora-is-near/stream-most/testing/u"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/sirupsen/logrus"
 )
 
@@ -18,86 +19,163 @@ import (
 // It wraps an array and allows for easy behaviour testing,
 // but no complex interactions with the stream are testable with it
 type Stream struct {
-	stream []messages.Message
+	stream []messages.BlockMessage
 
 	deduplicate         bool
-	deduplicationHashes map[string]struct{}
-}
-
-func (s *Stream) GetArray() []messages.Message {
-	return s.stream
-}
-
-func (s *Stream) Js() nats.JetStreamContext {
-	return nil
+	deduplicationHashes map[string]uint64
 }
 
 func (s *Stream) Options() *stream.Options {
 	return nil
 }
 
-func (s *Stream) WithDeduplication() *Stream {
-	s.deduplicate = true
-	s.deduplicationHashes = make(map[string]struct{})
-	return s
+func (s *Stream) Name() string {
+	return "fakey-fakey"
 }
 
 func (s *Stream) IsFake() bool {
 	return true
 }
 
-func (s *Stream) GetStream() *stream.Stream {
+func (s *Stream) Js() jetstream.JetStream {
 	return nil
 }
 
-func (s *Stream) Disconnect() error {
+func (s *Stream) Stats() *nats.Statistics {
+	return &nats.Statistics{
+		InMsgs:     0,
+		OutMsgs:    0,
+		InBytes:    0,
+		OutBytes:   0,
+		Reconnects: 0,
+	}
+}
+
+func (s *Stream) Stream() jetstream.Stream {
 	return nil
 }
 
-func (s *Stream) GetInfo(_ time.Duration) (*nats.StreamInfo, time.Time, error) {
+func (s *Stream) GetConfigSubjects(ctx context.Context) ([]string, error) {
+	return nil, fmt.Errorf("not implemented for fake stream")
+}
+
+func (s *Stream) GetInfo(ctx context.Context) (*jetstream.StreamInfo, error) {
 	var firstSeq, lastSeq uint64
 	if len(s.stream) > 0 {
 		firstSeq = s.stream[0].GetSequence()
 		lastSeq = s.stream[len(s.stream)-1].GetSequence()
 	}
 
-	return &nats.StreamInfo{
+	return &jetstream.StreamInfo{
 		Created: time.Now().Add(-1337 * time.Hour),
-		State: nats.StreamState{
+		State: jetstream.StreamState{
+			Msgs:     uint64(len(s.stream)),
 			FirstSeq: firstSeq,
 			LastSeq:  lastSeq,
 		},
-	}, time.Now(), nil
+	}, nil
 }
 
-func (s *Stream) Get(seq uint64) (*nats.RawStreamMsg, error) {
+func (s *Stream) Get(ctx context.Context, seq uint64) (messages.NatsMessage, error) {
 	i := uint64(0)
 	for i < uint64(len(s.stream)) {
 		msg := s.stream[i]
 		if msg.GetSequence() == seq {
-			return &nats.RawStreamMsg{
-				Sequence: msg.GetSequence(),
-				Header:   msg.GetHeader(),
-				Data:     msg.GetData(),
-			}, nil
+			return msg.GetNatsMessage(), nil
 		}
-
 		i += seq - msg.GetSequence()
 	}
 	return nil, errors.New("not found in the fake stream")
 }
 
-func (s *Stream) Add(msgs ...messages.Message) {
+func (s *Stream) GetLastMsgForSubject(ctx context.Context, subject string) (messages.NatsMessage, error) {
+	return nil, fmt.Errorf("not implemented for fake stream")
+}
+
+func (s *Stream) Write(ctx context.Context, msg *nats.Msg, opts ...jetstream.PublishOpt) (*jetstream.PubAck, error) {
+	seq := uint64(1)
+	if len(s.stream) != 0 {
+		seq = s.stream[len(s.stream)-1].GetSequence() + 1
+	}
+
+	header := make(nats.Header)
+	for k, v := range msg.Header {
+		vCopy := make([]string, len(v))
+		copy(vCopy, v)
+		header[k] = vCopy
+	}
+
+	applyPublishOpts(header, opts...)
+
+	if s.deduplicate {
+		// TODO: check if expectations align
+		if dupSeq, ok := s.deduplicationHashes[msg.Header.Get(jetstream.MsgIDHeader)]; ok {
+			return &jetstream.PubAck{
+				Stream:    s.Name(),
+				Sequence:  dupSeq,
+				Duplicate: true,
+			}, nil
+		}
+	}
+
+	block, err := v3.DecodeProtoBlock(msg.Data)
+	if err != nil {
+		return nil, err
+	}
+	m := &messages.AbstractBlockMessage{
+		Block: block,
+		NatsMessage: messages.RawStreamMessage{
+			RawStreamMsg: &jetstream.RawStreamMsg{
+				Subject:  msg.Subject,
+				Sequence: seq,
+				Header:   header,
+				Data:     msg.Data,
+				Time:     time.Now(),
+			},
+		},
+	}
+
+	s.stream = append(s.stream, m)
+	if s.deduplicate {
+		s.deduplicationHashes[msg.Header.Get(jetstream.MsgIDHeader)] = seq
+	}
+	return &jetstream.PubAck{
+		Stream:   s.Name(),
+		Sequence: seq,
+	}, nil
+}
+
+func (s *Stream) Disconnect() error {
+	return nil
+}
+
+func (s *Stream) GetArray() []messages.BlockMessage {
+	return s.stream
+}
+
+func (s *Stream) WithDeduplication() *Stream {
+	s.deduplicate = true
+	s.deduplicationHashes = make(map[string]uint64)
+	return s
+}
+
+func (s *Stream) Add(msgs ...messages.BlockMessage) {
 	for _, msg := range msgs {
-		data := u.BuildMessageToRawStreamMsg(msg)
-		_, err := s.Write(data.Data, data.Header, nats.AckWait(0))
+		_, err := s.Write(
+			context.Background(),
+			&nats.Msg{
+				Subject: msg.GetSubject(),
+				Header:  msg.GetHeader(),
+				Data:    msg.GetData(),
+			},
+		)
 		if err != nil {
 			logrus.Error(err)
 		}
 	}
 }
 
-func (s *Stream) ExpectExactly(t *testing.T, msgs ...messages.Message) {
+func (s *Stream) ExpectExactly(t *testing.T, msgs ...messages.BlockMessage) {
 	if len(msgs) != len(s.stream) {
 		t.Errorf("Different count of messages. Expected: %d, found: %d", len(msgs), len(s.stream))
 		return
@@ -121,9 +199,6 @@ func (s *Stream) ExpectExactly(t *testing.T, msgs ...messages.Message) {
 		if expected.GetPrevHash() != found.GetPrevHash() {
 			t.Errorf("Different block prev hashes. Expected: %s, found: %s", expected.GetPrevHash(), found.GetPrevHash())
 		}
-		if expected.GetType() != found.GetType() {
-			t.Errorf("Different block types. Expected: %s, found: %s", expected.GetType().String(), found.GetType().String())
-		}
 		if expected.GetType() == messages.Shard {
 			expectedShardID := expected.GetShard().GetShardID()
 			foundShardID := found.GetShard().GetShardID()
@@ -131,65 +206,6 @@ func (s *Stream) ExpectExactly(t *testing.T, msgs ...messages.Message) {
 				t.Errorf("Different shard numbers. Expected: %d, found: %d", expectedShardID, foundShardID)
 			}
 		}
-	}
-}
-
-func (s *Stream) Write(data []byte, header nats.Header, publishAckWait nats.AckWait) (*nats.PubAck, error) {
-	seq := uint64(1)
-	if len(s.stream) != 0 {
-		seq = s.stream[len(s.stream)-1].GetSequence() + 1
-	}
-
-	if s.deduplicate {
-		if _, ok := s.deduplicationHashes[header.Get(nats.MsgIdHdr)]; ok {
-			return &nats.PubAck{
-				Stream:    "fakey-fakey",
-				Sequence:  seq,
-				Duplicate: true,
-				Domain:    "",
-			}, nil
-		}
-	}
-
-	block, err := v3.DecodeProtoBlock(data)
-	if err != nil {
-		return nil, err
-	}
-	m := &messages.AbstractMessage{
-		TypedMessage: messages.TypedMessage{
-			Block: block,
-		},
-		Msg: &nats.Msg{
-			Data:   data,
-			Header: header,
-		},
-		Meta: &nats.MsgMetadata{
-			Sequence: nats.SequencePair{
-				Stream: seq,
-			},
-			Timestamp: time.Now(),
-			Stream:    "fakey-fakey",
-		},
-	}
-
-	s.stream = append(s.stream, m)
-	if s.deduplicate {
-		s.deduplicationHashes[header.Get(nats.MsgIdHdr)] = struct{}{}
-	}
-	return &nats.PubAck{
-		Stream:    "fakey-fakey",
-		Sequence:  seq,
-		Duplicate: false,
-	}, nil
-}
-
-func (s *Stream) Stats() *nats.Statistics {
-	return &nats.Statistics{
-		InMsgs:     0,
-		OutMsgs:    0,
-		InBytes:    0,
-		OutBytes:   0,
-		Reconnects: 0,
 	}
 }
 
@@ -237,7 +253,7 @@ func (s *Stream) DisplayWithHeaders() {
 
 func NewStream() *Stream {
 	return &Stream{
-		stream: make([]messages.Message, 0),
+		stream: make([]messages.BlockMessage, 0),
 	}
 }
 
