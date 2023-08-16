@@ -15,7 +15,6 @@ type NatsConnection struct {
 	opts       *Options
 	connection *nats.Conn
 	closed     chan error
-	errorChan  chan<- error
 }
 
 func (c *NatsConnection) connect() error {
@@ -29,9 +28,6 @@ func (c *NatsConnection) connect() error {
 		nats.Timeout(time.Duration(c.opts.TimeoutMs) * time.Millisecond),
 		nats.ErrorHandler(func(nc *nats.Conn, sub *nats.Subscription, err error) {
 			c.Error(err)
-			if c.errorChan != nil {
-				c.errorChan <- err
-			}
 		}),
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
 			if err != nil {
@@ -58,25 +54,24 @@ func (c *NatsConnection) connect() error {
 	return err
 }
 
-func (c *NatsConnection) SetErrorChan(errorChan chan<- error) {
-	c.errorChan = errorChan
-}
-
-func NewConnection(opts *Options, errorChan chan<- error) (*NatsConnection, error) {
+func NewConnection(opts *Options) (*NatsConnection, error) {
 	conn := &NatsConnection{
 		Entry: logrus.New().
 			WithField("component", "nats").
 			WithField("log_tag", opts.LogTag),
 
-		opts:      opts,
-		closed:    make(chan error, 1),
-		errorChan: errorChan,
+		opts:   opts,
+		closed: make(chan error, 1),
 	}
 
+	conn.Info("Connecting to NATS...")
 	err := conn.connect()
 	if err != nil {
+		conn.Errorf("Unable to connect to NATS: %v", err)
 		return nil, err
 	}
+
+	conn.Info("Connecting successfully")
 	return conn, nil
 }
 

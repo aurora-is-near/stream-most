@@ -146,7 +146,7 @@ func Connect(options *Options) (Interface, error) {
 
 	s.Infof("Connecting to NATS at %s", strings.Join(options.Nats.Endpoints, ", "))
 	var err error
-	s.nc, err = transport.NewConnection(options.Nats.WithDefaults(), nil)
+	s.nc, err = transport.NewConnection(options.Nats.WithDefaults())
 	if err != nil {
 		err = fmt.Errorf("unable to connect to NATS: %w", err)
 		s.Errorf("%v", err)
