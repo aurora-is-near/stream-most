@@ -37,6 +37,7 @@ type Stream struct {
 
 	options     *Options
 	requestWait time.Duration
+	writeWait   time.Duration
 	nc          *transport.NatsConnection
 	js          jetstream.JetStream
 	stream      jetstream.Stream
@@ -112,7 +113,9 @@ func (s *Stream) GetLastMsgForSubject(ctx context.Context, subject string) (mess
 }
 
 func (s *Stream) Write(ctx context.Context, msg *nats.Msg, opts ...jetstream.PublishOpt) (*jetstream.PubAck, error) {
-	return s.js.PublishMsg(ctx, msg, append(opts, jetstream.WithExpectStream(s.Name()))...)
+	tctx, cancel := context.WithTimeout(ctx, s.writeWait)
+	defer cancel()
+	return s.js.PublishMsg(tctx, msg, append(opts, jetstream.WithExpectStream(s.Name()))...)
 }
 
 func (s *Stream) Disconnect() error {
@@ -142,6 +145,7 @@ func Connect(options *Options) (Interface, error) {
 
 		options:     options,
 		requestWait: time.Millisecond * time.Duration(options.RequestWaitMs),
+		writeWait:   time.Millisecond * time.Duration(options.WriteWaitMs),
 	}
 
 	s.Infof("Connecting to NATS at %s", strings.Join(options.Nats.Endpoints, ", "))
