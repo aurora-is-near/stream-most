@@ -11,48 +11,50 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type AutoReader struct {
+type AutoReader[T any] struct {
 	*logrus.Entry
 
 	streamOpts      *stream.Options
 	readerOpts      *reader.Options
 	ReconnectWaitMs uint
 
-	output chan messages.NatsMessage
-	stop   chan struct{}
-	wg     sync.WaitGroup
+	decodeFn func(msg messages.NatsMessage) (T, error)
+	output   chan *reader.DecodedMsg[T]
+	stop     chan struct{}
+	wg       sync.WaitGroup
 }
 
-func NewAutoReader(streamOptions *stream.Options, readerOpts *reader.Options) *AutoReader {
-	ar := &AutoReader{
+func NewAutoReader[T any](streamOptions *stream.Options, readerOpts *reader.Options, decodeFn func(msg messages.NatsMessage) (T, error)) *AutoReader[T] {
+	ar := &AutoReader[T]{
 		Entry: logrus.New().
 			WithField("component", "autoreader").
 			WithField("stream", streamOptions.Stream),
 
 		streamOpts: streamOptions,
 		readerOpts: readerOpts,
+		decodeFn:   decodeFn,
 	}
 
 	return ar
 }
 
-func (ar *AutoReader) Start(startSeq uint64, endSeq uint64) {
-	ar.output = make(chan messages.NatsMessage)
+func (ar *AutoReader[T]) Start(startSeq uint64, endSeq uint64) {
+	ar.output = make(chan *reader.DecodedMsg[T])
 	ar.stop = make(chan struct{})
 	ar.wg.Add(1)
 	go ar.run(startSeq, endSeq)
 }
 
-func (ar *AutoReader) Output() <-chan messages.NatsMessage {
+func (ar *AutoReader[T]) Output() <-chan *reader.DecodedMsg[T] {
 	return ar.output
 }
 
-func (ar *AutoReader) Stop() {
+func (ar *AutoReader[T]) Stop() {
 	close(ar.stop)
 	ar.wg.Wait()
 }
 
-func (ar *AutoReader) newStream() (stream.Interface, error) {
+func (ar *AutoReader[T]) newStream() (stream.Interface, error) {
 	if ar.streamOpts.ShouldFake {
 		if ar.streamOpts.FakeStream != nil {
 			return ar.streamOpts.FakeStream, nil
@@ -63,13 +65,13 @@ func (ar *AutoReader) newStream() (stream.Interface, error) {
 	return stream.Connect(ar.streamOpts)
 }
 
-func (ar *AutoReader) run(nextSeq uint64, endSeq uint64) {
+func (ar *AutoReader[T]) run(nextSeq uint64, endSeq uint64) {
 	defer ar.wg.Done()
 	defer close(ar.output)
 
 	var err error
 	var s stream.Interface
-	var r reader.IReader
+	var r reader.IReader[T]
 
 	disconnect := func() {
 		if r != nil {
@@ -133,7 +135,7 @@ func (ar *AutoReader) run(nextSeq uint64, endSeq uint64) {
 			}
 
 			ar.Infof("starting reader from seq %d...", nextSeq)
-			r, err = reader.Start(context.Background(), ar.readerOpts, s, nil, nextSeq, endSeq)
+			r, err = reader.Start(context.Background(), s, ar.readerOpts.WithStartSeq(nextSeq), ar.decodeFn)
 			if err != nil {
 				ar.Errorf("unable to start reader: %v", err)
 				connectionProblem = true
@@ -163,9 +165,14 @@ func (ar *AutoReader) run(nextSeq uint64, endSeq uint64) {
 			select {
 			case <-ar.stop:
 				return
+			case <-out.WaitDecoding():
+			}
+			select {
+			case <-ar.stop:
+				return
 			case ar.output <- out:
 			}
-			nextSeq = out.GetSequence() + 1
+			nextSeq = out.Msg().GetSequence() + 1
 		}
 	}
 }

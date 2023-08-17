@@ -3,6 +3,7 @@ package validator
 import (
 	"context"
 
+	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/service/block_processor"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers/validator"
 	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
@@ -47,7 +48,12 @@ func (b *Validator) Run(ctx context.Context) error {
 	}
 
 	logrus.Infof("Starting from the sequence %d, finishing at %d", startingSequence, endingSequence)
-	rdr, err := reader.Start(context.Background(), b.ReaderOptions, b.Input, nil, startingSequence, endingSequence)
+	rdr, err := reader.Start(
+		context.Background(),
+		b.Input,
+		b.ReaderOptions.WithStartSeq(startingSequence).WithEndSeq(endingSequence),
+		formats.DefaultMsgParser,
+	)
 	if err != nil {
 		return errors.Wrap(err, "cannot start the reader")
 	}

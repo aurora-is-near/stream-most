@@ -14,57 +14,58 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type IReader interface {
-	Output() <-chan messages.NatsMessage
+type IReader[T any] interface {
+	Output() <-chan *DecodedMsg[T]
 	Error() error
 	Stop()
 	IsFake() bool
 }
 
-type Reader struct {
+type Reader[T any] struct {
 	*logrus.Entry
 
 	opts     *Options
 	input    stream.Interface
-	subjects []string
-	startSeq uint64
-	endSeq   uint64
+	decodeFn func(msg messages.NatsMessage) (T, error)
 
-	output chan messages.NatsMessage
+	output        chan *DecodedMsg[T]
+	decodingQueue chan *DecodedMsg[T]
 
 	ctx     context.Context
 	cancel  func()
 	err     error
 	errOnce sync.Once
 	wg      sync.WaitGroup
+
+	decodeCtx    context.Context
+	decodeCancel func()
 }
 
-func Start(ctx context.Context, opts *Options, input stream.Interface, subjects []string, startSeq uint64, endSeq uint64) (IReader, error) {
+func Start[T any](ctx context.Context, input stream.Interface, opts *Options, decodeFn func(msg messages.NatsMessage) (T, error)) (IReader[T], error) {
 	if input.IsFake() {
-		return createFake(ctx, opts, input, subjects, startSeq, endSeq)
+		return createFake(ctx, input, opts, decodeFn)
 	}
 
-	r := &Reader{
+	opts = opts.WithDefaults()
+
+	r := &Reader[T]{
 		Entry: logrus.New().
 			WithField("component", "reader").
 			WithField("stream", input.Name()).
 			WithField("log_tag", input.Options().Nats.LogTag),
 
-		opts:     opts.WithDefaults(),
-		input:    input,
-		subjects: subjects,
-		startSeq: startSeq,
-		endSeq:   endSeq,
-		output:   make(chan messages.NatsMessage, opts.BufferSize),
+		opts:          opts,
+		input:         input,
+		decodeFn:      decodeFn,
+		output:        make(chan *DecodedMsg[T], opts.OutputBufferSize),
+		decodingQueue: make(chan *DecodedMsg[T], opts.DecodingQueueSize),
 	}
 	r.ctx, r.cancel = context.WithCancel(ctx)
+	r.decodeCtx, r.decodeCancel = context.WithCancel(ctx)
 
-	if len(r.subjects) == 1 && r.subjects[0] == ">" {
-		r.subjects = nil
-	}
-
-	if r.startSeq < 1 {
-		r.startSeq = 1
+	r.wg.Add(int(r.opts.MaxDecoders))
+	for i := 0; i < int(r.opts.MaxDecoders); i++ {
+		go r.runDecoder()
 	}
 
 	r.wg.Add(1)
@@ -73,11 +74,11 @@ func Start(ctx context.Context, opts *Options, input stream.Interface, subjects 
 	return r, nil
 }
 
-func (r *Reader) Output() <-chan messages.NatsMessage {
+func (r *Reader[T]) Output() <-chan *DecodedMsg[T] {
 	return r.output
 }
 
-func (r *Reader) Error() error {
+func (r *Reader[T]) Error() error {
 	select {
 	case <-r.ctx.Done():
 		return r.err
@@ -86,16 +87,17 @@ func (r *Reader) Error() error {
 	}
 }
 
-func (r *Reader) Stop() {
+func (r *Reader[T]) Stop() {
 	r.cancel()
+	r.decodeCancel()
 	r.wg.Wait()
 }
 
-func (r *Reader) IsFake() bool {
+func (r *Reader[T]) IsFake() bool {
 	return false
 }
 
-func (r *Reader) finishWithError(format string, args ...any) {
+func (r *Reader[T]) finishWithError(format string, args ...any) {
 	select {
 	case <-r.ctx.Done():
 		// Ignore error if ctx is already canceled
@@ -109,14 +111,15 @@ func (r *Reader) finishWithError(format string, args ...any) {
 	r.cancel()
 }
 
-func (r *Reader) run() {
+func (r *Reader[T]) run() {
 	defer r.wg.Done()
 	defer close(r.output)
+	defer close(r.decodingQueue)
 	defer r.cancel()
 
 	consumer, err := r.input.Stream().OrderedConsumer(r.ctx, jetstream.OrderedConsumerConfig{
-		FilterSubjects: r.subjects,
-		OptStartSeq:    r.startSeq,
+		FilterSubjects: r.opts.FilterSubjects,
+		OptStartSeq:    r.opts.StartSeq,
 	})
 	if err != nil {
 		r.finishWithError("unable to create ordered consumer: %w", err)
@@ -145,19 +148,19 @@ func (r *Reader) run() {
 			}
 
 			if lastConsumedSeq.Load() == 0 {
-				if r.opts.StrictStart && len(r.subjects) == 0 {
-					if meta.Sequence.Stream != r.startSeq {
-						r.finishWithError("unexpected sequence: %d, expected: %d", meta.Sequence.Stream, r.startSeq)
+				if r.opts.StrictStart && len(r.opts.FilterSubjects) == 0 {
+					if meta.Sequence.Stream != r.opts.StartSeq {
+						r.finishWithError("unexpected sequence: %d, expected: %d", meta.Sequence.Stream, r.opts.StartSeq)
 						return
 					}
 				} else {
-					if meta.Sequence.Stream < r.startSeq {
-						r.finishWithError("unexpected sequence: %d, expected anything greater than or equal to %d", meta.Sequence.Stream, r.startSeq)
+					if meta.Sequence.Stream < r.opts.StartSeq {
+						r.finishWithError("unexpected sequence: %d, expected anything greater than or equal to %d", meta.Sequence.Stream, r.opts.StartSeq)
 						return
 					}
 				}
 			} else {
-				if len(r.subjects) == 0 {
+				if len(r.opts.FilterSubjects) == 0 {
 					if meta.Sequence.Stream != lastConsumedSeq.Load()+1 {
 						r.finishWithError("unexpected sequence: %d, expected: %d", meta.Sequence.Stream, lastConsumedSeq.Load()+1)
 						return
@@ -171,21 +174,35 @@ func (r *Reader) run() {
 			}
 			lastConsumedSeq.Store(meta.Sequence.Stream)
 
-			if r.endSeq > 0 && meta.Sequence.Stream >= r.endSeq {
+			if r.opts.EndSeq > 0 && meta.Sequence.Stream >= r.opts.EndSeq {
 				r.Info("end sequence reached, finishing")
 				r.cancel()
 				return
 			}
 
+			dMsg := &DecodedMsg[T]{
+				msg: &messages.StreamMessage{
+					Msg:  msg,
+					Meta: meta,
+				},
+				done: make(chan struct{}),
+			}
+
 			select {
 			case <-r.ctx.Done():
 				return
-			case r.output <- &messages.StreamMessage{Msg: msg, Meta: meta}:
+			case r.decodingQueue <- dMsg:
+			}
+
+			select {
+			case <-r.ctx.Done():
+				return
+			case r.output <- dMsg:
 			}
 
 			lastFiredSeq.Store(meta.Sequence.Stream)
 
-			if r.endSeq > 0 && meta.Sequence.Stream+1 >= r.endSeq {
+			if r.opts.EndSeq > 0 && meta.Sequence.Stream+1 >= r.opts.EndSeq {
 				r.Info("last sequence reached, finishing")
 				r.cancel()
 				return
@@ -226,7 +243,7 @@ func (r *Reader) run() {
 	}
 }
 
-func (r *Reader) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64) (bool, error) {
+func (r *Reader[T]) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64) (bool, error) {
 	silenceCandidateSeq := lastConsumedSeq.Load()
 
 	if lastFiredSeq.Load() < silenceCandidateSeq {
@@ -243,7 +260,7 @@ func (r *Reader) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64) (
 
 	nextAvailableSeq := lastConsumedSeq.Load()
 
-	if len(r.subjects) == 0 {
+	if len(r.opts.FilterSubjects) == 0 {
 		info, err := r.input.GetInfo(r.ctx)
 		if err != nil {
 			return false, fmt.Errorf("unable to get stream info: %w", err)
@@ -253,7 +270,7 @@ func (r *Reader) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64) (
 		}
 	}
 
-	for _, subj := range r.subjects {
+	for _, subj := range r.opts.FilterSubjects {
 		if lastConsumedSeq.Load() > silenceCandidateSeq {
 			return true, nil
 		}
@@ -284,7 +301,7 @@ func (r *Reader) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64) (
 	return lastConsumedSeq.Load() > silenceCandidateSeq, nil
 }
 
-func (r *Reader) tryWait(d time.Duration) bool {
+func (r *Reader[T]) tryWait(d time.Duration) bool {
 	t := time.NewTimer(d)
 	select {
 	case <-r.ctx.Done():
@@ -294,5 +311,28 @@ func (r *Reader) tryWait(d time.Duration) bool {
 		return false
 	case <-t.C:
 		return true
+	}
+}
+
+func (r *Reader[T]) runDecoder() {
+	defer r.wg.Done()
+
+	for {
+		select {
+		case <-r.decodeCtx.Done():
+			return
+		default:
+		}
+
+		select {
+		case <-r.decodeCtx.Done():
+			return
+		case msg, ok := <-r.decodingQueue:
+			if !ok {
+				return
+			}
+			msg.value, msg.decodingErr = r.decodeFn(msg.msg)
+			close(msg.done)
+		}
 	}
 }

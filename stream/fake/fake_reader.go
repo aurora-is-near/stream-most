@@ -9,54 +9,49 @@ import (
 )
 
 // Reader is a simple fake for reader.IReader, that only works in pair with fake.Stream
-type Reader struct {
+type Reader[T any] struct {
 	opts     *reader.Options
 	input    stream.Interface
-	startSeq uint64
-	endSeq   uint64
-	output   chan messages.NatsMessage
-	closed   bool
+	decodeFn func(msg messages.NatsMessage) (T, error)
+	output   chan *reader.DecodedMsg[T]
 }
 
-func StartReader(ctx context.Context, opts *reader.Options, input stream.Interface, subjects []string, startSeq uint64, endSeq uint64) (reader.IReader, error) {
-	r := &Reader{
+func StartReader[T any](ctx context.Context, input stream.Interface, opts *reader.Options, decodeFn func(msg messages.NatsMessage) (T, error)) (reader.IReader[T], error) {
+	opts = opts.WithDefaults()
+	r := &Reader[T]{
 		opts:     opts,
 		input:    input,
-		startSeq: startSeq,
-		endSeq:   endSeq,
+		decodeFn: decodeFn,
 	}
 	r.fill()
 	return r, nil
 }
 
-func (r *Reader) IsFake() bool {
+func (r *Reader[T]) IsFake() bool {
 	return true
 }
 
-func (r *Reader) Error() error {
+func (r *Reader[T]) Error() error {
 	return nil
 }
 
-func (r *Reader) Output() <-chan messages.NatsMessage {
+func (r *Reader[T]) Output() <-chan *reader.DecodedMsg[T] {
 	return r.output
 }
 
-func (r *Reader) Stop() {
-	if !r.closed {
-		r.closed = true
-	}
-}
+func (r *Reader[T]) Stop() {}
 
-func (r *Reader) fill() {
-	r.output = make(chan messages.NatsMessage, len(r.input.(*Stream).GetArray()))
+func (r *Reader[T]) fill() {
+	r.output = make(chan *reader.DecodedMsg[T], len(r.input.(*Stream).GetArray()))
 	for _, item := range r.input.(*Stream).GetArray() {
-		if item.GetSequence() < r.startSeq {
+		if item.GetSequence() < r.opts.StartSeq {
 			continue
 		}
-		if r.endSeq > 0 && item.GetSequence() >= r.endSeq {
+		if r.opts.EndSeq > 0 && item.GetSequence() >= r.opts.EndSeq {
 			break
 		}
-		r.output <- item.GetNatsMessage()
+		value, decErr := r.decodeFn(item)
+		r.output <- reader.NewPredecodedMsg[T](item, value, decErr)
 	}
 	close(r.output)
 }

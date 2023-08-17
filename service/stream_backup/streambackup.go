@@ -25,7 +25,7 @@ var errInterrupted = errors.New("interrupted")
 
 type StreamBackup struct {
 	Chunks   chunks.ChunksInterface
-	Reader   *autoreader.AutoReader
+	Reader   *autoreader.AutoReader[messages.BlockMessage]
 	StartSeq uint64
 	EndSeq   uint64
 
@@ -121,9 +121,9 @@ func (sb *StreamBackup) pullSegment(l, r uint64) error {
 			if !ok {
 				return nil
 			}
-			curBlock, err := formats.Active().ParseMsg(curMsg)
+			curBlock, err := curMsg.Value()
 			if err != nil {
-				return fmt.Errorf("can't decode new block on seq %v: %w", curMsg.GetSequence(), err)
+				return fmt.Errorf("can't decode new block on seq %v: %w", curMsg.Msg().GetSequence(), err)
 			}
 			if prevBlock != nil {
 				switch formats.Active().GetFormat() {

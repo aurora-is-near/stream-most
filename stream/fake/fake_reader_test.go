@@ -4,13 +4,14 @@ import (
 	"context"
 	"testing"
 
+	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream/reader"
 	"github.com/aurora-is-near/stream-most/testing/u"
 	"github.com/stretchr/testify/require"
 )
 
 func TestFakeReader(t *testing.T) {
-	reader.UseFake(StartReader)
+	reader.UseFake(StartReader[struct{}])
 
 	fakeInput := &Stream{}
 	fakeInput.Add(
@@ -21,14 +22,18 @@ func TestFakeReader(t *testing.T) {
 		u.Announcement(5, []bool{true, true, true}, 5, "hash", "prev_hash"),
 	)
 
-	reader, err := reader.Start(context.Background(), &reader.Options{}, fakeInput, nil, 2, 4)
+	reader, err := reader.Start(context.Background(), fakeInput, &reader.Options{StartSeq: 2, EndSeq: 4},
+		func(msg messages.NatsMessage) (struct{}, error) {
+			return struct{}{}, nil
+		},
+	)
 	if err != nil {
 		panic(err)
 	}
 
 	resultSequences := []uint64{}
 	for msg := range reader.Output() {
-		resultSequences = append(resultSequences, msg.GetSequence())
+		resultSequences = append(resultSequences, msg.Msg().GetSequence())
 	}
 
 	require.Equal(

@@ -33,7 +33,7 @@ func TestNearV3_Basic(t *testing.T) {
 
 	fakeInput.Display()
 
-	rdr, err := reader.Start(context.Background(), &reader.Options{}, fakeInput, nil, 0, 0)
+	rdr, err := reader.Start(context.Background(), fakeInput, &reader.Options{}, formats.DefaultMsgParser)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestNearV3_Stuck(t *testing.T) {
 
 	fakeInput.Display()
 
-	rdr, err := reader.Start(context.Background(), &reader.Options{}, fakeInput, nil, 0, 0)
+	rdr, err := reader.Start(context.Background(), fakeInput, &reader.Options{}, formats.DefaultMsgParser)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -26,6 +26,7 @@ func run(config Config) error {
 		Reader: autoreader.NewAutoReader(
 			config.Input,
 			config.Reader,
+			formats.DefaultMsgParser,
 		),
 		StartSeq: config.FromSeq,
 		EndSeq:   config.ToSeq,

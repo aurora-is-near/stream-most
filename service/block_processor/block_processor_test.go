@@ -30,7 +30,7 @@ func TestBlockProcessor(t *testing.T) {
 		u.Announcement(5, []bool{true, true, true}, 2, "BBB", "AAA"),
 	)
 
-	reader, err := reader.Start(context.Background(), &reader.Options{}, input, nil, 2, 0)
+	reader, err := reader.Start(context.Background(), input, &reader.Options{StartSeq: 2}, formats.DefaultMsgParser)
 	if err != nil {
 		return
 	}

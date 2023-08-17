@@ -3,6 +3,7 @@ package bridge
 import (
 	"context"
 
+	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/service/block_processor"
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers"
 	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
@@ -62,7 +63,12 @@ func (b *Bridge) Run(ctx context.Context) error {
 	logrus.Infof("Starting from the sequence %d", startSequence)
 
 	logrus.Debug("Starting the reader...")
-	rdr, err := reader.Start(context.Background(), b.ReaderOptions, b.Input, nil, startSequence, b.options.InputEndSequence)
+	rdr, err := reader.Start(
+		context.Background(),
+		b.Input,
+		b.ReaderOptions.WithStartSeq(startSequence).WithEndSeq(b.options.InputEndSequence),
+		formats.DefaultMsgParser,
+	)
 	if err != nil {
 		return errors.Wrap(err, "cannot start the reader")
 	}

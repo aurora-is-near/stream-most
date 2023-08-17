@@ -4,13 +4,12 @@ import (
 	"context"
 	"errors"
 
-	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream/reader"
 	"github.com/sirupsen/logrus"
 )
 
-func ReaderToBlockMessage(ctx context.Context, reader reader.IReader, parseTolerance uint) (chan messages.BlockMessage, chan error) {
+func ReaderToBlockMessage(ctx context.Context, reader reader.IReader[messages.BlockMessage], parseTolerance uint) (chan messages.BlockMessage, chan error) {
 	out := make(chan messages.BlockMessage, 1024)
 	errCh := make(chan error, 1)
 
@@ -43,9 +42,16 @@ func ReaderToBlockMessage(ctx context.Context, reader reader.IReader, parseToler
 					return
 				}
 
-				blockMsg, err := formats.Active().ParseMsg(msg)
+				select {
+				case <-ctx.Done():
+					logrus.Info("Reader adapter: context cancelled, exiting")
+					return
+				case <-msg.WaitDecoding():
+				}
+
+				blockMsg, err := msg.Value()
 				if err != nil {
-					logrus.Warnf("Reader adapter: can't parse message on seq %d, will decrease tolerance: %v", msg.GetSequence(), blockMsg)
+					logrus.Warnf("Reader adapter: can't parse message on seq %d, will decrease tolerance: %v", msg.Msg().GetSequence(), blockMsg)
 					if remainingParseTolerance == 0 {
 						logrus.Error("Reader adapter: too many parse errors in row, exiting")
 						errCh <- errors.New("reader adapter: too many parse errors in row")
