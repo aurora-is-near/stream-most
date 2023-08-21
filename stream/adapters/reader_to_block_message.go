@@ -9,8 +9,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func ReaderToBlockMessage(ctx context.Context, reader reader.IReader[messages.BlockMessage], parseTolerance uint) (chan messages.BlockMessage, chan error) {
-	out := make(chan messages.BlockMessage, 1024)
+func ReaderToBlockMessage(ctx context.Context, reader reader.IReader[*messages.BlockMessage], parseTolerance uint) (chan *messages.BlockMessage, chan error) {
+	out := make(chan *messages.BlockMessage, 1024)
 	errCh := make(chan error, 1)
 
 	go func() {

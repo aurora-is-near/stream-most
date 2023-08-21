@@ -5,5 +5,5 @@ import (
 )
 
 type TipPeeker interface {
-	GetTip() (messages.BlockMessage, error)
+	GetTip() (*messages.BlockMessage, error)
 }

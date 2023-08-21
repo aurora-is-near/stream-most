@@ -11,9 +11,9 @@ import (
 type storedBlock struct {
 	expiresAt uint64
 
-	announcement messages.BlockMessage
-	shards       []messages.BlockMessage
-	shardsStash  []messages.BlockMessage
+	announcement *messages.BlockMessage
+	shards       []*messages.BlockMessage
+	shardsStash  []*messages.BlockMessage
 
 	shardsRequired []bool
 }
@@ -22,31 +22,31 @@ func (b *storedBlock) missingAnnouncement() bool {
 	return b.announcement == nil
 }
 
-func (b *storedBlock) addAnnouncement(announcement messages.BlockMessage) {
+func (b *storedBlock) addAnnouncement(announcement *messages.BlockMessage) {
 	b.announcement = announcement
-	b.shardsRequired = announcement.GetAnnouncement().GetShardMask()
+	b.shardsRequired = announcement.Block.GetShardMask()
 
 	for i := range b.shardsStash {
 		b.addShard(b.shardsStash[i])
 	}
 }
 
-func (b *storedBlock) addShard(shard messages.BlockMessage) (isNew bool) {
+func (b *storedBlock) addShard(shard *messages.BlockMessage) (isNew bool) {
 	if b.missingAnnouncement() {
 		b.stashShard(shard)
 		return true
 	}
 
-	shardId := shard.GetShard().GetShardID()
+	shardId := shard.Block.GetShardID()
 
 	if len(b.shardsRequired) <= int(shardId) {
 		logrus.Error("Shard ID is out of range for the given block")
 		return false
 	}
 
-	if b.shardsRequired[shard.GetShard().GetShardID()] {
+	if b.shardsRequired[shard.Block.GetShardID()] {
 		b.shards = append(b.shards, shard)
-		b.shardsRequired[shard.GetShard().GetShardID()] = false
+		b.shardsRequired[shard.Block.GetShardID()] = false
 		return true
 	}
 
@@ -54,13 +54,13 @@ func (b *storedBlock) addShard(shard messages.BlockMessage) (isNew bool) {
 	return false
 }
 
-func (b *storedBlock) stashShard(shard messages.BlockMessage) {
+func (b *storedBlock) stashShard(shard *messages.BlockMessage) {
 	b.shardsStash = append(b.shardsStash, shard)
 }
 
-func (b *storedBlock) shardsSorted() []messages.BlockMessage {
+func (b *storedBlock) shardsSorted() []*messages.BlockMessage {
 	sort.Slice(b.shards, func(i, j int) bool {
-		return b.shards[i].GetShard().GetShardID() < b.shards[j].GetShard().GetShardID()
+		return b.shards[i].Block.GetShardID() < b.shards[j].Block.GetShardID()
 	})
 
 	return b.shards
@@ -76,7 +76,7 @@ func (b *storedBlock) isComplete() bool {
 	return b.announcement != nil && shardsCompleted
 }
 
-func (b *storedBlock) writeTo(output chan messages.BlockMessage) {
+func (b *storedBlock) writeTo(output chan *messages.BlockMessage) {
 	output <- b.announcement
 	for _, shard := range b.shardsSorted() {
 		output <- shard
@@ -85,9 +85,9 @@ func (b *storedBlock) writeTo(output chan messages.BlockMessage) {
 
 func (b *storedBlock) getAbstractBlock() blocks.Block {
 	if !b.missingAnnouncement() {
-		return b.announcement.GetBlock()
+		return b.announcement.Block
 	} else if len(b.shardsStash) != 0 {
-		return b.shardsStash[0].GetBlock()
+		return b.shardsStash[0].Block
 	}
 
 	return nil
@@ -96,6 +96,6 @@ func (b *storedBlock) getAbstractBlock() blocks.Block {
 func newStoredBlock(expiresAt uint64) *storedBlock {
 	return &storedBlock{
 		expiresAt: expiresAt,
-		shards:    make([]messages.BlockMessage, 0),
+		shards:    make([]*messages.BlockMessage, 0),
 	}
 }

@@ -17,6 +17,6 @@ Call formats.UseFormat() first, or instantiate a new facade with formats.NewFaca
 	return def
 }
 
-func DefaultMsgParser(msg messages.NatsMessage) (messages.BlockMessage, error) {
+func DefaultMsgParser(msg messages.NatsMessage) (*messages.BlockMessage, error) {
 	return Active().ParseMsg(msg)
 }

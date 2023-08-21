@@ -111,7 +111,7 @@ func (b *Bridge) Run(ctx context.Context) error {
 			break
 		}
 
-		logrus.Debug("Received results from the processor: ", results.GetHeight())
+		logrus.Debug("Received results from the processor: ", results.Block.GetHeight())
 		err := writer.Write(ctx, results)
 		if err != nil {
 			logrus.Errorf("Error while writing a message to output stream: %v", err)

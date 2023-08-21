@@ -47,7 +47,7 @@ func TestNearV3_Basic(t *testing.T) {
 	})
 
 	input, _ := adapters.ReaderToBlockMessage(context.Background(), rdr, 10)
-	output := make(chan messages.BlockMessage, 100)
+	output := make(chan *messages.BlockMessage, 100)
 	driver.Bind(input, output)
 
 	go func() {
@@ -104,7 +104,7 @@ func TestNearV3_Stuck(t *testing.T) {
 	})
 
 	input, _ := adapters.ReaderToBlockMessage(context.Background(), rdr, 10)
-	output := make(chan messages.BlockMessage, 100)
+	output := make(chan *messages.BlockMessage, 100)
 	driver.Bind(input, output)
 
 	go func() {

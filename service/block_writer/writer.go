@@ -23,23 +23,23 @@ type Writer struct {
 	outputStream   stream.Interface
 	lowHeightInRow uint64
 
-	lastWritten      messages.BlockMessage
+	lastWritten      *messages.BlockMessage
 	closed           bool
 	onCloseListeners []func(err error)
 }
 
-func (w *Writer) write(ctx context.Context, msg messages.BlockMessage) (*jetstream.PubAck, error) {
+func (w *Writer) write(ctx context.Context, msg *messages.BlockMessage) (*jetstream.PubAck, error) {
 	if w.closed {
 		return nil, ErrClosed
 	}
 
-	block := msg.GetBlock()
+	block := msg.Block
 	if err := w.validate(block); err != nil {
 		w.processError(err)
 		return nil, err
 	}
 
-	headers := w.enrichHeaders(msg, msg.GetHeader())
+	headers := w.enrichHeaders(msg, msg.Msg.GetHeader())
 
 	var lastError error
 	var puback *jetstream.PubAck
@@ -50,7 +50,7 @@ func (w *Writer) write(ctx context.Context, msg messages.BlockMessage) (*jetstre
 			&nats.Msg{
 				Subject: "", // TODO!!!
 				Header:  headers,
-				Data:    msg.GetData(),
+				Data:    msg.Msg.GetData(),
 			},
 			// TODO
 		)
@@ -61,11 +61,11 @@ func (w *Writer) write(ctx context.Context, msg messages.BlockMessage) (*jetstre
 			}
 
 			if puback.Duplicate {
-				logrus.Debugf("Duplicate message for a block with height %d", msg.GetHeight())
+				logrus.Debugf("Duplicate message for a block with height %d", msg.Block.GetHeight())
 				return nil, ErrDuplicate
 			}
 
-			logrus.Debugf("Wrote a message for a block with height %d", msg.GetHeight())
+			logrus.Debugf("Wrote a message for a block with height %d", msg.Block.GetHeight())
 			w.lowHeightInRow = 0
 			return puback, nil
 		}
@@ -85,16 +85,16 @@ func (w *Writer) write(ctx context.Context, msg messages.BlockMessage) (*jetstre
 	return nil, lastError
 }
 
-func (w *Writer) WriteWithAck(ctx context.Context, msg messages.BlockMessage) (*jetstream.PubAck, error) {
+func (w *Writer) WriteWithAck(ctx context.Context, msg *messages.BlockMessage) (*jetstream.PubAck, error) {
 	return w.write(ctx, msg)
 }
 
-func (w *Writer) Write(ctx context.Context, msg messages.BlockMessage) error {
+func (w *Writer) Write(ctx context.Context, msg *messages.BlockMessage) error {
 	_, err := w.write(ctx, msg)
 	return err
 }
 
-func (w *Writer) getTip() (messages.BlockMessage, error) {
+func (w *Writer) getTip() (*messages.BlockMessage, error) {
 	tip, err := w.TipCached.GetTip()
 	if err != nil {
 		return nil, err
@@ -102,11 +102,11 @@ func (w *Writer) getTip() (messages.BlockMessage, error) {
 
 	if tip != nil {
 		if monitoring.TipHeight != nil { // TODO: resolve normally
-			monitoring.TipHeight.Set(float64(tip.GetHeight()))
+			monitoring.TipHeight.Set(float64(tip.Block.GetHeight()))
 		}
 	}
 
-	if w.lastWritten != nil && tip.GetHeight() < w.lastWritten.GetHeight() {
+	if w.lastWritten != nil && tip.Block.GetHeight() < w.lastWritten.Block.GetHeight() {
 		return w.lastWritten, nil
 	}
 	return tip, err
@@ -127,23 +127,23 @@ func (w *Writer) validate(block blocks.Block) error {
 	}
 
 	if tip != nil {
-		if block.GetHeight() < tip.GetHeight() {
+		if block.GetHeight() < tip.Block.GetHeight() {
 			return ErrLowHeight
 		}
-		if block.GetPrevHash() != tip.GetBlock().GetHash() && block.GetHash() != tip.GetHash() {
+		if block.GetPrevHash() != tip.Block.GetHash() && block.GetHash() != tip.Block.GetHash() {
 			return ErrHashMismatch
 		}
 	}
 	return nil
 }
 
-func (w *Writer) enrichHeaders(message messages.BlockMessage, header nats.Header) nats.Header {
+func (w *Writer) enrichHeaders(message *messages.BlockMessage, header nats.Header) nats.Header {
 	var uniqueId string
-	switch message.GetType() {
-	case messages.Announcement:
-		uniqueId = strconv.FormatUint(message.GetHeight(), 10)
-	case messages.Shard:
-		uniqueId = fmt.Sprintf("%d.%d", message.GetHeight(), message.GetShard().GetShardID())
+	switch message.Block.GetBlockType() {
+	case blocks.Announcement:
+		uniqueId = strconv.FormatUint(message.Block.GetHeight(), 10)
+	case blocks.Shard:
+		uniqueId = fmt.Sprintf("%d.%d", message.Block.GetHeight(), message.Block.GetShardID())
 	}
 
 	if header == nil {

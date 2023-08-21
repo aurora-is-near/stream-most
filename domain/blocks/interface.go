@@ -4,14 +4,9 @@ type Block interface {
 	GetHash() string
 	GetPrevHash() string
 	GetHeight() uint64
-}
 
-type BlockAnnouncement interface {
-	Block
+	// v3+
+	GetBlockType() BlockType
 	GetShardMask() []bool
-}
-
-type BlockShard interface {
-	Block
 	GetShardID() uint64
 }

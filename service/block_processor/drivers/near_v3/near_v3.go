@@ -3,6 +3,7 @@ package near_v3
 import (
 	"errors"
 
+	"github.com/aurora-is-near/stream-most/domain/blocks"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/block_processor/observer"
 	"github.com/aurora-is-near/stream-most/util"
@@ -19,8 +20,8 @@ type NearV3 struct {
 
 	lastWrittenBlockHash *string
 
-	input  chan messages.BlockMessage
-	output chan messages.BlockMessage
+	input  chan *messages.BlockMessage
+	output chan *messages.BlockMessage
 
 	observer *observer.Observer
 
@@ -31,7 +32,7 @@ type NearV3 struct {
 	killed bool
 }
 
-func (n *NearV3) Bind(input chan messages.BlockMessage, output chan messages.BlockMessage) {
+func (n *NearV3) Bind(input chan *messages.BlockMessage, output chan *messages.BlockMessage) {
 	n.input = input
 	n.output = output
 }
@@ -51,11 +52,11 @@ func (n *NearV3) Run() {
 
 		n.clock++
 
-		switch msg.GetType() {
-		case messages.Announcement:
+		switch msg.Block.GetBlockType() {
+		case blocks.Announcement:
 			logrus.Debug("Received message is an announcement")
 			n.processAnnouncement(msg)
-		case messages.Shard:
+		case blocks.Shard:
 			logrus.Debug("Received message is block")
 			n.processShard(msg)
 		default:
@@ -84,9 +85,9 @@ func (n *NearV3) FinishError() error {
 }
 
 func (n *NearV3) pop(block *storedBlock) {
-	n.lastWrittenBlockHash = util.Ptr(block.announcement.GetHash())
-	delete(n.blocks, block.announcement.GetHash())
-	delete(n.blocksByPreviousHash, block.announcement.GetPrevHash())
+	n.lastWrittenBlockHash = util.Ptr(block.announcement.Block.GetHash())
+	delete(n.blocks, block.announcement.Block.GetHash())
+	delete(n.blocksByPreviousHash, block.announcement.Block.GetPrevHash())
 	block.writeTo(n.output)
 
 	n.messagesSinceLastWrite = 0
@@ -127,14 +128,14 @@ func (n *NearV3) popReadyBlocks() error {
 	return nil
 }
 
-func (n *NearV3) newBlockFrom(message messages.BlockMessage) *storedBlock {
-	hash := message.GetHash()
+func (n *NearV3) newBlockFrom(message *messages.BlockMessage) *storedBlock {
+	hash := message.Block.GetHash()
 
 	block := newStoredBlock(n.clock + n.opts.BlocksCacheSize)
-	switch message.GetType() {
-	case messages.Announcement:
+	switch message.Block.GetBlockType() {
+	case blocks.Announcement:
 		block.addAnnouncement(message)
-	case messages.Shard:
+	case blocks.Shard:
 		block.stashShard(message)
 	}
 
@@ -150,8 +151,8 @@ func (n *NearV3) prolongCache(block *storedBlock) {
 	block.expiresAt = n.clock + n.opts.BlocksCacheSize
 }
 
-func (n *NearV3) processAnnouncement(message messages.BlockMessage) {
-	hash := message.GetHash()
+func (n *NearV3) processAnnouncement(message *messages.BlockMessage) {
+	hash := message.Block.GetHash()
 
 	if block, exists := n.blocks[hash]; !exists {
 		n.newBlockFrom(message)
@@ -163,8 +164,8 @@ func (n *NearV3) processAnnouncement(message messages.BlockMessage) {
 	}
 }
 
-func (n *NearV3) processShard(shard messages.BlockMessage) {
-	if block, exists := n.blocks[shard.GetHash()]; !exists {
+func (n *NearV3) processShard(shard *messages.BlockMessage) {
+	if block, exists := n.blocks[shard.Block.GetHash()]; !exists {
 		n.newBlockFrom(shard)
 	} else if block.missingAnnouncement() {
 		block.stashShard(shard)

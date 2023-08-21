@@ -7,7 +7,7 @@ import (
 )
 
 type WrappedMessage struct {
-	Message messages.BlockMessage
+	Message *messages.BlockMessage
 	Wraps   []error
 }
 
@@ -28,6 +28,6 @@ func (m *WrappedMessage) Wrap(wrap error) *WrappedMessage {
 	return &WrappedMessage{Wraps: append(m.Wraps, wrap), Message: m.Message}
 }
 
-func WrapMessage(message messages.BlockMessage, err error) *WrappedMessage {
+func WrapMessage(message *messages.BlockMessage, err error) *WrappedMessage {
 	return &WrappedMessage{Wraps: []error{err}, Message: message}
 }

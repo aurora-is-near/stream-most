@@ -16,23 +16,23 @@ import (
 	Removing this file will not affect anything but tests
 */
 
-func Announcement(sequence uint64, shardsMap []bool, height uint64, hash string, prevHash string) messages.BlockMessage {
+func Announcement(sequence uint64, shardsMap []bool, height uint64, hash string, prevHash string) *messages.BlockMessage {
 	return MessageFromBlock(sequence, NewSimpleBlockAnnouncement(shardsMap, height, hash, prevHash))
 }
 
-func Shard(sequence uint64, height uint64, hash string, prevHash string, shardId uint64) messages.BlockMessage {
+func Shard(sequence uint64, height uint64, hash string, prevHash string, shardId uint64) *messages.BlockMessage {
 	return MessageFromBlock(sequence, NewSimpleBlockShard(height, hash, prevHash, shardId))
 }
 
-func MessageFromBlock(sequence uint64, block blocks.Block) messages.BlockMessage {
+func MessageFromBlock(sequence uint64, block blocks.Block) *messages.BlockMessage {
 	data, err := RecoverBlockPayload(block)
 	if err != nil {
 		panic(err)
 	}
 
-	return &messages.AbstractBlockMessage{
+	return &messages.BlockMessage{
 		Block: block,
-		NatsMessage: messages.RawStreamMessage{
+		Msg: messages.RawStreamMessage{
 			RawStreamMsg: &jetstream.RawStreamMsg{
 				Sequence: sequence,
 				Data:     data,
@@ -41,7 +41,7 @@ func MessageFromBlock(sequence uint64, block blocks.Block) messages.BlockMessage
 	}
 }
 
-func NewSimpleBlockAnnouncement(shardsMap []bool, height uint64, hash string, prevHash string) blocks.BlockAnnouncement {
+func NewSimpleBlockAnnouncement(shardsMap []bool, height uint64, hash string, prevHash string) *v3.NearBlockAnnouncement {
 	return &v3.NearBlockAnnouncement{
 		BlockHeaderView: &near_block.BlockHeaderView{
 			Header: &near_block.IndexerBlockHeaderView{
@@ -54,7 +54,7 @@ func NewSimpleBlockAnnouncement(shardsMap []bool, height uint64, hash string, pr
 	}
 }
 
-func NewSimpleBlockShard(height uint64, hash string, prevHash string, shardId uint64) blocks.BlockShard {
+func NewSimpleBlockShard(height uint64, hash string, prevHash string, shardId uint64) *v3.NearBlockShard {
 	return &v3.NearBlockShard{
 		BlockShard: &near_block.BlockShard{
 			ShardId: shardId,

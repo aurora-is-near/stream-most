@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 
+	"github.com/aurora-is-near/stream-most/domain/blocks"
 	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream"
@@ -23,8 +24,8 @@ type StreamSeek struct {
 }
 
 // SeekShards
-func (p *StreamSeek) SeekShards(from, to uint64, forBlock *string) ([]messages.BlockMessage, error) {
-	var shards []messages.BlockMessage
+func (p *StreamSeek) SeekShards(from, to uint64, forBlock *string) ([]*messages.BlockMessage, error) {
+	var shards []*messages.BlockMessage
 
 	if from == 0 {
 		from = 1
@@ -41,8 +42,8 @@ func (p *StreamSeek) SeekShards(from, to uint64, forBlock *string) ([]messages.B
 			return shards, err
 		}
 
-		if message.GetType() == messages.Shard {
-			if forBlock == nil || (message.GetHash() == *forBlock) {
+		if message.Block.GetBlockType() == blocks.Shard {
+			if forBlock == nil || (message.Block.GetHash() == *forBlock) {
 				shards = append(shards, message)
 			}
 		}
@@ -121,15 +122,15 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 			return 0, err
 		}
 
-		switch message.GetType() {
-		case messages.Announcement:
+		switch message.Block.GetBlockType() {
+		case blocks.Announcement:
 			shift = 0
-			if message.GetHeight() < height {
+			if message.Block.GetHeight() < height {
 				l = (l + r) / 2
 			} else {
 				r = (l + r) / 2
 			}
-		case messages.Shard:
+		case blocks.Shard:
 			shift++
 		}
 	}
@@ -147,9 +148,9 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 			continue
 		}
 
-		switch message.GetType() {
-		case messages.Announcement:
-			logrus.Infof("Stream Seek: found block announcement with height %d at sequence %d", message.GetHeight(), l)
+		switch message.Block.GetBlockType() {
+		case blocks.Announcement:
+			logrus.Infof("Stream Seek: found block announcement with height %d at sequence %d", message.Block.GetHeight(), l)
 			return l + shift, nil
 		}
 	}
@@ -158,8 +159,8 @@ func (p *StreamSeek) SeekAnnouncementWithHeightBelow(height uint64, notBefore ui
 }
 
 func (p *StreamSeek) SeekLastFullyWrittenBlock() (
-	announcement messages.BlockMessage,
-	shards []messages.BlockMessage,
+	announcement *messages.BlockMessage,
+	shards []*messages.BlockMessage,
 	err error,
 ) {
 	info, err := p.stream.GetInfo(context.Background())
@@ -180,7 +181,7 @@ func (p *StreamSeek) SeekLastFullyWrittenBlock() (
 		lowerBound = 1
 	}
 
-	var shardsStash []messages.BlockMessage
+	var shardsStash []*messages.BlockMessage
 
 	for seq := upperBound; seq >= lowerBound; seq-- {
 		msg, err := p.stream.Get(context.Background(), seq)
@@ -194,10 +195,10 @@ func (p *StreamSeek) SeekLastFullyWrittenBlock() (
 			return nil, nil, err
 		}
 
-		switch message.GetType() {
-		case messages.Announcement:
+		switch message.Block.GetBlockType() {
+		case blocks.Announcement:
 			countOfShards := 0
-			for _, v := range message.GetAnnouncement().GetShardMask() {
+			for _, v := range message.Block.GetShardMask() {
 				if v {
 					countOfShards++
 				}
@@ -216,7 +217,7 @@ func (p *StreamSeek) SeekLastFullyWrittenBlock() (
 			}
 
 			return message, shardsStash, nil
-		case messages.Shard:
+		case blocks.Shard:
 			// We found some shard, stash it
 			shardsStash = append(shardsStash, message)
 		}
@@ -284,7 +285,7 @@ func (p *StreamSeek) SeekFirstAnnouncementBetween(from uint64, to uint64) (uint6
 			return 0, errors.Wrap(err, "cannot decode message at the given sequence")
 		}
 
-		if message.GetType() == messages.Announcement {
+		if message.Block.GetBlockType() == blocks.Announcement {
 			return seq, nil
 		}
 	}

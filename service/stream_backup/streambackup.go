@@ -25,7 +25,7 @@ var errInterrupted = errors.New("interrupted")
 
 type StreamBackup struct {
 	Chunks   chunks.ChunksInterface
-	Reader   *autoreader.AutoReader[messages.BlockMessage]
+	Reader   *autoreader.AutoReader[*messages.BlockMessage]
 	StartSeq uint64
 	EndSeq   uint64
 
@@ -129,53 +129,53 @@ func (sb *StreamBackup) pullSegment(l, r uint64) error {
 				switch formats.Active().GetFormat() {
 				// TODO: add "simple" format
 				case formats.AuroraV2, formats.NearV2:
-					if prevBlock.GetHash() != curBlock.GetPrevHash() {
-						return fmt.Errorf("hash mismatch on seq %v", curBlock.GetSequence())
+					if prevBlock.GetHash() != curBlock.Block.GetPrevHash() {
+						return fmt.Errorf("hash mismatch on seq %v", curBlock.Msg.GetSequence())
 					}
-					if prevBlock.GetHeight() >= curBlock.GetHeight() {
-						return fmt.Errorf("height mismatch on seq %v", curBlock.GetSequence())
+					if prevBlock.GetHeight() >= curBlock.Block.GetHeight() {
+						return fmt.Errorf("height mismatch on seq %v", curBlock.Msg.GetSequence())
 					}
 				case formats.NearV3:
-					if prevBlock.GetHash() == curBlock.GetHash() {
+					if prevBlock.GetHash() == curBlock.Block.GetHash() {
 						if _, ok := prevBlock.(*v3.NearBlockAnnouncement); !ok {
-							return fmt.Errorf("unexpected near v3 block on seq %d after shard on prev block", curBlock.GetSequence())
+							return fmt.Errorf("unexpected near v3 block on seq %d after shard on prev block", curBlock.Msg.GetSequence())
 						}
-						if curBlock.GetType() != messages.Shard {
-							return fmt.Errorf("near v3 block on seq %d expected to be shard but it's not", curBlock.GetSequence())
+						if curBlock.Block.GetBlockType() != blocks.Shard {
+							return fmt.Errorf("near v3 block on seq %d expected to be shard but it's not", curBlock.Msg.GetSequence())
 						}
-						if prevBlock.GetHeight() != curBlock.GetHeight() {
-							return fmt.Errorf("height mismatch on seq %v", curBlock.GetSequence())
+						if prevBlock.GetHeight() != curBlock.Block.GetHeight() {
+							return fmt.Errorf("height mismatch on seq %v", curBlock.Msg.GetSequence())
 						}
 					} else {
-						if prevBlock.GetHash() != curBlock.GetPrevHash() {
-							return fmt.Errorf("hash mismatch on seq %v", curBlock.GetSequence())
+						if prevBlock.GetHash() != curBlock.Block.GetPrevHash() {
+							return fmt.Errorf("hash mismatch on seq %v", curBlock.Msg.GetSequence())
 						}
-						if prevBlock.GetHeight() >= curBlock.GetHeight() {
-							return fmt.Errorf("height mismatch on seq %v", curBlock.GetSequence())
+						if prevBlock.GetHeight() >= curBlock.Block.GetHeight() {
+							return fmt.Errorf("height mismatch on seq %v", curBlock.Msg.GetSequence())
 						}
-						if curBlock.GetType() != messages.Announcement {
-							return fmt.Errorf("near v3 block on seq %d expected to be announcement but it's not", curBlock.GetSequence())
+						if curBlock.Block.GetBlockType() != blocks.Announcement {
+							return fmt.Errorf("near v3 block on seq %d expected to be announcement but it's not", curBlock.Msg.GetSequence())
 						}
 					}
 				}
 			}
 			mb := &messagebackup.MessageBackup{
 				Headers:  make(map[string]*messagebackup.HeaderValues),
-				UnixNano: uint64(curBlock.GetTimestamp().UnixNano()),
-				Data:     curBlock.GetData(),
-				Sequence: curBlock.GetSequence(),
+				UnixNano: uint64(curBlock.Msg.GetTimestamp().UnixNano()),
+				Data:     curBlock.Msg.GetData(),
+				Sequence: curBlock.Msg.GetSequence(),
 			}
-			for header, values := range curBlock.GetHeader() {
+			for header, values := range curBlock.Msg.GetHeader() {
 				mb.Headers[header] = &messagebackup.HeaderValues{Values: values}
 			}
 			data, err := mb.MarshalVT()
 			if err != nil {
-				return fmt.Errorf("can't marshal new block on seq %v: %w", curBlock.GetSequence(), err)
+				return fmt.Errorf("can't marshal new block on seq %v: %w", curBlock.Msg.GetSequence(), err)
 			}
 			if err := sb.Chunks.Write(l, data); err != nil {
-				return fmt.Errorf("can't write new block on seq %v: %w", curBlock.GetSequence(), err)
+				return fmt.Errorf("can't write new block on seq %v: %w", curBlock.Msg.GetSequence(), err)
 			}
-			prevBlock = curBlock.GetBlock()
+			prevBlock = curBlock.Block
 			l++
 		}
 	}

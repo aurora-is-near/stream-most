@@ -1,8 +1,8 @@
-package messages
+package blocks
 
-type MessageType uint64
+type BlockType uint64
 
-func (t MessageType) String() string {
+func (t BlockType) String() string {
 	switch t {
 	case Announcement:
 		return "[H]"
@@ -14,7 +14,7 @@ func (t MessageType) String() string {
 }
 
 const (
-	Announcement MessageType = iota
+	Announcement BlockType = iota
 	Shard
 	Unknown
 )

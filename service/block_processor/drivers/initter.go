@@ -18,8 +18,8 @@ func Infer(tp DriverType, _, output stream.Interface) Driver {
 				panic(err)
 			}
 		} else {
-			logrus.Info("Last fully written block's height is ", lastWrittenBlock.GetHeight())
-			lastWrittenHash = util.Ptr(lastWrittenBlock.GetHash())
+			logrus.Info("Last fully written block's height is ", lastWrittenBlock.Block.GetHeight())
+			lastWrittenHash = util.Ptr(lastWrittenBlock.Block.GetHash())
 		}
 
 		return near_v3.NewNearV3((&near_v3.Options{

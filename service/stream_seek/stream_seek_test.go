@@ -3,8 +3,8 @@ package stream_seek
 import (
 	"testing"
 
+	"github.com/aurora-is-near/stream-most/domain/blocks"
 	"github.com/aurora-is-near/stream-most/domain/formats"
-	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream/fake"
 	"github.com/aurora-is-near/stream-most/testing/u"
 	"github.com/aurora-is-near/stream-most/util"
@@ -26,11 +26,11 @@ func TestStreamSeek_SeekLastFullyWrittenBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if announcement.GetType() != messages.Announcement {
+	if announcement.Block.GetBlockType() != blocks.Announcement {
 		t.Error("not an announcement")
 	}
 
-	if announcement.GetSequence() != 1 {
+	if announcement.Msg.GetSequence() != 1 {
 		t.Error("bad sequence")
 	}
 
@@ -59,10 +59,10 @@ func TestStreamSeek_SeekShards(t *testing.T) {
 	}
 
 	for _, v := range shards {
-		if v.GetType() != messages.Shard {
+		if v.Block.GetBlockType() != blocks.Shard {
 			t.Error("not a shard")
 		}
-		if !(v.GetSequence() == 2) && !(v.GetSequence() == 3) {
+		if !(v.Msg.GetSequence() == 2) && !(v.Msg.GetSequence() == 3) {
 			t.Error("bad sequence")
 		}
 	}

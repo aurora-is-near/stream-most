@@ -110,7 +110,7 @@ func (sr *StreamRestore) push() error {
 
 	var tipBlock blocks.Block
 	if tip != nil {
-		tipBlock = tip.GetBlock()
+		tipBlock = tip.Block
 	}
 
 	seq, err := sr.findStartChunkSeq(tipBlock)
@@ -165,9 +165,9 @@ func (sr *StreamRestore) push() error {
 			}
 			bb := out.blockBackup
 			lastReadSeq = bb.Sequence
-			switch ack, err := writer.WriteWithAck(context.Background(), &messages.AbstractBlockMessage{
+			switch ack, err := writer.WriteWithAck(context.Background(), &messages.BlockMessage{
 				Block: bb.Block,
-				NatsMessage: &messages.RawStreamMessage{
+				Msg: &messages.RawStreamMessage{
 					RawStreamMsg: &jetstream.RawStreamMsg{
 						Data: bb.MessageBackup.Data,
 						// TODO: headers

@@ -69,7 +69,7 @@ func (b *Validator) Run(ctx context.Context) error {
 			logrus.Error("ErrorInData: cannot cast data to *observer.WrappedMessage")
 		}
 
-		logrus.Errorf("Error in data on sequence %d: %v", d.Message.GetSequence(), d.Wraps)
+		logrus.Errorf("Error in data on sequence %d: %v", d.Message.Msg.GetSequence(), d.Wraps)
 	})
 
 	<-processor.Run(ctx) // Validation driver doesn't write anything and then closes

@@ -9,8 +9,8 @@ import (
 )
 
 type Jitter struct {
-	input    chan messages.BlockMessage
-	output   chan messages.BlockMessage
+	input    chan *messages.BlockMessage
+	output   chan *messages.BlockMessage
 	observer *observer.Observer
 
 	delayedMessages *DelayedMessagesHeap
@@ -32,7 +32,7 @@ func (j *Jitter) BindObserver(obs *observer.Observer) {
 	j.observer = obs
 }
 
-func (j *Jitter) Bind(input chan messages.BlockMessage, output chan messages.BlockMessage) {
+func (j *Jitter) Bind(input chan *messages.BlockMessage, output chan *messages.BlockMessage) {
 	j.input = input
 	j.output = output
 }
@@ -63,11 +63,11 @@ func (j *Jitter) Run() {
 	}
 }
 
-func (j *Jitter) shouldDropout(_ messages.BlockMessage) bool {
+func (j *Jitter) shouldDropout(_ *messages.BlockMessage) bool {
 	return rand.Float64() < j.opts.DropoutChance
 }
 
-func (j *Jitter) shouldDelay(_ messages.BlockMessage) (bool, uint64) {
+func (j *Jitter) shouldDelay(_ *messages.BlockMessage) (bool, uint64) {
 	should := rand.Float64() < j.opts.DelayChance
 	if !should {
 		return false, 0

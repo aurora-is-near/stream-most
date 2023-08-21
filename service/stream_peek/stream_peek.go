@@ -21,7 +21,7 @@ type StreamPeek struct {
 	stream stream.Interface
 }
 
-func (p *StreamPeek) GetTip() (messages.BlockMessage, error) {
+func (p *StreamPeek) GetTip() (*messages.BlockMessage, error) {
 	info, err := p.stream.GetInfo(context.Background())
 	if err != nil {
 		return nil, err
@@ -67,7 +67,7 @@ func (p *StreamPeek) GetTipHeight() (uint64, error) {
 		return 0, errors2.Wrap(ErrCorruptedTip, err.Error())
 	}
 
-	return message.GetHeight(), nil
+	return message.Block.GetHeight(), nil
 }
 
 func NewStreamPeek(streamInterface stream.Interface) *StreamPeek {

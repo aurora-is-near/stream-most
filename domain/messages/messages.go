@@ -15,14 +15,7 @@ type NatsMessage interface {
 	GetTimestamp() time.Time
 }
 
-type BlockMessage interface {
-	blocks.Block
-	NatsMessage
-
-	GetBlock() blocks.Block
-	GetNatsMessage() NatsMessage
-
-	GetAnnouncement() blocks.BlockAnnouncement
-	GetShard() blocks.BlockShard
-	GetType() MessageType
+type BlockMessage struct {
+	Block blocks.Block
+	Msg   NatsMessage
 }

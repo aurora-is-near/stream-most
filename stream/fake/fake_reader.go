@@ -44,14 +44,14 @@ func (r *Reader[T]) Stop() {}
 func (r *Reader[T]) fill() {
 	r.output = make(chan *reader.DecodedMsg[T], len(r.input.(*Stream).GetArray()))
 	for _, item := range r.input.(*Stream).GetArray() {
-		if item.GetSequence() < r.opts.StartSeq {
+		if item.Msg.GetSequence() < r.opts.StartSeq {
 			continue
 		}
-		if r.opts.EndSeq > 0 && item.GetSequence() >= r.opts.EndSeq {
+		if r.opts.EndSeq > 0 && item.Msg.GetSequence() >= r.opts.EndSeq {
 			break
 		}
-		value, decErr := r.decodeFn(item)
-		r.output <- reader.NewPredecodedMsg[T](item, value, decErr)
+		value, decErr := r.decodeFn(item.Msg)
+		r.output <- reader.NewPredecodedMsg[T](item.Msg, value, decErr)
 	}
 	close(r.output)
 }

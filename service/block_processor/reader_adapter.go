@@ -9,7 +9,7 @@ import (
 	"github.com/aurora-is-near/stream-most/stream/reader"
 )
 
-func NewProcessorWithReader(ctx context.Context, reader reader.IReader[messages.BlockMessage], driver drivers.Driver, parseTolerance uint) (*Processor, chan error) {
+func NewProcessorWithReader(ctx context.Context, reader reader.IReader[*messages.BlockMessage], driver drivers.Driver, parseTolerance uint) (*Processor, chan error) {
 	in, errors := adapters.ReaderToBlockMessage(ctx, reader, parseTolerance)
 	f := NewProcessor(in, driver)
 	return f, errors

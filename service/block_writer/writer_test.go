@@ -19,7 +19,7 @@ func TestWriter(t *testing.T) {
 
 	writer := NewWriter(NewOptions().WithDefaults().Validated(), outputStream, peeker)
 
-	msgs := []messages.BlockMessage{
+	msgs := []*messages.BlockMessage{
 		u.Announcement(1, []bool{true, true, true}, 1, "AAA", "000"),
 		u.Shard(2, 1, "AAA", "000", 1),
 		u.Shard(3, 1, "AAA", "000", 2),
