@@ -1,56 +1,21 @@
 package blocks
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-type testBlock struct {
-	height    uint64
-	blockType BlockType
-	shardID   uint64
-}
-
-func newTestBlock(height uint64, blockType BlockType, shardID uint64) *testBlock {
-	return &testBlock{
-		height:    height,
-		blockType: blockType,
-		shardID:   shardID,
+func newTestBlock(height uint64, blockType BlockType, shardID uint64) *AbstractBlock {
+	return &AbstractBlock{
+		Height:    height,
+		BlockType: blockType,
+		ShardID:   shardID,
 	}
 }
 
-func (t *testBlock) GetHash() string {
-	return ""
-}
-
-func (t *testBlock) GetPrevHash() string {
-	return ""
-}
-
-func (t *testBlock) GetHeight() uint64 {
-	return t.height
-}
-
-func (t *testBlock) GetBlockType() BlockType {
-	return t.blockType
-}
-
-func (t *testBlock) GetShardMask() []bool {
-	return nil
-}
-
-func (t *testBlock) GetShardID() uint64 {
-	return t.shardID
-}
-
-func (t *testBlock) String() string {
-	return fmt.Sprintf("%s:%d.%d", t.blockType.String(), t.height, t.shardID)
-}
-
 func TestLess(t *testing.T) {
-	blockGroups := [][]*testBlock{
+	blockGroups := [][]*AbstractBlock{
 		{
 			newTestBlock(100, Announcement, 0),
 			newTestBlock(100, Announcement, 0),
