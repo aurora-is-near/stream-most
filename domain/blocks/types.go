@@ -1,6 +1,6 @@
 package blocks
 
-type BlockType uint64
+type BlockType int
 
 func (t BlockType) String() string {
 	switch t {
@@ -14,7 +14,7 @@ func (t BlockType) String() string {
 }
 
 const (
-	Announcement BlockType = iota
-	Shard
-	Unknown
+	Announcement BlockType = 0
+	Shard        BlockType = 1
+	Unknown      BlockType = 2
 )

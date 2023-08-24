@@ -23,30 +23,30 @@ type AbstractBlock struct {
 	ShardID   uint64
 }
 
-func (t *AbstractBlock) GetHash() string {
-	return t.Hash
+func (b *AbstractBlock) GetHash() string {
+	return b.Hash
 }
 
-func (t *AbstractBlock) GetPrevHash() string {
-	return t.PrevHash
+func (b *AbstractBlock) GetPrevHash() string {
+	return b.PrevHash
 }
 
-func (t *AbstractBlock) GetHeight() uint64 {
-	return t.Height
+func (b *AbstractBlock) GetHeight() uint64 {
+	return b.Height
 }
 
-func (t *AbstractBlock) GetBlockType() BlockType {
-	return t.BlockType
+func (b *AbstractBlock) GetBlockType() BlockType {
+	return b.BlockType
 }
 
-func (t *AbstractBlock) GetShardMask() []bool {
-	return t.ShardMask
+func (b *AbstractBlock) GetShardMask() []bool {
+	return b.ShardMask
 }
 
-func (t *AbstractBlock) GetShardID() uint64 {
-	return t.ShardID
+func (b *AbstractBlock) GetShardID() uint64 {
+	return b.ShardID
 }
 
-func (t *AbstractBlock) String() string {
-	return fmt.Sprintf("%s:%d.%d", t.BlockType.String(), t.Height, t.ShardID)
+func (b *AbstractBlock) String() string {
+	return fmt.Sprintf("%s:%d.%d", b.BlockType.String(), b.Height, b.ShardID)
 }

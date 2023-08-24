@@ -4,9 +4,11 @@ import (
 	"fmt"
 
 	"github.com/aurora-is-near/stream-most/domain/blocks"
+	"github.com/aurora-is-near/stream-most/domain/formats/headers"
 	v2 "github.com/aurora-is-near/stream-most/domain/formats/v2"
 	v3 "github.com/aurora-is-near/stream-most/domain/formats/v3"
 	"github.com/aurora-is-near/stream-most/domain/messages"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 type Facade struct {
@@ -23,10 +25,12 @@ func (f *Facade) GetFormat() FormatType {
 
 func (f *Facade) ParseBlock(data []byte) (blocks.Block, error) {
 	switch f.format {
-	case AuroraV2:
-		return v2.DecodeAuroraBlock(data)
+	case HeadersOnly:
+		return nil, fmt.Errorf("can't parse block from message data, selected format is headers-only")
 	case NearV2:
 		return v2.DecodeNearBlock(data)
+	case AuroraV2:
+		return v2.DecodeAuroraBlock(data)
 	case NearV3:
 		return v3.DecodeProtoBlock(data)
 	default:
@@ -34,10 +38,23 @@ func (f *Facade) ParseBlock(data []byte) (blocks.Block, error) {
 	}
 }
 
+func (f *Facade) ParseMsgID(msgID string) (blocks.Block, error) {
+	return headers.ParseMsgID(msgID)
+}
+
 func (f *Facade) ParseMsg(msg messages.NatsMessage) (*messages.BlockMessage, error) {
-	block, err := f.ParseBlock(msg.GetData())
+	var err error
+	var block blocks.Block
+
+	switch f.format {
+	case HeadersOnly:
+		block, err = f.ParseMsgID(msg.GetHeader().Get(jetstream.MsgIDHeader))
+	default:
+		block, err = f.ParseBlock(msg.GetData())
+	}
+
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse block from message data: %w", err)
+		return nil, fmt.Errorf("unable to parse block: %w", err)
 	}
 
 	return &messages.BlockMessage{
