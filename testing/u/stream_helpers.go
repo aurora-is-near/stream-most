@@ -5,20 +5,18 @@ import (
 
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/transport"
+	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 )
 
 func DefaultLocalStream() (stream.Interface, error) {
 	s, err := stream.Connect(&stream.Options{
-		Nats: &transport.Options{
-			Endpoints: []string{
-				"nats://localhost:4222/",
-			},
-			TimeoutMs:           100000,
-			PingIntervalMs:      600000,
-			MaxPingsOutstanding: 5,
-			LogTag:              "input",
-			Name:                "test-bridge-input",
+		Nats: &transport.NATSConfig{
+			LogTag: "input",
+			Options: transport.MustApplyNatsOptions(
+				transport.RecommendedNatsOptions(),
+				nats.Name("test-bridge-input"),
+			),
 		},
 		Stream:        "testing_stream",
 		RequestWaitMs: 50000,
@@ -37,16 +35,14 @@ func DefaultLocalStream() (stream.Interface, error) {
 
 func DefaultProductionStream() (stream.Interface, error) {
 	return stream.Connect(&stream.Options{
-		Nats: &transport.Options{
-			Endpoints: []string{
-				"tls://developer.nats.backend.aurora.dev:4222/",
-			},
-			Creds:               "../../../production_developer.creds",
-			TimeoutMs:           100000,
-			PingIntervalMs:      600000,
-			MaxPingsOutstanding: 5,
-			LogTag:              "input",
-			Name:                "test-bridge-input",
+		Nats: &transport.NATSConfig{
+			OverrideURL:   "tls://developer.nats.backend.aurora.dev:4222/",
+			OverrideCreds: "../../../production_developer.creds",
+			LogTag:        "input",
+			Options: transport.MustApplyNatsOptions(
+				transport.RecommendedNatsOptions(),
+				nats.Name("test-bridge-input"),
+			),
 		},
 		Stream:        "v3_mainnet_near_blocks",
 		RequestWaitMs: 50000,

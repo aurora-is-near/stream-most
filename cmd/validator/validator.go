@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+
 	"github.com/aurora-is-near/stream-most/configs"
 	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/monitor"
@@ -10,7 +12,6 @@ import (
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/support/when_interrupted"
 	"github.com/sirupsen/logrus"
-	"os"
 )
 
 func run(ctx context.Context, config Config) error {
@@ -35,7 +36,7 @@ func main() {
 
 	config := Config{}
 	configs.ReadTo("cmd/validator/config.json", &config)
-	config.Input.Nats.Name = "stream-most-validator"
+	config.Input.Nats.Options.Name = "stream-most-validator"
 
 	go monitor.NewMetricsServer(config.Monitoring).Serve(ctx, true)
 

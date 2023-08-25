@@ -3,7 +3,7 @@ package stream
 import "github.com/aurora-is-near/stream-most/transport"
 
 type Options struct {
-	Nats          *transport.Options
+	Nats          *transport.NATSConfig
 	Stream        string
 	RequestWaitMs uint
 	WriteWaitMs   uint

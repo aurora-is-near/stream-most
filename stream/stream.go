@@ -3,7 +3,6 @@ package stream
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/aurora-is-near/stream-most/domain/messages"
@@ -148,9 +147,9 @@ func Connect(options *Options) (Interface, error) {
 		writeWait:   time.Millisecond * time.Duration(options.WriteWaitMs),
 	}
 
-	s.Infof("Connecting to NATS at %s", strings.Join(options.Nats.Endpoints, ", "))
+	s.Infof("Connecting to NATS at %s", options.Nats.OverrideURL)
 	var err error
-	s.nc, err = transport.NewConnection(options.Nats.WithDefaults())
+	s.nc, err = transport.ConnectNATS(options.Nats)
 	if err != nil {
 		err = fmt.Errorf("unable to connect to NATS: %w", err)
 		s.Errorf("%v", err)

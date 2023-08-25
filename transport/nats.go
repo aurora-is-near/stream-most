@@ -1,31 +1,37 @@
 package transport
 
 import (
-	"strings"
-	"time"
+	"fmt"
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/nats-io/jsm.go/natscontext"
 	"github.com/nats-io/nats.go"
 )
 
 type NatsConnection struct {
 	*logrus.Entry
 
-	opts       *Options
+	config     *NATSConfig
 	connection *nats.Conn
 	closed     chan error
 }
 
 func (c *NatsConnection) connect() error {
-	options := []nats.Option{
-		nats.Name(c.opts.Name),
-		nats.ReconnectWait(time.Second / 5),
-		nats.PingInterval(time.Duration(c.opts.PingIntervalMs) * time.Millisecond),
-		nats.RetryOnFailedConnect(true),
-		nats.MaxReconnects(-1),
-		nats.MaxPingsOutstanding(c.opts.MaxPingsOutstanding),
-		nats.Timeout(time.Duration(c.opts.TimeoutMs) * time.Millisecond),
+	ctxOptions := []natscontext.Option{}
+	if c.config.OverrideURL != "" {
+		ctxOptions = append(ctxOptions, natscontext.WithServerURL(c.config.OverrideURL))
+	}
+	if c.config.OverrideCreds != "" {
+		ctxOptions = append(ctxOptions, natscontext.WithCreds(c.config.OverrideCreds))
+	}
+
+	natsCtx, err := natscontext.New(c.config.ContextName, true, ctxOptions...)
+	if err != nil {
+		return fmt.Errorf("unable to create or load context: %w", err)
+	}
+
+	natsOptsList, err := natsCtx.NATSOptions(
 		nats.ErrorHandler(func(nc *nats.Conn, sub *nats.Subscription, err error) {
 			c.Error(err)
 		}),
@@ -44,34 +50,35 @@ func (c *NatsConnection) connect() error {
 			}
 			c.closed <- err
 		}),
-	}
-	if len(c.opts.Creds) > 0 {
-		options = append(options, nats.UserCredentials(c.opts.Creds))
+	)
+	if err != nil {
+		return fmt.Errorf("unable to get NATS options from NATS context: %w", err)
 	}
 
-	var err error
-	c.connection, err = nats.Connect(strings.Join(c.opts.Endpoints, ", "), options...)
+	opts := c.config.Options
+	opts.Servers = processUrlString(natsCtx.ServerURL())
+	if opts, err = ApplyNatsOptions(opts, natsOptsList...); err != nil {
+		return err
+	}
+
+	c.connection, err = opts.Connect()
 	return err
 }
 
-func NewConnection(opts *Options) (*NatsConnection, error) {
+func ConnectNATS(config *NATSConfig) (*NatsConnection, error) {
 	conn := &NatsConnection{
-		Entry: logrus.New().
-			WithField("component", "nats").
-			WithField("log_tag", opts.LogTag),
-
-		opts:   opts,
+		Entry:  logrus.New().WithField("nats", config.LogTag),
+		config: config,
 		closed: make(chan error, 1),
 	}
 
 	conn.Info("Connecting to NATS...")
-	err := conn.connect()
-	if err != nil {
+	if err := conn.connect(); err != nil {
 		conn.Errorf("Unable to connect to NATS: %v", err)
 		return nil, err
 	}
 
-	conn.Info("Connecting successfully")
+	conn.Info("Connected successfully")
 	return conn, nil
 }
 

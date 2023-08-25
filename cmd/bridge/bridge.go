@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"os"
+
 	"github.com/aurora-is-near/stream-most/configs"
 	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/monitor"
@@ -11,7 +13,6 @@ import (
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/support/when_interrupted"
 	"github.com/sirupsen/logrus"
-	"os"
 )
 
 // run returns true if any write happened while running
@@ -55,8 +56,8 @@ func main() {
 
 	config := Config{}
 	configs.ReadTo("cmd/bridge/config.json", &config)
-	config.Input.Nats.Name = "stream-most"
-	config.Output.Nats.Name = "stream-most"
+	config.Input.Nats.Options.Name = "stream-most"
+	config.Output.Nats.Options.Name = "stream-most"
 
 	formats.UseFormat(config.MessagesFormat)
 

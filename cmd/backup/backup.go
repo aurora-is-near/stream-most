@@ -41,7 +41,7 @@ func main() {
 
 	config := Config{}
 	configs.ReadTo("cmd/backup/config.json", &config)
-	config.Input.Nats.Name = "stream-most"
+	config.Input.Nats.Options.Name = "stream-most"
 
 	formats.UseFormat(config.MessagesFormat)
 

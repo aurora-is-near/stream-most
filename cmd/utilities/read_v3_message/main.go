@@ -12,28 +12,19 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func chooseConfig(env string) *transport.Options {
+func chooseConfig(env string) *transport.NATSConfig {
 	switch env {
 	case "local":
-		return &transport.Options{
-			Endpoints: []string{
-				"nats://localhost:4222/",
-			},
-			TimeoutMs:           10000,
-			PingIntervalMs:      600000,
-			MaxPingsOutstanding: 5,
-			LogTag:              "input",
+		return &transport.NATSConfig{
+			LogTag:  "input",
+			Options: transport.RecommendedNatsOptions(),
 		}
 	case "prod":
-		return &transport.Options{
-			Endpoints: []string{
-				"tls://developer.nats.backend.aurora.dev:4222/",
-			},
-			Creds:               "production_developer.creds",
-			TimeoutMs:           10000,
-			PingIntervalMs:      600000,
-			MaxPingsOutstanding: 5,
-			LogTag:              "input",
+		return &transport.NATSConfig{
+			OverrideURL:   "tls://developer.nats.backend.aurora.dev:4222/",
+			OverrideCreds: "production_developer.creds",
+			LogTag:        "input",
+			Options:       transport.RecommendedNatsOptions(),
 		}
 	}
 
