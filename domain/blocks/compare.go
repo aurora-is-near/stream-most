@@ -23,3 +23,13 @@ func Less(x, y Block) bool {
 		return false
 	}
 }
+
+func Equal(x, y Block) bool {
+	if x.GetHeight() != y.GetHeight() || x.GetBlockType() != y.GetBlockType() {
+		return false
+	}
+	if x.GetBlockType() == Shard {
+		return x.GetShardID() == y.GetShardID()
+	}
+	return true
+}

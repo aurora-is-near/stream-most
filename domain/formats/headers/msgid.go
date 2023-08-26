@@ -55,7 +55,7 @@ func ParseMsgID(msgID string) (*MsgIDBlock, error) {
 
 	shard, err := strconv.ParseUint(shardStr, 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse block height: %w", err)
+		return nil, fmt.Errorf("unable to parse block shard: %w", err)
 	}
 
 	return &MsgIDBlock{
