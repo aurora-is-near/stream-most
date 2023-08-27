@@ -1,7 +1,10 @@
 package verifier
 
 import (
+	"fmt"
+
 	"github.com/aurora-is-near/stream-most/domain/blocks"
+	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 )
 
@@ -100,4 +103,39 @@ func (s *Sequential) getNextNeededShardID(b *messages.BlockMessage) (uint64, boo
 	}
 
 	return 0, false
+}
+
+func SequentialForFormat(format formats.FormatType, headersOnly bool, shardFilter []bool) (*Sequential, error) {
+	switch format {
+	case formats.HeadersOnly:
+		return &Sequential{
+			AllowHeightGaps:       true,
+			CheckBlocksCompletion: false,
+			CheckHashes:           false,
+			ShardFilter:           nil,
+		}, nil
+	case formats.NearV2:
+		return &Sequential{
+			AllowHeightGaps:       true,
+			CheckBlocksCompletion: false,
+			CheckHashes:           !headersOnly,
+			ShardFilter:           nil,
+		}, nil
+	case formats.AuroraV2:
+		return &Sequential{
+			AllowHeightGaps:       false,
+			CheckBlocksCompletion: false,
+			CheckHashes:           !headersOnly,
+			ShardFilter:           nil,
+		}, nil
+	case formats.NearV3:
+		return &Sequential{
+			AllowHeightGaps:       true,
+			CheckBlocksCompletion: !headersOnly,
+			CheckHashes:           !headersOnly,
+			ShardFilter:           shardFilter,
+		}, nil
+	default:
+		return nil, fmt.Errorf("unable to infer sequential verifier for format #%d (%s)", int(format), format.String())
+	}
 }
