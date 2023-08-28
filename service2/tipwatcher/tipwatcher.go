@@ -62,9 +62,6 @@ func (w *TipWatcher) run(input stream.Interface, refreshInterval time.Duration) 
 			prevInfo := w.lastInfo.Load()
 			w.lastInfo.Store(FetchTip(w.ctx, input))
 			close(prevInfo.outdated)
-			if w.lastInfo.Load().err != nil {
-				return
-			}
 		}
 	}
 }
