@@ -52,7 +52,7 @@ func Start[T any](ctx context.Context, input stream.Interface, opts *Options, de
 		Entry: logrus.New().
 			WithField("component", "reader").
 			WithField("stream", input.Name()).
-			WithField("log_tag", input.Options().Nats.LogTag),
+			WithField("nats", input.Options().Nats.LogTag),
 
 		opts:          opts,
 		input:         input,
@@ -60,8 +60,8 @@ func Start[T any](ctx context.Context, input stream.Interface, opts *Options, de
 		output:        make(chan *DecodedMsg[T], opts.OutputBufferSize),
 		decodingQueue: make(chan *DecodedMsg[T], opts.DecodingQueueSize),
 	}
-	r.ctx, r.cancel = context.WithCancel(ctx)
-	r.decodeCtx, r.decodeCancel = context.WithCancel(ctx)
+	r.ctx, r.cancel = context.WithCancel(context.Background())
+	r.decodeCtx, r.decodeCancel = context.WithCancel(context.Background())
 
 	r.wg.Add(int(r.opts.MaxDecoders))
 	for i := 0; i < int(r.opts.MaxDecoders); i++ {
@@ -250,7 +250,7 @@ func (r *Reader[T]) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64
 		return true, nil
 	}
 
-	if !r.tryWait(time.Millisecond * time.Duration(r.opts.MaxSilenceMs)) {
+	if !r.tryWait(r.opts.MaxSilence) {
 		return true, nil
 	}
 
@@ -294,7 +294,7 @@ func (r *Reader[T]) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64
 		return true, nil
 	}
 
-	if !r.tryWait(time.Millisecond * time.Duration(r.opts.MaxSilenceMs)) {
+	if !r.tryWait(r.opts.MaxSilence) {
 		return true, nil
 	}
 

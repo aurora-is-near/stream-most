@@ -38,7 +38,6 @@ func main() {
 		Nats:   chooseConfig(env),
 		Stream: "myblocks",
 		//Stream:        "v3_mainnet_near_blocks",
-		RequestWaitMs: 5000,
 	})
 	if err != nil {
 		panic(err)

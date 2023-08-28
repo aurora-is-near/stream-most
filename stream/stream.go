@@ -3,7 +3,6 @@ package stream
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/transport"
@@ -34,12 +33,10 @@ type Interface interface {
 type Stream struct {
 	*logrus.Entry
 
-	options     *Options
-	requestWait time.Duration
-	writeWait   time.Duration
-	nc          *transport.NatsConnection
-	js          jetstream.JetStream
-	stream      jetstream.Stream
+	options *Options
+	nc      *transport.NatsConnection
+	js      jetstream.JetStream
+	stream  jetstream.Stream
 }
 
 func (s *Stream) Options() *Options {
@@ -70,7 +67,7 @@ func (s *Stream) Stream() jetstream.Stream {
 func (s *Stream) GetConfigSubjects(ctx context.Context) ([]string, error) {
 	next := s.Name()
 	for {
-		tctx, cancel := context.WithTimeout(ctx, s.requestWait)
+		tctx, cancel := context.WithTimeout(ctx, s.options.RequestWait)
 		str, err := s.js.Stream(tctx, next)
 		cancel()
 		if err != nil {
@@ -86,13 +83,13 @@ func (s *Stream) GetConfigSubjects(ctx context.Context) ([]string, error) {
 }
 
 func (s *Stream) GetInfo(ctx context.Context) (*jetstream.StreamInfo, error) {
-	tctx, cancel := context.WithTimeout(ctx, s.requestWait)
+	tctx, cancel := context.WithTimeout(ctx, s.options.RequestWait)
 	defer cancel()
 	return s.stream.Info(tctx)
 }
 
 func (s *Stream) Get(ctx context.Context, seq uint64) (messages.NatsMessage, error) {
-	tctx, cancel := context.WithTimeout(ctx, s.requestWait)
+	tctx, cancel := context.WithTimeout(ctx, s.options.RequestWait)
 	defer cancel()
 	msg, err := s.stream.GetMsg(tctx, seq)
 	if err != nil {
@@ -102,7 +99,7 @@ func (s *Stream) Get(ctx context.Context, seq uint64) (messages.NatsMessage, err
 }
 
 func (s *Stream) GetLastMsgForSubject(ctx context.Context, subject string) (messages.NatsMessage, error) {
-	tctx, cancel := context.WithTimeout(ctx, s.requestWait)
+	tctx, cancel := context.WithTimeout(ctx, s.options.RequestWait)
 	defer cancel()
 	msg, err := s.stream.GetLastMsgForSubject(tctx, subject)
 	if err != nil {
@@ -112,7 +109,7 @@ func (s *Stream) GetLastMsgForSubject(ctx context.Context, subject string) (mess
 }
 
 func (s *Stream) Write(ctx context.Context, msg *nats.Msg, opts ...jetstream.PublishOpt) (*jetstream.PubAck, error) {
-	tctx, cancel := context.WithTimeout(ctx, s.writeWait)
+	tctx, cancel := context.WithTimeout(ctx, s.options.WriteWait)
 	defer cancel()
 	return s.js.PublishMsg(tctx, msg, append(opts, jetstream.WithExpectStream(s.Name()))...)
 }
@@ -140,11 +137,9 @@ func Connect(options *Options) (Interface, error) {
 	s := &Stream{
 		Entry: logrus.
 			WithField("stream", options.Stream).
-			WithField("log_tag", options.Nats.LogTag),
+			WithField("nats", options.Nats.LogTag),
 
-		options:     options,
-		requestWait: time.Millisecond * time.Duration(options.RequestWaitMs),
-		writeWait:   time.Millisecond * time.Duration(options.WriteWaitMs),
+		options: options,
 	}
 
 	s.Infof("Connecting to NATS at %s", options.Nats.OverrideURL)
@@ -168,7 +163,7 @@ func Connect(options *Options) (Interface, error) {
 	s.Infof("JetStream connected")
 
 	s.Infof("Getting stream '%s'", options.Stream)
-	streamRequestCtx, cancelStreamRequest := context.WithTimeout(context.Background(), s.requestWait)
+	streamRequestCtx, cancelStreamRequest := context.WithTimeout(context.Background(), s.options.RequestWait)
 	defer cancelStreamRequest()
 	s.stream, err = s.js.Stream(streamRequestCtx, options.Stream)
 	if err != nil {

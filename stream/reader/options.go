@@ -1,13 +1,16 @@
 package reader
 
-import "runtime"
+import (
+	"runtime"
+	"time"
+)
 
 type Options struct {
 	FilterSubjects    []string
 	StartSeq          uint64
 	EndSeq            uint64
 	StrictStart       bool
-	MaxSilenceMs      uint
+	MaxSilence        time.Duration
 	MaxDecoders       uint
 	OutputBufferSize  uint
 	DecodingQueueSize uint
@@ -20,8 +23,8 @@ func (opts Options) WithDefaults() *Options {
 	if opts.StartSeq == 0 {
 		opts.StartSeq = 1
 	}
-	if opts.MaxSilenceMs == 0 {
-		opts.MaxSilenceMs = 5000
+	if opts.MaxSilence == 0 {
+		opts.MaxSilence = time.Second * 5
 	}
 
 	maxprocs := uint(runtime.GOMAXPROCS(0))

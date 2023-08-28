@@ -2,6 +2,7 @@ package u
 
 import (
 	"context"
+	"time"
 
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/transport"
@@ -18,8 +19,8 @@ func DefaultLocalStream() (stream.Interface, error) {
 				nats.Name("test-bridge-input"),
 			),
 		},
-		Stream:        "testing_stream",
-		RequestWaitMs: 50000,
+		Stream:      "testing_stream",
+		RequestWait: time.Second * 50,
 	})
 	errorMessage := `failed to connect to local stream, please setup localhost:4222 nats server and stream 'testing_stream'.`
 	if (s == nil) || (err != nil) {
@@ -44,7 +45,7 @@ func DefaultProductionStream() (stream.Interface, error) {
 				nats.Name("test-bridge-input"),
 			),
 		},
-		Stream:        "v3_mainnet_near_blocks",
-		RequestWaitMs: 50000,
+		Stream:      "v3_mainnet_near_blocks",
+		RequestWait: time.Second * 50,
 	})
 }
