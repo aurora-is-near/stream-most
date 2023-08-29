@@ -17,10 +17,10 @@ type TipWatcher struct {
 	wg       sync.WaitGroup
 }
 
-func StartTipWatcher(ctx context.Context, input stream.Interface, refreshInterval time.Duration) (*TipWatcher, error) {
+func StartTipWatcher(ctx context.Context, input stream.Interface, refreshInterval time.Duration) (*TipWatcher, *TipInfo, error) {
 	tipInfo := FetchTip(ctx, input)
 	if tipInfo.err != nil {
-		return nil, fmt.Errorf("can't start tip watcher: unable to fetch initial tip: %w", tipInfo.err)
+		return nil, nil, fmt.Errorf("can't start tip watcher: unable to fetch initial tip: %w", tipInfo.err)
 	}
 
 	w := &TipWatcher{}
@@ -30,7 +30,7 @@ func StartTipWatcher(ctx context.Context, input stream.Interface, refreshInterva
 	w.wg.Add(1)
 	go w.run(input, refreshInterval)
 
-	return w, nil
+	return w, tipInfo, nil
 }
 
 func (w *TipWatcher) GetTip() *TipInfo {
