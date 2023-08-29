@@ -10,6 +10,7 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/reader/monitoring"
+	"github.com/aurora-is-near/stream-most/util"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/sirupsen/logrus"
 )
@@ -250,7 +251,7 @@ func (r *Reader[T]) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64
 		return true, nil
 	}
 
-	if !r.tryWait(r.opts.MaxSilence) {
+	if !util.CtxSleep(r.ctx, r.opts.MaxSilence) {
 		return true, nil
 	}
 
@@ -294,24 +295,11 @@ func (r *Reader[T]) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64
 		return true, nil
 	}
 
-	if !r.tryWait(r.opts.MaxSilence) {
+	if !util.CtxSleep(r.ctx, r.opts.MaxSilence) {
 		return true, nil
 	}
 
 	return lastConsumedSeq.Load() > silenceCandidateSeq, nil
-}
-
-func (r *Reader[T]) tryWait(d time.Duration) bool {
-	t := time.NewTimer(d)
-	select {
-	case <-r.ctx.Done():
-		if !t.Stop() {
-			<-t.C
-		}
-		return false
-	case <-t.C:
-		return true
-	}
 }
 
 func (r *Reader[T]) runDecoder() {
