@@ -30,3 +30,8 @@ func (f FormatType) String() string {
 	}
 	return "Unknown"
 }
+
+func GetFormatByName(name string) (FormatType, bool) {
+	t, ok := formatsByName[name]
+	return t, ok
+}
