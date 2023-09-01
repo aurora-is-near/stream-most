@@ -36,13 +36,13 @@ func NewAuto() *Workpool {
 	return New(0, 8192)
 }
 
-func (w *Workpool) Add(ctx context.Context, job func(context.Context)) error {
+func (w *Workpool) Add(ctx context.Context, job func(context.Context)) bool {
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return false
 	case w.jobs <- job:
+		return true
 	}
-	return nil
 }
 
 func (w *Workpool) StopImmediately(waitStop bool) {
