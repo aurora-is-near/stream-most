@@ -1,17 +1,16 @@
 package fake
 
 import (
-	"context"
 	"testing"
+	"time"
 
-	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream/reader"
 	"github.com/aurora-is-near/stream-most/testing/u"
 	"github.com/stretchr/testify/require"
 )
 
 func TestFakeReader(t *testing.T) {
-	reader.UseFake(StartReader[struct{}])
+	reader.UseFake(StartReader)
 
 	fakeInput := &Stream{}
 	fakeInput.Add(
@@ -22,24 +21,24 @@ func TestFakeReader(t *testing.T) {
 		u.Announcement(5, []bool{true, true, true}, 5, "hash", "prev_hash"),
 	)
 
-	reader, err := reader.Start(context.Background(), fakeInput, &reader.Options{StartSeq: 2, EndSeq: 4},
-		func(msg messages.NatsMessage) (struct{}, error) {
-			return struct{}{}, nil
-		},
-	)
-	if err != nil {
-		panic(err)
-	}
+	receiver := NewFakeReceiver(len(fakeInput.GetArray()))
 
-	resultSequences := []uint64{}
-	for msg := range reader.Output() {
-		resultSequences = append(resultSequences, msg.Msg().GetSequence())
+	r, err := StartReader(fakeInput, &reader.Options{StartSeq: 2, EndSeq: 5}, receiver)
+	require.NoError(t, err)
+	defer r.Stop(true)
+
+	result, err := receiver.GetAll(10, time.Second)
+	require.NoError(t, err)
+
+	resultSeq := []uint64{}
+	for _, msg := range result {
+		resultSeq = append(resultSeq, msg.GetSequence())
 	}
 
 	require.Equal(
 		t,
-		[]uint64{2, 3},
-		resultSequences,
+		[]uint64{2, 3, 4},
+		resultSeq,
 		"Expected result sequences",
 	)
 }

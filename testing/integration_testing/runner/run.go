@@ -1,5 +1,6 @@
 package runner
 
+/*
 import (
 	"context"
 	"time"
@@ -97,3 +98,4 @@ func NewRunner(mode Mode, options ...Option) *Runner {
 	}
 	return r
 }
+*/

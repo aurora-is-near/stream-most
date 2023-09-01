@@ -1,12 +1,12 @@
 package fakes
 
-import (
+/* import (
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/autoreader"
 	"github.com/aurora-is-near/stream-most/stream/fake"
 	"github.com/aurora-is-near/stream-most/stream/reader"
-)
+) */
 
 /*
 	While doing complex testing, we might not know what implementation of fakes to use.
@@ -15,9 +15,10 @@ import (
 
 // UseDefaultOnes registers basic fakes that do their job.
 // You might want to register a bit trickier fakes instead, e.g. for calls mocking
-func UseDefaultOnes() {
+/* func UseDefaultOnes() {
 	stream.UseFake(fake.NewFakeStream)
 	reader.UseFake(fake.StartReader[struct{}])
 	reader.UseFake(fake.StartReader[messages.BlockMessage])
 	autoreader.UseFakeStream(fake.NewFakeStreamWithOptions)
 }
+*/

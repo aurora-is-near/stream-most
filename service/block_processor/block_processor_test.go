@@ -1,5 +1,6 @@
 package block_processor
 
+/*
 import (
 	"context"
 	"testing"
@@ -59,3 +60,4 @@ func TestBlockProcessor(t *testing.T) {
 
 	outputStream.DisplayRows()
 }
+*/

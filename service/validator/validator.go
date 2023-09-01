@@ -1,5 +1,6 @@
 package validator
 
+/*
 import (
 	"context"
 
@@ -98,3 +99,4 @@ func NewValidator(input stream.Interface, readerOpts *reader.Options, from, to u
 		InputEndSequence:   to,
 	}
 }
+*/

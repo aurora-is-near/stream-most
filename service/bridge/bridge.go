@@ -1,5 +1,6 @@
 package bridge
 
+/*
 import (
 	"context"
 
@@ -159,3 +160,4 @@ func NewBridge(options *Options, driver drivers.Driver, input, output stream.Int
 		options:       options,
 	}
 }
+*/

@@ -1,5 +1,6 @@
 package main
 
+/*
 import (
 	"context"
 	"fmt"
@@ -65,3 +66,4 @@ func main() {
 	}
 	os.Exit(1)
 }
+*/

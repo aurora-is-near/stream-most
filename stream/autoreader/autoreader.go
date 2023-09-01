@@ -1,5 +1,6 @@
 package autoreader
 
+/*
 import (
 	"context"
 	"sync"
@@ -176,3 +177,4 @@ func (ar *AutoReader[T]) run(nextSeq uint64, endSeq uint64) {
 		}
 	}
 }
+*/

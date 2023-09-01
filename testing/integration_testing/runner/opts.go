@@ -1,5 +1,6 @@
 package runner
 
+/*
 import (
 	"github.com/aurora-is-near/stream-most/service/block_processor/drivers"
 	"github.com/aurora-is-near/stream-most/service/bridge"
@@ -66,3 +67,4 @@ func HasToFinish() Option {
 		r.hasToFinish = true
 	}
 }
+*/

@@ -1,5 +1,6 @@
 package adapters
 
+/*
 import (
 	"context"
 	"errors"
@@ -74,3 +75,4 @@ func ReaderToBlockMessage(ctx context.Context, reader reader.IReader[*messages.B
 
 	return out, errCh
 }
+*/

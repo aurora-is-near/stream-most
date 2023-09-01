@@ -1,5 +1,6 @@
 package stream_backup
 
+/*
 import (
 	"errors"
 	"fmt"
@@ -180,3 +181,4 @@ func (sb *StreamBackup) pullSegment(l, r uint64) error {
 		}
 	}
 }
+*/

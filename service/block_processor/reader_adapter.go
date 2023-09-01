@@ -1,5 +1,6 @@
 package block_processor
 
+/*
 import (
 	"context"
 
@@ -14,3 +15,4 @@ func NewProcessorWithReader(ctx context.Context, reader reader.IReader[*messages
 	f := NewProcessor(in, driver)
 	return f, errors
 }
+*/
