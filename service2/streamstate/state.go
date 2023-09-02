@@ -43,8 +43,19 @@ func Fetch(ctx context.Context, input stream.Interface) *State {
 		return res
 	}
 
-	msg, err := input.Get(ctx, res.Info.State.LastSeq)
+	tipSeq := res.Info.State.LastSeq
+	msg, err := input.Get(ctx, tipSeq)
 	if err != nil {
+		// Checking if message fell out of stream
+		if res.Info, res.Err = input.GetInfo(ctx); res.Err != nil {
+			res.Err = fmt.Errorf("unable to get stream info for stream '%s': %w", input.Name(), res.Err)
+			return res
+		}
+		if tipSeq < res.Info.State.FirstSeq {
+			// Confirmed, Message fell out of stream
+			return res
+		}
+
 		res.Err = fmt.Errorf(
 			"unable to fetch last msg (#%d) from stream '%s': %w",
 			res.Info.State.LastSeq,
