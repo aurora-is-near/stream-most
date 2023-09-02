@@ -2,6 +2,7 @@ package reader
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -268,6 +269,9 @@ func (r *Reader) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64) {
 		}
 		msg, err := r.input.GetLastMsgForSubject(r.ctx, subj)
 		if err != nil {
+			if errors.Is(err, jetstream.ErrMsgNotFound) {
+				continue
+			}
 			r.finish(fmt.Errorf("unable to get last stream message for subject '%s': %w", subj, err))
 			return
 		}
