@@ -2,7 +2,6 @@ package streamseek
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/aurora-is-near/stream-most/domain/blocks"
@@ -10,8 +9,6 @@ import (
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/sirupsen/logrus"
 )
-
-var ErrEmptyRange = errors.New("empty range")
 
 /*
 	Seeks earliest block that is greater than provided block (by using binsearch).
