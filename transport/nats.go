@@ -10,7 +10,7 @@ import (
 )
 
 type NatsConnection struct {
-	*logrus.Entry
+	logger *logrus.Entry
 
 	config     *NATSConfig
 	connection *nats.Conn
@@ -33,20 +33,20 @@ func (c *NatsConnection) connect() error {
 
 	natsOptsList, err := natsCtx.NATSOptions(
 		nats.ErrorHandler(func(nc *nats.Conn, sub *nats.Subscription, err error) {
-			c.Error(err)
+			c.logger.Error(err)
 		}),
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
 			if err != nil {
-				c.Warnf("Disconnected due to: %v, will try reconnecting", err)
+				c.logger.Warnf("Disconnected due to: %v, will try reconnecting", err)
 			}
 		}),
 		nats.ReconnectHandler(func(nc *nats.Conn) {
-			c.Infof("Reconnected [%v]", nc.ConnectedUrl())
+			c.logger.Infof("Reconnected [%v]", nc.ConnectedUrl())
 		}),
 		nats.ClosedHandler(func(nc *nats.Conn) {
 			err := nc.LastError()
 			if err != nil {
-				c.Infof("Connection closed: %v", err)
+				c.logger.Infof("Connection closed: %v", err)
 			}
 			c.closed <- err
 		}),
@@ -67,25 +67,25 @@ func (c *NatsConnection) connect() error {
 
 func ConnectNATS(config *NATSConfig) (*NatsConnection, error) {
 	conn := &NatsConnection{
-		Entry:  logrus.New().WithField("nats", config.LogTag),
+		logger: logrus.WithField("component", "nats").WithField("nats", config.LogTag),
 		config: config,
 		closed: make(chan error, 1),
 	}
 
-	conn.Info("Connecting to NATS...")
+	conn.logger.Info("Connecting to NATS...")
 	if err := conn.connect(); err != nil {
-		conn.Errorf("Unable to connect to NATS: %v", err)
+		conn.logger.Errorf("Unable to connect to NATS: %v", err)
 		return nil, err
 	}
 
-	conn.Info("Connected successfully")
+	conn.logger.Info("Connected successfully")
 	return conn, nil
 }
 
 func (c *NatsConnection) Drain() error {
-	c.Info("Draining NATS connection...")
+	c.logger.Info("Draining NATS connection...")
 	if err := c.connection.Drain(); err != nil {
-		c.Errorf("Error when draining NATS connection: %v", err)
+		c.logger.Errorf("Error when draining NATS connection: %v", err)
 		return err
 	}
 	return nil

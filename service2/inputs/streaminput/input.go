@@ -49,7 +49,8 @@ func Start(config *Config) *Input {
 
 	in := &Input{
 		logger: logrus.
-			WithField("streaminput", config.Stream.Stream).
+			WithField("component", "streaminput").
+			WithField("stream", config.Stream.Stream).
 			WithField("nats", config.Stream.Nats.LogTag),
 
 		config:   config,

@@ -28,7 +28,7 @@ type IReader interface {
 }
 
 type Reader struct {
-	*logrus.Entry
+	logger *logrus.Entry
 
 	opts     *Options
 	input    stream.Interface
@@ -49,8 +49,9 @@ func Start(input stream.Interface, opts *Options, receiver Receiver) (IReader, e
 	opts = opts.WithDefaults()
 
 	r := &Reader{
-		Entry: logrus.New().
-			WithField("streamreader", input.Name()).
+		logger: logrus.
+			WithField("component", "streamreader").
+			WithField("stream", input.Name()).
 			WithField("nats", input.Options().Nats.LogTag),
 
 		opts:     opts,
@@ -90,9 +91,9 @@ func (r *Reader) finish(err error) {
 		r.err = err
 		r.cancel()
 		if err != nil {
-			r.Errorf("finished with error: %v", r.err)
+			r.logger.Errorf("finished with error: %v", r.err)
 		} else {
-			r.Infof("finished normally")
+			r.logger.Infof("finished normally")
 		}
 	})
 }
@@ -158,7 +159,7 @@ func (r *Reader) run() {
 			lastConsumedSeq.Store(meta.Sequence.Stream)
 
 			if r.opts.EndSeq > 0 && meta.Sequence.Stream >= r.opts.EndSeq {
-				r.Info("end sequence reached, finishing")
+				r.logger.Info("end sequence reached, finishing")
 				r.finish(nil)
 				return
 			}
@@ -168,7 +169,7 @@ func (r *Reader) run() {
 			lastFiredSeq.Store(meta.Sequence.Stream)
 
 			if r.opts.EndSeq > 0 && meta.Sequence.Stream+1 >= r.opts.EndSeq {
-				r.Info("last sequence reached, finishing")
+				r.logger.Info("last sequence reached, finishing")
 				r.finish(nil)
 				return
 			}
@@ -236,7 +237,7 @@ func (r *Reader) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64) {
 			minPotentialNextSeq = r.opts.StartSeq
 		}
 		if minPotentialNextSeq >= r.opts.EndSeq {
-			r.Infof("min potential next seq (%d) >= endSeq (%d), finishing", minPotentialNextSeq, r.opts.EndSeq)
+			r.logger.Infof("min potential next seq (%d) >= endSeq (%d), finishing", minPotentialNextSeq, r.opts.EndSeq)
 			r.finish(nil)
 			return
 		}

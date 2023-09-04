@@ -15,7 +15,7 @@ import (
 */
 
 func SeekSeq(ctx context.Context, input stream.Interface, target uint64, startSeq, endSeq uint64) (uint64, error) {
-	logger := logrus.WithField("streamseek", input.Name())
+	logger := logrus.WithField("component", "streamseek").WithField("stream", input.Name())
 
 	logger.Infof("Seeking on stream %s (startSeq=%d, endSeq=%d)", input.Name(), startSeq, endSeq)
 	logger.Infof("Looking for earliest sequence that is greater or equal to %d", target)

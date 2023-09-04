@@ -31,7 +31,7 @@ type Interface interface {
 }
 
 type Stream struct {
-	*logrus.Entry
+	logger *logrus.Entry
 
 	options *Options
 	nc      *transport.NatsConnection
@@ -118,7 +118,7 @@ func (s *Stream) Disconnect() error {
 	if s.nc == nil {
 		return nil
 	}
-	s.Info("Disconnecting...")
+	s.logger.Info("Disconnecting...")
 	err := s.nc.Drain()
 	s.nc = nil
 	return err
@@ -135,44 +135,45 @@ func Connect(options *Options) (Interface, error) {
 	options = options.WithDefaults()
 
 	s := &Stream{
-		Entry: logrus.
+		logger: logrus.
+			WithField("component", "stream").
 			WithField("stream", options.Stream).
 			WithField("nats", options.Nats.LogTag),
 
 		options: options,
 	}
 
-	s.Infof("Connecting to NATS at %s", options.Nats.OverrideURL)
+	s.logger.Infof("Connecting to NATS at %s", options.Nats.OverrideURL)
 	var err error
 	s.nc, err = transport.ConnectNATS(options.Nats)
 	if err != nil {
 		err = fmt.Errorf("unable to connect to NATS: %w", err)
-		s.Errorf("%v", err)
+		s.logger.Errorf("%v", err)
 		return nil, err
 	}
-	s.Infof("NATS connected")
+	s.logger.Infof("NATS connected")
 
-	s.Infof("Connecting to JetStream")
+	s.logger.Infof("Connecting to JetStream")
 	s.js, err = jetstream.New(s.nc.Conn())
 	if err != nil {
 		err = fmt.Errorf("unable to connect to JetStream: %w", err)
-		s.Errorf("%v", err)
+		s.logger.Errorf("%v", err)
 		s.nc.Drain()
 		return nil, err
 	}
-	s.Infof("JetStream connected")
+	s.logger.Infof("JetStream connected")
 
-	s.Infof("Getting stream '%s'", options.Stream)
+	s.logger.Infof("Getting stream '%s'", options.Stream)
 	streamRequestCtx, cancelStreamRequest := context.WithTimeout(context.Background(), s.options.RequestWait)
 	defer cancelStreamRequest()
 	s.stream, err = s.js.Stream(streamRequestCtx, options.Stream)
 	if err != nil {
 		err = fmt.Errorf("unable to connect to stream: %w", err)
-		s.Errorf("%v", err)
+		s.logger.Errorf("%v", err)
 		s.nc.Drain()
 		return nil, err
 	}
-	s.Infof("Stream connected")
+	s.logger.Infof("Stream connected")
 
 	return s, nil
 }

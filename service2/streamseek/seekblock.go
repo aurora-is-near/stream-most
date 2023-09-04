@@ -18,7 +18,7 @@ import (
 */
 
 func SeekBlock(ctx context.Context, input stream.Interface, target blocks.Block, startSeq, endSeq uint64) (uint64, error) {
-	logger := logrus.WithField("streamseek", input.Name())
+	logger := logrus.WithField("component", "streamseek").WithField("stream", input.Name())
 
 	logger.Infof("Seeking on stream %s (startSeq=%d, endSeq=%d)", input.Name(), startSeq, endSeq)
 	logger.Infof("Looking for earliest block that is greater than '%s'", blocks.ConstructMsgID(target))
