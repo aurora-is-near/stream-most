@@ -8,6 +8,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+/*
+	Seeks earliest sequence that is equal or greater to provided.
+	If such sequence is out of range - ErrEmpty range will be returned.
+	If such sequence is not available yet - it will still be returned.
+*/
+
 func SeekSeq(ctx context.Context, input stream.Interface, target uint64, startSeq, endSeq uint64) (uint64, error) {
 	logger := logrus.WithField("streamseek", input.Name())
 
