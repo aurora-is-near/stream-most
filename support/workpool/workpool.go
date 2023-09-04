@@ -26,7 +26,7 @@ func New(workers int, queueSize uint) *Workpool {
 
 	w.wg.Add(workers)
 	for i := 0; i < workers; i++ {
-		w.runWorker()
+		go w.runWorker()
 	}
 
 	return w
