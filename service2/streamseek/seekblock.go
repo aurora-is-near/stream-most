@@ -22,7 +22,6 @@ func SeekBlock(ctx context.Context, input stream.Interface, target blocks.Block,
 
 	logger.Infof("Seeking on stream %s (startSeq=%d, endSeq=%d)", input.Name(), startSeq, endSeq)
 	logger.Infof("Looking for earliest block that is greater than '%s'", blocks.ConstructMsgID(target))
-	logger.Infof("(if there's no such in range - the latest one will be returned)")
 
 	if endSeq > 0 && startSeq >= endSeq {
 		logger.Warnf("Weird configuration (startSeq (%d) >= endSeq (%d))", startSeq, endSeq)
@@ -71,7 +70,6 @@ func SeekBlock(ctx context.Context, input stream.Interface, target blocks.Block,
 		}
 
 		m := (l + r) / 2
-		logger.Infof("Checking block on seq=%d", m)
 
 		msg, err := input.Get(ctx, m)
 		if err != nil {
