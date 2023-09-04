@@ -6,7 +6,8 @@ import (
 
 type Input interface {
 	/*
-		Returns stream state.
+		Returns cached stream state.
+		It's guaranteed to be up to date only for static streams.
 
 		Error classes:
 			- ErrTemporarilyUnavailable
@@ -19,6 +20,10 @@ type Input interface {
 
 		If new reading session was requested - next call to Blocks() would return another channel.
 		In other words, each channel is associated with some reading session.
+
+		If new reading session was requested before the current one has ended - current channel is not
+		guaranteed to be closed, which practically means that one shouldn't use "for range" to read from
+		this channel if any seeks are going to happen in between.
 	*/
 	Blocks() <-chan Msg
 
