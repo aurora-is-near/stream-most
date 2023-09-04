@@ -25,4 +25,9 @@ type Output interface {
 			- ErrCollision
 	*/
 	AppendSafely(ctx context.Context, tipSeq uint64, tip, msg *messages.BlockMessage) error
+
+	/*
+		Gracefully stops component, terminates all associated goroutines, releases connections etc.
+	*/
+	Stop(wait bool)
 }

@@ -52,4 +52,9 @@ type Input interface {
 		Immediately resets output and error, immediately returns.
 	*/
 	SeekSeq(seq uint64)
+
+	/*
+		Gracefully stops component, terminates all associated goroutines, releases connections etc.
+	*/
+	Stop(wait bool)
 }
