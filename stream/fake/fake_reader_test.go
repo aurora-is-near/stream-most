@@ -14,11 +14,11 @@ func TestFakeReader(t *testing.T) {
 
 	fakeInput := &Stream{}
 	fakeInput.Add(
-		u.Announcement(1, []bool{true, true, true}, 1, "hash", "prev_hash"),
-		u.Announcement(2, []bool{true, true, true}, 2, "hash", "prev_hash"),
-		u.Announcement(3, []bool{true, true, true}, 3, "hash", "prev_hash"),
-		u.Announcement(4, []bool{true, true, true}, 4, "hash", "prev_hash"),
-		u.Announcement(5, []bool{true, true, true}, 5, "hash", "prev_hash"),
+		u.Announcement(1, 1, "hash", "prev_hash", []bool{true, true, true}),
+		u.Announcement(2, 2, "hash", "prev_hash", []bool{true, true, true}),
+		u.Announcement(3, 3, "hash", "prev_hash", []bool{true, true, true}),
+		u.Announcement(4, 4, "hash", "prev_hash", []bool{true, true, true}),
+		u.Announcement(5, 5, "hash", "prev_hash", []bool{true, true, true}),
 	)
 
 	receiver := NewFakeReceiver(len(fakeInput.GetArray()))

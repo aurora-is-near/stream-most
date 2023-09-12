@@ -16,12 +16,12 @@ import (
 	Removing this file will not affect anything but tests
 */
 
-func Announcement(sequence uint64, shardsMap []bool, height uint64, hash string, prevHash string) *messages.BlockMessage {
-	return MessageFromBlock(sequence, NewSimpleBlockAnnouncement(shardsMap, height, hash, prevHash))
+func Announcement(sequence uint64, height uint64, hash string, prevHash string, shardMask []bool) *messages.BlockMessage {
+	return MessageFromBlock(sequence, NewSimpleBlockAnnouncement(height, hash, prevHash, shardMask))
 }
 
-func Shard(sequence uint64, height uint64, hash string, prevHash string, shardId uint64) *messages.BlockMessage {
-	return MessageFromBlock(sequence, NewSimpleBlockShard(height, hash, prevHash, shardId))
+func Shard(sequence uint64, height uint64, shardId uint64, hash string, prevHash string, shardMask []bool) *messages.BlockMessage {
+	return MessageFromBlock(sequence, NewSimpleBlockShard(height, shardId, hash, prevHash, shardMask))
 }
 
 func MessageFromBlock(sequence uint64, block blocks.Block) *messages.BlockMessage {
@@ -41,20 +41,20 @@ func MessageFromBlock(sequence uint64, block blocks.Block) *messages.BlockMessag
 	}
 }
 
-func NewSimpleBlockAnnouncement(shardsMap []bool, height uint64, hash string, prevHash string) *v3.NearBlockAnnouncement {
+func NewSimpleBlockAnnouncement(height uint64, hash string, prevHash string, shardMask []bool) *v3.NearBlockAnnouncement {
 	return &v3.NearBlockAnnouncement{
 		BlockHeaderView: &near_block.BlockHeaderView{
 			Header: &near_block.IndexerBlockHeaderView{
 				Height:       height,
 				H256Hash:     []byte(hash),
 				H256PrevHash: []byte(prevHash),
-				ChunkMask:    shardsMap,
+				ChunkMask:    shardMask,
 			},
 		},
 	}
 }
 
-func NewSimpleBlockShard(height uint64, hash string, prevHash string, shardId uint64) *v3.NearBlockShard {
+func NewSimpleBlockShard(height uint64, shardId uint64, hash string, prevHash string, shardMask []bool) *v3.NearBlockShard {
 	return &v3.NearBlockShard{
 		BlockShard: &near_block.BlockShard{
 			ShardId: shardId,
@@ -63,6 +63,7 @@ func NewSimpleBlockShard(height uint64, hash string, prevHash string, shardId ui
 					Height:       height,
 					H256Hash:     []byte(hash),
 					H256PrevHash: []byte(prevHash),
+					ChunkMask:    shardMask,
 				},
 			},
 		},

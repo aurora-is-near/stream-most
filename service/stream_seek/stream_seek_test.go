@@ -14,10 +14,10 @@ func TestStreamSeek_SeekLastFullyWrittenBlock(t *testing.T) {
 	formats.UseFormat(formats.NearV3)
 	testInput := fake.NewStream()
 	testInput.Add(
-		u.Announcement(1, []bool{true, true, true}, 1, "AAA", "000"),
-		u.Shard(2, 1, "AAA", "000", 0),
-		u.Shard(3, 1, "AAA", "000", 1),
-		u.Shard(4, 1, "AAA", "000", 2),
+		u.Announcement(1, 1, "AAA", "000", []bool{true, true, true}),
+		u.Shard(2, 1, 0, "AAA", "000", []bool{true, true, true}),
+		u.Shard(3, 1, 1, "AAA", "000", []bool{true, true, true}),
+		u.Shard(4, 1, 2, "AAA", "000", []bool{true, true, true}),
 	)
 
 	seeker := NewStreamSeek(testInput)
@@ -42,10 +42,10 @@ func TestStreamSeek_SeekShards(t *testing.T) {
 
 	testInput := fake.NewStream()
 	testInput.Add(
-		u.Announcement(1, []bool{true, true, true}, 1, "AAA", "000"),
-		u.Shard(2, 1, "AAA", "000", 1),
-		u.Shard(3, 1, "AAA", "000", 2),
-		u.Shard(4, 1, "AAA", "000", 2),
+		u.Announcement(1, 1, "AAA", "000", []bool{true, true, true}),
+		u.Shard(2, 1, 1, "AAA", "000", []bool{true, true, true}),
+		u.Shard(3, 1, 2, "AAA", "000", []bool{true, true, true}),
+		u.Shard(4, 1, 2, "AAA", "000", []bool{true, true, true}),
 	)
 
 	seeker := NewStreamSeek(testInput)

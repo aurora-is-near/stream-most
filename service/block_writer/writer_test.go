@@ -20,13 +20,13 @@ func TestWriter(t *testing.T) {
 	writer := NewWriter(NewOptions().WithDefaults().Validated(), outputStream, peeker)
 
 	msgs := []*messages.BlockMessage{
-		u.Announcement(1, []bool{true, true, true}, 1, "AAA", "000"),
-		u.Shard(2, 1, "AAA", "000", 1),
-		u.Shard(3, 1, "AAA", "000", 2),
-		u.Shard(4, 1, "AAA", "000", 2),
-		u.Announcement(5, []bool{true, true, true}, 2, "BBB", "AAA"),
-		u.Announcement(6, []bool{true, true, true}, 3, "CCC", "BBB"),
-		u.Announcement(7, []bool{true, true, true}, 4, "DDD", "CCC"),
+		u.Announcement(1, 1, "AAA", "000", []bool{true, true, true}),
+		u.Shard(2, 1, 1, "AAA", "000", []bool{true, true, true}),
+		u.Shard(3, 1, 2, "AAA", "000", []bool{true, true, true}),
+		u.Shard(4, 1, 2, "AAA", "000", []bool{true, true, true}),
+		u.Announcement(5, 2, "BBB", "AAA", []bool{true, true, true}),
+		u.Announcement(6, 3, "CCC", "BBB", []bool{true, true, true}),
+		u.Announcement(7, 4, "DDD", "CCC", []bool{true, true, true}),
 	}
 
 	for _, m := range msgs {
