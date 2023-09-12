@@ -200,7 +200,7 @@ func (out *Output) handleConnection() error {
 	}
 }
 
-func (out *Output) AppendSafely(ctx context.Context, predecessorSeq uint64, predecessorMsgID string, msg *messages.BlockMessage) error {
+func (out *Output) WriteAfter(ctx context.Context, predecessorSeq uint64, predecessorMsgID string, msg *messages.BlockMessage) error {
 	conn := out.curConn.Load()
 	if err := conn.obtainQuota(); err != nil {
 		if errors.Is(err, blockio.ErrTemporarilyUnavailable) || errors.Is(err, blockio.ErrCompletelyUnavailable) {
@@ -210,7 +210,7 @@ func (out *Output) AppendSafely(ctx context.Context, predecessorSeq uint64, pred
 	}
 	defer conn.returnQuota()
 
-	if err := out.appendSafely(ctx, predecessorSeq, predecessorMsgID, msg, conn); err != nil {
+	if err := out.writeAfter(ctx, predecessorSeq, predecessorMsgID, msg, conn); err != nil {
 		if ctx.Err() != nil && errors.Is(err, ctx.Err()) {
 			return fmt.Errorf("%w (%w)", ctx.Err(), blockio.ErrCanceled)
 		}
@@ -225,7 +225,7 @@ func (out *Output) AppendSafely(ctx context.Context, predecessorSeq uint64, pred
 	return nil
 }
 
-func (out *Output) appendSafely(ctx context.Context, predecessorSeq uint64, predecessorMsgID string, msg *messages.BlockMessage, conn *connection) error {
+func (out *Output) writeAfter(ctx context.Context, predecessorSeq uint64, predecessorMsgID string, msg *messages.BlockMessage, conn *connection) error {
 	wMsg := &nats.Msg{
 		Header: make(nats.Header),
 		Data:   msg.Msg.GetData(),
