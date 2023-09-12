@@ -17,14 +17,19 @@ type Output interface {
 	State() (State, error)
 
 	/*
-		Tries to append message safely (using expected-tip checks).
+		Tries to append message safely (using expected-predecessor checks).
+		predecessorMsgID can be left empty (means no predecessor msgid enforced).
 
 		Error classes:
 			- ErrTemporarilyUnavailable
 			- ErrCompletelyUnavailable
 			- ErrCollision
+			- ErrCanceled
+			- ErrWrongPredecessor
+			- ErrRemovedPredecessor
+			- ErrRemovedPosition
 	*/
-	AppendSafely(ctx context.Context, tipSeq uint64, tip, msg *messages.BlockMessage) error
+	AppendSafely(ctx context.Context, predecessorSeq uint64, predecessorMsgID string, msg *messages.BlockMessage) error
 
 	/*
 		Gracefully stops component, terminates all associated goroutines, releases connections etc.
