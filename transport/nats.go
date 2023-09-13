@@ -14,7 +14,8 @@ type NatsConnection struct {
 
 	config     *NATSConfig
 	connection *nats.Conn
-	closed     chan error
+	closeErr   error
+	closed     chan struct{}
 }
 
 func (c *NatsConnection) connect() error {
@@ -44,11 +45,9 @@ func (c *NatsConnection) connect() error {
 			c.logger.Infof("Reconnected [%v]", nc.ConnectedUrl())
 		}),
 		nats.ClosedHandler(func(nc *nats.Conn) {
-			err := nc.LastError()
-			if err != nil {
-				c.logger.Infof("Connection closed: %v", err)
-			}
-			c.closed <- err
+			c.closeErr = nc.LastError()
+			c.logger.Infof("Connection closed: %v", c.closeErr)
+			close(c.closed)
 		}),
 	)
 	if err != nil {
@@ -69,7 +68,7 @@ func ConnectNATS(config *NATSConfig) (*NatsConnection, error) {
 	conn := &NatsConnection{
 		logger: logrus.WithField("component", "nats").WithField("nats", config.LogTag),
 		config: config,
-		closed: make(chan error, 1),
+		closed: make(chan struct{}),
 	}
 
 	conn.logger.Info("Connecting to NATS...")
@@ -88,13 +87,23 @@ func (c *NatsConnection) Drain() error {
 		c.logger.Errorf("Error when draining NATS connection: %v", err)
 		return err
 	}
-	return nil
+	<-c.closed
+	return c.closeErr
 }
 
 func (c *NatsConnection) Conn() *nats.Conn {
 	return c.connection
 }
 
-func (c *NatsConnection) Closed() <-chan error {
+func (c *NatsConnection) CloseError() error {
+	select {
+	case <-c.closed:
+		return c.closeErr
+	default:
+		return nil
+	}
+}
+
+func (c *NatsConnection) Closed() <-chan struct{} {
 	return c.closed
 }
