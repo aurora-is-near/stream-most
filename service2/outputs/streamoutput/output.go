@@ -92,6 +92,8 @@ func (out *Output) putErr(err error) {
 }
 
 func (out *Output) run() {
+	defer close(out.finished)
+
 	err := out.runReconnectionLoop()
 
 	if errors.Is(err, ErrStopped) {
