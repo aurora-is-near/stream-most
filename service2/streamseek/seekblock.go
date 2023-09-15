@@ -42,7 +42,10 @@ func SeekBlock(ctx context.Context, input stream.Interface, target blocks.Block,
 		return 0, fmt.Errorf("%w: nothing to seek (firstSeq (%d) >= endSeq (%d))", ErrEmptyRange, state.FirstSeq, endSeq)
 	}
 
-	firstLegitSeq := state.FirstSeq
+	firstLegitSeq := uint64(1)
+	if firstLegitSeq < state.FirstSeq {
+		firstLegitSeq = state.FirstSeq
+	}
 	if firstLegitSeq < startSeq {
 		firstLegitSeq = startSeq
 	}
