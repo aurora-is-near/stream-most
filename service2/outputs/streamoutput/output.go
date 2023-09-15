@@ -267,7 +267,7 @@ func (out *Output) writeAfter(ctx context.Context, predecessorSeq uint64, predec
 			return fmt.Errorf("unable to write msgid='%s' at seq=%d: %w (%w)", msgID, predecessorSeq+1, writeErr, ErrConnectionProblem)
 		}
 
-		out.logger.Warnf("Got failed expected-predecessor checks on seq=%d and msgid='%s', running analysis...", predecessorSeq+1, msgID)
+		out.logger.Warnf("Got failed expected-predecessor checks on seq=%d and msgid='%s' (%v), running analysis...", predecessorSeq+1, msgID, writeErr)
 		if predecessorMsgID != "" {
 			out.logger.Infof("Btw expected predecessor's msgid='%s'", predecessorMsgID)
 		}
@@ -289,6 +289,13 @@ func (out *Output) writeAfter(ctx context.Context, predecessorSeq uint64, predec
 			return nil
 		}
 
+		if predecessorSeq == 0 {
+			if predecessorMsgID != "" {
+				return fmt.Errorf("it's not possible to have predesessor with msgid='%s' and seq=%d (%w)", predecessorMsgID, predecessorSeq, blockio.ErrWrongPredecessor)
+			}
+			return fmt.Errorf("can't write to empty stream for unknown reason: %w (%w)", writeErr, ErrConnectionProblem)
+		}
+
 		if realPredecessor, realPredecessorPresent := analysis[predecessorSeq]; realPredecessorPresent {
 			if predecessorMsgID != "" {
 				if realPredecessor == nil {
@@ -298,7 +305,7 @@ func (out *Output) writeAfter(ctx context.Context, predecessorSeq uint64, predec
 					return fmt.Errorf("expected predecessor msgid='%s' on seq=%d but got '%s' (%w)", predecessorMsgID, predecessorSeq, realPredecessorMsgID, blockio.ErrWrongPredecessor)
 				}
 			}
-			return fmt.Errorf("expect-checks failed for unknown reason, predecessor on seq=%d confirmed to be right, see logs (%w)", predecessorSeq, ErrConnectionProblem)
+			return fmt.Errorf("expect-checks failed for unknown reason (%w), predecessor on seq=%d confirmed to be right, see logs (%w)", writeErr, predecessorSeq, ErrConnectionProblem)
 		}
 
 		return fmt.Errorf("expected predecessor on seq=%d, but it doesn't exist yet (%w)", predecessorSeq, blockio.ErrWrongPredecessor)
@@ -322,8 +329,8 @@ func (out *Output) analyzeVicinity(ctx context.Context, conn *connection, center
 	dedup := map[uint64]struct{}{}
 	elements := []uint64{}
 	for _, center := range centers {
-		l, r := uint64(0), center+3
-		if center >= 3 {
+		l, r := uint64(1), center+3
+		if center > 3 {
 			l = center - 3
 		}
 		for seq := l; seq <= r; seq++ {
