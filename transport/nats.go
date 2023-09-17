@@ -83,10 +83,7 @@ func ConnectNATS(config *NATSConfig) (*NatsConnection, error) {
 
 func (c *NatsConnection) Drain() error {
 	c.logger.Info("Draining NATS connection...")
-	if err := c.connection.Drain(); err != nil {
-		c.logger.Errorf("Error when draining NATS connection: %v", err)
-		return err
-	}
+	c.connection.Drain()
 	<-c.closed
 	return c.closeErr
 }
