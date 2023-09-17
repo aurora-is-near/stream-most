@@ -33,5 +33,5 @@ func (a *NearBlockShard) GetShardMask() []bool {
 }
 
 func (s *NearBlockShard) GetShardID() uint64 {
-	return 0
+	return s.BlockShard.ShardId
 }
