@@ -72,7 +72,7 @@ func (out *Output) State() (blockio.State, error) {
 		return nil, s.Err
 	}
 	lastWritten := out.lastWrittenMsg.Load()
-	if lastWritten == nil || lastWritten.Msg.GetSequence() < s.LastSeq() {
+	if lastWritten == nil || lastWritten.Msg.GetSequence() <= s.LastSeq() {
 		return s, nil
 	}
 	return stateWithTip{state: s, tip: lastWritten}, nil

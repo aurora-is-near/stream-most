@@ -1,0 +1,525 @@
+package streamoutput
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/aurora-is-near/stream-most/domain/blocks"
+	"github.com/aurora-is-near/stream-most/domain/formats"
+	"github.com/aurora-is-near/stream-most/service2/blockio"
+	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/aurora-is-near/stream-most/testing/u"
+	"github.com/aurora-is-near/stream-most/transport"
+	"github.com/nats-io/nats-server/v2/test"
+	"github.com/nats-io/nats.go/jetstream"
+	"github.com/stretchr/testify/require"
+)
+
+func makeCfg(natsUrl string, natsLogTag string, streamName string, maxReconnects int, reconnectDelay time.Duration, stateFetchInterval time.Duration) *Config {
+	return &Config{
+		Stream: &stream.Options{
+			Nats: &transport.NATSConfig{
+				OverrideURL: natsUrl,
+				LogTag:      natsLogTag,
+				Options:     transport.RecommendedNatsOptions(),
+			},
+			Stream:      streamName,
+			RequestWait: time.Second,
+			WriteWait:   time.Second,
+		},
+		WriteRetryWait:        jetstream.DefaultPubRetryWait,
+		WriteRetryAttempts:    jetstream.DefaultPubRetryAttempts,
+		PreserveCustomHeaders: true,
+		MaxReconnects:         maxReconnects,
+		ReconnectDelay:        reconnectDelay,
+		StateFetchInterval:    stateFetchInterval,
+	}
+}
+
+func TestState(t *testing.T) {
+	formats.UseFormat(formats.NearV3)
+
+	// Allocate two ports.
+	// Second one will be needed to write a couple of new blocks while
+	// stream is invisible for streamoutput component.
+	ports := u.GetFreePorts(2)
+	opts := u.GetTestNATSServerOpts(t)
+	opts.Port = ports[0]
+
+	// Start everything
+	s := test.RunServer(&opts)
+	defer s.Shutdown()
+
+	u.CreateStream(s.ClientURL(), "teststream", []string{"teststream.*"}, 5, time.Hour)
+
+	sOut := Start(makeCfg(s.ClientURL(), "streamout", "teststream", -1, time.Second/5, time.Second/5))
+	defer sOut.Stop(true)
+
+	// Wait until initial empty state is loaded
+	require.Eventually(t, func() bool {
+		state, err := sOut.State()
+		if err != nil {
+			require.ErrorIs(t, err, ErrNotStartedYet)
+			require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
+		} else {
+			u.RequireEmptyState(t, state)
+			return true
+		}
+		return false
+	}, time.Second, time.Second/20)
+
+	// Write first block
+	u.WriteBlocks(s.ClientURL(), "teststream", "teststream.*", true,
+		u.Announcement(1, 555, "AAA", "_", nil),
+	)
+
+	// Wait until first block is loaded in state
+	require.Eventually(t, func() bool {
+		state, err := sOut.State()
+		require.NoError(t, err)
+		switch state.LastSeq() {
+		case 0:
+			u.RequireEmptyState(t, state)
+		default:
+			u.RequireState(t, state, 1, 1, blocks.Announcement, 555, 0, "AAA", "_", nil)
+			return true
+		}
+		return false
+	}, time.Second, time.Second/20)
+
+	// Write multiple new blocks
+	u.WriteBlocks(s.ClientURL(), "teststream", "teststream.*", true,
+		u.Shard(2, 555, 0, "AAA", "_", nil),
+		u.Shard(3, 555, 3, "AAA", "_", nil),
+		u.Announcement(4, 557, "BBB", "AAA", nil),
+		u.Announcement(5, 558, "CCC", "BBB", nil),
+		u.Announcement(6, 600, "DDD", "CCC", nil),
+	)
+
+	// Make sure last block is loaded eventually
+	require.Eventually(t, func() bool {
+		state, err := sOut.State()
+		require.NoError(t, err)
+		switch state.LastSeq() {
+		case 1:
+			u.RequireState(t, state, 1, 1, blocks.Announcement, 555, 0, "AAA", "_", nil)
+		case 2:
+			u.RequireState(t, state, 1, 2, blocks.Shard, 555, 0, "AAA", "_", nil)
+		case 3:
+			u.RequireState(t, state, 1, 3, blocks.Shard, 555, 3, "AAA", "_", nil)
+		case 4:
+			u.RequireState(t, state, 1, 4, blocks.Announcement, 557, 0, "BBB", "AAA", nil)
+		case 5:
+			u.RequireState(t, state, 1, 5, blocks.Announcement, 558, 0, "CCC", "BBB", nil)
+		default:
+			u.RequireState(t, state, 2, 6, blocks.Announcement, 600, 0, "DDD", "CCC", nil)
+			return true
+		}
+		return false
+	}, time.Second, time.Second/20)
+
+	// Shutdown server
+	s.Shutdown()
+
+	// Wait until streamoutput has noticed that server has been shut down
+	require.Eventually(t, func() bool {
+		state, err := sOut.State()
+		if err != nil {
+			require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
+			return true
+		}
+		u.RequireState(t, state, 2, 6, blocks.Announcement, 600, 0, "DDD", "CCC", nil)
+		return false
+	}, time.Second*5, time.Second/20)
+
+	// Start server on another port to make a couple of writes while
+	// stream is invisible for streamoutput
+	opts.Port = ports[1]
+	s = test.RunServer(&opts)
+
+	// Write a couple of new blocks
+	u.WriteBlocks(s.ClientURL(), "teststream", "teststream.*", true,
+		u.Announcement(7, 607, "EEE", "DDD", nil),
+		u.Announcement(8, 608, "FFF", "EEE", nil),
+	)
+
+	// Restart it on initial port again
+	s.Shutdown()
+	opts.Port = ports[0]
+	s = test.RunServer(&opts)
+
+	// Make sure that new blocks are eventually noticed by streamoutput
+	require.Eventually(t, func() bool {
+		state, err := sOut.State()
+		if err != nil {
+			require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
+			return false
+		}
+		u.RequireState(t, state, 4, 8, blocks.Announcement, 608, 0, "FFF", "EEE", nil)
+		return true
+	}, time.Second*5, time.Second/20)
+
+	// Write a couple of new blocks
+	u.WriteBlocks(s.ClientURL(), "teststream", "teststream.*", true,
+		u.Announcement(9, 609, "GGG", "FFF", nil),
+		u.Announcement(10, 610, "HHH", "GGG", nil),
+	)
+
+	// Make sure that writes after restart are noticed as well
+	require.Eventually(t, func() bool {
+		state, err := sOut.State()
+		require.NoError(t, err)
+		switch state.LastSeq() {
+		case 8:
+			u.RequireState(t, state, 4, 8, blocks.Announcement, 608, 0, "FFF", "EEE", nil)
+		case 9:
+			u.RequireState(t, state, 5, 9, blocks.Announcement, 609, 0, "GGG", "FFF", nil)
+		default:
+			u.RequireState(t, state, 6, 10, blocks.Announcement, 610, 0, "HHH", "GGG", nil)
+			return true
+		}
+		return false
+	}, time.Second, time.Second/20)
+
+	// Stop streamoutput
+	sOut.Stop(true)
+
+	// Make sure that state eventually becomes completely unavailable
+	require.Eventually(t, func() bool {
+		state, err := sOut.State()
+		if err != nil {
+			require.ErrorIs(t, err, blockio.ErrCompletelyUnavailable)
+			return true
+		}
+		u.RequireState(t, state, 6, 10, blocks.Announcement, 610, 0, "HHH", "GGG", nil)
+		return false
+	}, time.Second*5, time.Second/20)
+}
+
+func TestLimitedReconnects(t *testing.T) {
+	formats.UseFormat(formats.NearV3)
+
+	// Start everything
+	opts := u.GetTestNATSServerOpts(t)
+	s := test.RunServer(&opts)
+	defer s.Shutdown()
+
+	u.CreateStream(s.ClientURL(), "teststream", []string{"teststream.*"}, 5, time.Hour)
+
+	sOut := Start(makeCfg(s.ClientURL(), "streamout", "teststream", 2, time.Second/5, time.Second/5))
+	defer sOut.Stop(true)
+
+	// Wait until initial empty state is loaded
+	require.Eventually(t, func() bool {
+		state, err := sOut.State()
+		if err != nil {
+			require.ErrorIs(t, err, ErrNotStartedYet)
+			require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
+		} else {
+			u.RequireEmptyState(t, state)
+			return true
+		}
+		return false
+	}, time.Second, time.Second/20)
+
+	// Shutting down server
+	s.Shutdown()
+
+	// Wait until state becomes completely unavailable
+	require.Eventually(t, func() bool {
+		state, err := sOut.State()
+		if err != nil {
+			if errors.Is(err, blockio.ErrCompletelyUnavailable) {
+				return true
+			}
+			require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
+		} else {
+			u.RequireEmptyState(t, state)
+		}
+		return false
+	}, time.Second*5, time.Second/20)
+}
+
+func TestWriteReconnect(t *testing.T) {
+	formats.UseFormat(formats.NearV3)
+
+	// Start everything
+	opts := u.GetTestNATSServerOpts(t)
+	s := test.RunServer(&opts)
+	defer s.Shutdown()
+
+	u.CreateStream(s.ClientURL(), "teststream", []string{"teststream.*"}, 5, time.Hour)
+
+	sOut := Start(makeCfg(s.ClientURL(), "streamout", "teststream", -1, time.Second/5, time.Second/5))
+	defer sOut.Stop(true)
+
+	// Wait until first write succeeds
+	require.Eventually(t, func() bool {
+		err := sOut.WriteAfter(context.Background(), 0, "", u.Announcement(1, 101, "AAA", "_", nil))
+		if err != nil {
+			require.ErrorIs(t, err, ErrNotStartedYet)
+			require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
+			return false
+		}
+		return true
+	}, time.Second*2, time.Second/20)
+
+	// Check that next write succeeds
+	err := sOut.WriteAfter(context.Background(), 1, "101", u.Shard(2, 101, 3, "AAA", "_", nil))
+	require.NoError(t, err)
+
+	// Stop server
+	s.Shutdown()
+
+	// Make sure writes don't work now
+	err = sOut.WriteAfter(context.Background(), 2, "101.3", u.Shard(3, 101, 5, "AAA", "_", nil))
+	require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
+
+	// Run server again
+	s = test.RunServer(&opts)
+	_ = s
+
+	// Wait until writes work again
+	require.Eventually(t, func() bool {
+		err := sOut.WriteAfter(context.Background(), 2, "101.3", u.Shard(3, 101, 5, "AAA", "_", nil))
+		if err != nil {
+			require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
+			return false
+		}
+		return true
+	}, time.Second*2, time.Second/20)
+
+	// Check that next write succeeds as well
+	err = sOut.WriteAfter(context.Background(), 3, "101.5", u.Announcement(4, 105, "BBB", "AAA", nil))
+	require.NoError(t, err)
+}
+
+func TestWritesAffectState(t *testing.T) {
+	formats.UseFormat(formats.NearV3)
+
+	// Start everything
+	opts := u.GetTestNATSServerOpts(t)
+	s := test.RunServer(&opts)
+	defer s.Shutdown()
+
+	u.CreateStream(s.ClientURL(), "teststream", []string{"teststream.*"}, 5, time.Hour)
+
+	sOut := Start(makeCfg(s.ClientURL(), "streamout", "teststream", -1, time.Second/5, time.Second))
+	defer sOut.Stop(true)
+
+	// Wait until initial empty state is loaded
+	require.Eventually(t, func() bool {
+		state, err := sOut.State()
+		if err != nil {
+			require.ErrorIs(t, err, ErrNotStartedYet)
+			require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
+		} else {
+			u.RequireEmptyState(t, state)
+			return true
+		}
+		return false
+	}, time.Second*5, time.Second/20)
+
+	// Test that every write immediately affects the state
+	lastMsgID := ""
+	for i := uint64(1); i <= 100; i++ {
+		newBlock := u.Announcement(i, i+100, toHex(i+100), toHex(i+99), nil)
+		err := sOut.WriteAfter(context.Background(), i-1, lastMsgID, newBlock)
+		require.NoError(t, err)
+		lastMsgID = blocks.ConstructMsgID(newBlock.Block)
+
+		state, err := sOut.State()
+		require.NoError(t, err)
+		u.RequireState(t, state, state.FirstSeq(), i, blocks.Announcement, i+100, 0, toHex(i+100), toHex(i+99), nil)
+	}
+
+	// Do external write
+	u.WriteBlocks(s.ClientURL(), "teststream", "teststream.*", true,
+		u.Announcement(101, 201, toHex(201), toHex(200), nil),
+	)
+
+	// Makes sure external write affects state as well
+	require.Eventually(t, func() bool {
+		state, err := sOut.State()
+		require.NoError(t, err)
+		if state.LastSeq() == 101 {
+			u.RequireState(t, state, 97, 101, blocks.Announcement, 201, 0, toHex(201), toHex(200), nil)
+			return true
+		}
+		u.RequireState(t, state, state.FirstSeq(), 100, blocks.Announcement, 200, 0, toHex(200), toHex(199), nil)
+		return false
+	}, time.Second*5, time.Second/20)
+
+	// Stop server
+	s.Shutdown()
+
+	// Wait until streamoutput has noticed that server has been shut down
+	require.Eventually(t, func() bool {
+		state, err := sOut.State()
+		if err != nil {
+			require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
+			return true
+		}
+		u.RequireState(t, state, 97, 101, blocks.Announcement, 201, 0, toHex(201), toHex(200), nil)
+		return false
+	}, time.Second*5, time.Second/20)
+
+	// Run server again
+	s = test.RunServer(&opts)
+	_ = s
+
+	// Wait until streamoutput state is loaded again
+	require.Eventually(t, func() bool {
+		state, err := sOut.State()
+		if err != nil {
+			require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
+			return false
+		}
+		u.RequireState(t, state, 97, 101, blocks.Announcement, 201, 0, toHex(201), toHex(200), nil)
+		return true
+	}, time.Second*5, time.Second/20)
+
+	// Test that every write immediately affects the state again
+	lastMsgID = "201"
+	for i := uint64(102); i <= 200; i++ {
+		newBlock := u.Shard(i, 201, i, toHex(i+100), toHex(i+99), nil)
+		err := sOut.WriteAfter(context.Background(), i-1, lastMsgID, newBlock)
+		require.NoError(t, err)
+		lastMsgID = blocks.ConstructMsgID(newBlock.Block)
+
+		state, err := sOut.State()
+		require.NoError(t, err)
+		u.RequireState(t, state, state.FirstSeq(), i, blocks.Shard, 201, i, toHex(i+100), toHex(i+99), nil)
+	}
+
+	// Write duplicate
+	duplicateBlock := u.Shard(198, 201, 198, toHex(298), toHex(297), nil)
+	err := sOut.WriteAfter(context.Background(), 197, "201.197", duplicateBlock)
+	require.NoError(t, err)
+
+	// Make sure that duplicate write doesn't affect the state
+	state, err := sOut.State()
+	require.NoError(t, err)
+	u.RequireState(t, state, state.FirstSeq(), 200, blocks.Shard, 201, 200, toHex(300), toHex(299), nil)
+}
+
+func TestWriteErrors(t *testing.T) {
+	formats.UseFormat(formats.NearV3)
+
+	// Start everything
+	opts := u.GetTestNATSServerOpts(t)
+	s := test.RunServer(&opts)
+	defer s.Shutdown()
+
+	u.CreateStream(s.ClientURL(), "teststream", []string{"teststream.*"}, 3, time.Hour)
+
+	sOut := Start(makeCfg(s.ClientURL(), "streamout", "teststream", -1, time.Second/5, time.Second/5))
+	defer sOut.Stop(true)
+
+	// Empty stream + wrong predecessor seq: blockio.ErrWrongPredecessor
+	require.Eventually(t, func() bool {
+		err := sOut.WriteAfter(context.Background(), 1, "", u.Announcement(2, 2, "", "", nil))
+		require.Error(t, err)
+		if errors.Is(err, blockio.ErrTemporarilyUnavailable) {
+			return false
+		}
+		require.ErrorIs(t, err, blockio.ErrWrongPredecessor)
+		return true
+	}, time.Second*5, time.Second/20)
+
+	// Empty stream + wrong predecessor msgid: blockio.ErrWrongPredecessor
+	err := sOut.WriteAfter(context.Background(), 0, "non-existing-msgid", u.Announcement(1, 1, "", "", nil))
+	require.ErrorIs(t, err, blockio.ErrWrongPredecessor)
+
+	// Empty stream + wrong predecessor seq + wrong predecessor msgid: blockio.ErrWrongPredecessor
+	err = sOut.WriteAfter(context.Background(), 1, "non-existing-msgid", u.Announcement(2, 2, "", "", nil))
+	require.ErrorIs(t, err, blockio.ErrWrongPredecessor)
+
+	// Correct write
+	err = sOut.WriteAfter(context.Background(), 0, "", u.Announcement(1, 1, "", "", nil))
+	require.NoError(t, err)
+
+	// Wrong predecessor seq: blockio.ErrWrongPredecessor
+	err = sOut.WriteAfter(context.Background(), 2, "1", u.Announcement(2, 2, "", "", nil))
+	require.ErrorIs(t, err, blockio.ErrWrongPredecessor)
+
+	// Wrong predecessor seq + missing predecessor msgid: blockio.ErrWrongPredecessor
+	err = sOut.WriteAfter(context.Background(), 2, "", u.Announcement(2, 2, "", "", nil))
+	require.ErrorIs(t, err, blockio.ErrWrongPredecessor)
+
+	// Wrong predecessor msgid: blockio.ErrWrongPredecessor
+	err = sOut.WriteAfter(context.Background(), 1, "non-existing-msgid", u.Announcement(2, 2, "", "", nil))
+	require.ErrorIs(t, err, blockio.ErrWrongPredecessor)
+
+	// Wrong predecessor seq + wrong predecessor msgid: blockio.ErrWrongPredecessor
+	err = sOut.WriteAfter(context.Background(), 2, "non-existing-msgid", u.Announcement(2, 2, "", "", nil))
+	require.ErrorIs(t, err, blockio.ErrWrongPredecessor)
+
+	// Correct write
+	err = sOut.WriteAfter(context.Background(), 1, "1", u.Announcement(2, 2, "", "", nil))
+	require.NoError(t, err)
+
+	// Correct write with no predecessor msgid enforced
+	err = sOut.WriteAfter(context.Background(), 2, "", u.Announcement(3, 3, "", "", nil))
+	require.NoError(t, err)
+
+	// Correct writes
+	for i := uint64(4); i <= 100; i++ {
+		err = sOut.WriteAfter(context.Background(), i-1, strconv.FormatUint(i-1, 10), u.Announcement(i, i, "", "", nil))
+		require.NoError(t, err)
+	}
+
+	firstSeq, lastSeq := uint64(98), uint64(100)
+
+	for _, predecessorSeq := range []uint64{0, 1, 2, 94, 95, 96, 97, 98, 99, 100, 101, 102, 1000, 1001, 1002} {
+		for _, predecessorMsgId := range []string{"", "0", "1", "2", "94", "95", "96", "97", "98", "99", "100", "101", "102", "1000", "1001", "1002"} {
+			for _, elem := range []uint64{0, 1, 2, 97, 98, 99, 100, 101, 102, 1000, 1001, 1002} {
+
+				var expectedErr error
+
+				if elem <= lastSeq { // Dedup case
+					if elem < firstSeq { // Dedup behavior beyond it's window is undefined
+						continue
+					}
+					if predecessorSeq+1 == elem { // Normal dedup
+						expectedErr = nil
+					} else { // Dedup into wrong sequence
+						expectedErr = blockio.ErrCollision
+					}
+				} else { // New element
+					if predecessorSeq+1 < firstSeq { // Removed position
+						expectedErr = blockio.ErrRemovedPosition
+					} else if predecessorSeq < lastSeq { // Collision
+						expectedErr = blockio.ErrCollision
+					} else if predecessorSeq == lastSeq && predecessorMsgId == "" || predecessorMsgId == strconv.FormatUint(predecessorSeq, 10) { // Normal write
+						continue
+					} else {
+						expectedErr = blockio.ErrWrongPredecessor
+					}
+				}
+
+				msg := u.Announcement(elem, elem, "", "", nil)
+				err = sOut.WriteAfter(context.Background(), predecessorSeq, predecessorMsgId, msg)
+				if expectedErr != nil {
+					require.ErrorIs(t, err, expectedErr)
+				} else {
+					require.NoError(t, err)
+				}
+			}
+		}
+	}
+
+	// Make sure writes still work after that
+	for i := uint64(101); i <= 200; i++ {
+		err = sOut.WriteAfter(context.Background(), i-1, strconv.FormatUint(i-1, 10), u.Announcement(i, i, "", "", nil))
+		require.NoError(t, err)
+	}
+}
+
+func toHex(n uint64) string {
+	return fmt.Sprintf("%x", n)
+}
