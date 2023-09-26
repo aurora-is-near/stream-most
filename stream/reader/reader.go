@@ -10,7 +10,6 @@ import (
 
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream"
-	"github.com/aurora-is-near/stream-most/stream/reader/monitoring"
 	"github.com/aurora-is-near/stream-most/util"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/sirupsen/logrus"
@@ -125,10 +124,6 @@ func (r *Reader) run() {
 			if err != nil {
 				r.finish(fmt.Errorf("unable to parse message metadata: %w", err))
 				return
-			}
-
-			if monitoring.LastReadSequence != nil {
-				monitoring.LastReadSequence.Set(float64(meta.Sequence.Stream))
 			}
 
 			if lastConsumedSeq.Load() == 0 {
