@@ -3,11 +3,11 @@ package streaminput
 import (
 	"time"
 
-	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/aurora-is-near/stream-most/stream/streamconnector"
 )
 
 type Config struct {
-	Stream             *stream.Options
+	Conn               *streamconnector.Config
 	FilterSubjects     []string
 	StartSeq           uint64
 	EndSeq             uint64

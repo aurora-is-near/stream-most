@@ -8,7 +8,7 @@ import (
 )
 
 type Fetcher struct {
-	input     stream.Interface
+	input     *stream.Stream
 	interval  time.Duration
 	stopOnErr bool
 	cb        func(*State)
@@ -18,7 +18,7 @@ type Fetcher struct {
 	stopped chan struct{}
 }
 
-func StartFetcher(input stream.Interface, interval time.Duration, stopOnErr bool, cb func(*State)) *Fetcher {
+func StartFetcher(input *stream.Stream, interval time.Duration, stopOnErr bool, cb func(*State)) *Fetcher {
 	f := &Fetcher{
 		input:     input,
 		interval:  interval,

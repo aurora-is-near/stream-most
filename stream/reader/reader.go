@@ -15,22 +15,11 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type Receiver interface {
-	HandleMsg(ctx context.Context, msg messages.NatsMessage)
-	HandleFinish(err error)
-}
-
-type IReader interface {
-	Error() error
-	Stop(wait bool)
-	IsFake() bool
-}
-
 type Reader struct {
 	logger *logrus.Entry
 
-	opts     *Options
-	input    stream.Interface
+	cfg      *Config
+	input    *stream.Stream
 	receiver Receiver
 
 	ctx        context.Context
@@ -40,20 +29,16 @@ type Reader struct {
 	wg         sync.WaitGroup
 }
 
-func Start(input stream.Interface, opts *Options, receiver Receiver) (IReader, error) {
-	if input.IsFake() {
-		return createFake(input, opts, receiver)
-	}
-
-	opts = opts.WithDefaults()
+func Start(input *stream.Stream, cfg *Config, receiver Receiver) (*Reader, error) {
+	cfg = cfg.WithDefaults()
 
 	r := &Reader{
 		logger: logrus.
 			WithField("component", "streamreader").
 			WithField("stream", input.Name()).
-			WithField("nats", input.Options().Nats.LogTag),
+			WithField("tag", cfg.LogTag),
 
-		opts:     opts,
+		cfg:      cfg,
 		input:    input,
 		receiver: receiver,
 	}
@@ -102,8 +87,8 @@ func (r *Reader) run() {
 	defer r.receiver.HandleFinish(r.err)
 
 	consumer, err := r.input.Stream().OrderedConsumer(r.ctx, jetstream.OrderedConsumerConfig{
-		FilterSubjects: r.opts.FilterSubjects,
-		OptStartSeq:    r.opts.StartSeq,
+		FilterSubjects: r.cfg.FilterSubjects,
+		OptStartSeq:    r.cfg.StartSeq,
 	})
 	if err != nil {
 		r.finish(fmt.Errorf("unable to create ordered consumer: %w", err))
@@ -127,19 +112,19 @@ func (r *Reader) run() {
 			}
 
 			if lastConsumedSeq.Load() == 0 {
-				if r.opts.StrictStart && len(r.opts.FilterSubjects) == 0 {
-					if meta.Sequence.Stream != r.opts.StartSeq {
-						r.finish(fmt.Errorf("unexpected sequence: %d, expected: %d", meta.Sequence.Stream, r.opts.StartSeq))
+				if r.cfg.StrictStart && len(r.cfg.FilterSubjects) == 0 {
+					if meta.Sequence.Stream != r.cfg.StartSeq {
+						r.finish(fmt.Errorf("unexpected sequence: %d, expected: %d", meta.Sequence.Stream, r.cfg.StartSeq))
 						return
 					}
 				} else {
-					if meta.Sequence.Stream < r.opts.StartSeq {
-						r.finish(fmt.Errorf("unexpected sequence: %d, expected anything greater than or equal to %d", meta.Sequence.Stream, r.opts.StartSeq))
+					if meta.Sequence.Stream < r.cfg.StartSeq {
+						r.finish(fmt.Errorf("unexpected sequence: %d, expected anything greater than or equal to %d", meta.Sequence.Stream, r.cfg.StartSeq))
 						return
 					}
 				}
 			} else {
-				if len(r.opts.FilterSubjects) == 0 {
+				if len(r.cfg.FilterSubjects) == 0 {
 					if meta.Sequence.Stream != lastConsumedSeq.Load()+1 {
 						r.finish(fmt.Errorf("unexpected sequence: %d, expected: %d", meta.Sequence.Stream, lastConsumedSeq.Load()+1))
 						return
@@ -153,7 +138,7 @@ func (r *Reader) run() {
 			}
 			lastConsumedSeq.Store(meta.Sequence.Stream)
 
-			if r.opts.EndSeq > 0 && meta.Sequence.Stream >= r.opts.EndSeq {
+			if r.cfg.EndSeq > 0 && meta.Sequence.Stream >= r.cfg.EndSeq {
 				r.logger.Info("end sequence reached, finishing")
 				r.finish(nil)
 				return
@@ -163,7 +148,7 @@ func (r *Reader) run() {
 
 			lastFiredSeq.Store(meta.Sequence.Stream)
 
-			if r.opts.EndSeq > 0 && meta.Sequence.Stream+1 >= r.opts.EndSeq {
+			if r.cfg.EndSeq > 0 && meta.Sequence.Stream+1 >= r.cfg.EndSeq {
 				r.logger.Info("last sequence reached, finishing")
 				r.finish(nil)
 				return
@@ -206,7 +191,7 @@ func (r *Reader) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64) {
 	}
 
 	// Let's wait to ensure it doesn't change
-	if !util.CtxSleep(r.ctx, r.opts.MaxSilence) {
+	if !util.CtxSleep(r.ctx, r.cfg.MaxSilence) {
 		return
 	}
 
@@ -223,16 +208,16 @@ func (r *Reader) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64) {
 	}
 
 	// Is there anything to read potentially?
-	if r.opts.EndSeq > 0 {
+	if r.cfg.EndSeq > 0 {
 		minPotentialNextSeq := lastFiredSeq.Load() + 1
 		if info.State.FirstSeq > minPotentialNextSeq {
 			minPotentialNextSeq = info.State.FirstSeq
 		}
-		if r.opts.StartSeq > minPotentialNextSeq {
-			minPotentialNextSeq = r.opts.StartSeq
+		if r.cfg.StartSeq > minPotentialNextSeq {
+			minPotentialNextSeq = r.cfg.StartSeq
 		}
-		if minPotentialNextSeq >= r.opts.EndSeq {
-			r.logger.Infof("min potential next seq (%d) >= endSeq (%d), finishing", minPotentialNextSeq, r.opts.EndSeq)
+		if minPotentialNextSeq >= r.cfg.EndSeq {
+			r.logger.Infof("min potential next seq (%d) >= endSeq (%d), finishing", minPotentialNextSeq, r.cfg.EndSeq)
 			r.finish(nil)
 			return
 		}
@@ -249,12 +234,12 @@ func (r *Reader) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64) {
 	provenAvailableSeq := lastConsumedSeq.Load()
 
 	// For read-all-subjects mode we simply check stream last seq
-	if len(r.opts.FilterSubjects) == 0 && info.State.LastSeq > provenAvailableSeq {
+	if len(r.cfg.FilterSubjects) == 0 && info.State.LastSeq > provenAvailableSeq {
 		provenAvailableSeq = info.State.LastSeq
 	}
 
 	// For custom subjects we check last msg per subject
-	for _, subj := range r.opts.FilterSubjects {
+	for _, subj := range r.cfg.FilterSubjects {
 		// If cursor suddenly changed - all ok, return
 		if lastConsumedSeq.Load() > silenceCandidateSeq {
 			return
@@ -287,7 +272,7 @@ func (r *Reader) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64) {
 	}
 
 	// Let's wait that we don't get new message for some time even though it's proven to exist
-	if !util.CtxSleep(r.ctx, r.opts.MaxSilence) {
+	if !util.CtxSleep(r.ctx, r.cfg.MaxSilence) {
 		return
 	}
 

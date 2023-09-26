@@ -3,11 +3,11 @@ package streamoutput
 import (
 	"time"
 
-	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/aurora-is-near/stream-most/stream/streamconnector"
 )
 
 type Config struct {
-	Stream                *stream.Options
+	Conn                  *streamconnector.Config
 	SubjectPattern        string
 	WriteRetryWait        time.Duration
 	WriteRetryAttempts    int

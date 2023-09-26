@@ -6,6 +6,7 @@ import (
 	"github.com/aurora-is-near/stream-most/service/blockio"
 	"github.com/aurora-is-near/stream-most/service/outputs/streamoutput"
 	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/aurora-is-near/stream-most/stream/streamconnector"
 	"github.com/aurora-is-near/stream-most/transport"
 	"github.com/aurora-is-near/stream-most/util"
 	"github.com/nats-io/nats.go/jetstream"
@@ -19,7 +20,7 @@ func StreamCmd() (cmd *cobra.Command, outputFactory func() (blockio.Output, erro
 	}
 
 	cfg := &streamoutput.Config{
-		Stream: &stream.Options{
+		Conn: &streamconnector.Config{
 			Nats: &transport.NATSConfig{
 				ContextName:   "",
 				OverrideURL:   "",
@@ -27,9 +28,12 @@ func StreamCmd() (cmd *cobra.Command, outputFactory func() (blockio.Output, erro
 				LogTag:        "output",
 				Options:       transport.RecommendedNatsOptions(),
 			},
-			Stream:      "",
-			RequestWait: time.Second * 10,
-			WriteWait:   time.Second * 10,
+			Stream: &stream.Config{
+				Name:        "",
+				RequestWait: time.Second * 10,
+				WriteWait:   time.Second * 10,
+				LogTag:      "output",
+			},
 		},
 		SubjectPattern:        "",
 		WriteRetryWait:        jetstream.DefaultPubRetryWait,
@@ -40,12 +44,12 @@ func StreamCmd() (cmd *cobra.Command, outputFactory func() (blockio.Output, erro
 		StateFetchInterval:    time.Second * 15,
 	}
 
-	cmd.PersistentFlags().StringVar(&cfg.Stream.Nats.ContextName, "out-nats", "", "Name of the nats context for output stream. If empty - default one will be used")
-	cmd.PersistentFlags().StringVar(&cfg.Stream.Nats.OverrideURL, "out-url", "", "Override NATS URL for output stream. Comma-separated list is supported")
-	cmd.PersistentFlags().StringVar(&cfg.Stream.Nats.OverrideCreds, "out-creds", "", "Override path to NATS credentials file for output stream. If empty - won't be used")
-	cmd.PersistentFlags().StringVar(&cfg.Stream.Stream, "out-stream", "", "Name of the output stream")
-	cmd.PersistentFlags().DurationVar(&cfg.Stream.RequestWait, "out-request-timeout", time.Second*10, "Read-requests timeout for output stream connection")
-	cmd.PersistentFlags().DurationVar(&cfg.Stream.WriteWait, "out-write-timeout", time.Second*10, "Write-requests timeout for output stream connection")
+	cmd.PersistentFlags().StringVar(&cfg.Conn.Nats.ContextName, "out-nats", "", "Name of the nats context for output stream. If empty - default one will be used")
+	cmd.PersistentFlags().StringVar(&cfg.Conn.Nats.OverrideURL, "out-url", "", "Override NATS URL for output stream. Comma-separated list is supported")
+	cmd.PersistentFlags().StringVar(&cfg.Conn.Nats.OverrideCreds, "out-creds", "", "Override path to NATS credentials file for output stream. If empty - won't be used")
+	cmd.PersistentFlags().StringVar(&cfg.Conn.Stream.Name, "out-stream", "", "Name of the output stream")
+	cmd.PersistentFlags().DurationVar(&cfg.Conn.Stream.RequestWait, "out-request-timeout", time.Second*10, "Read-requests timeout for output stream connection")
+	cmd.PersistentFlags().DurationVar(&cfg.Conn.Stream.WriteWait, "out-write-timeout", time.Second*10, "Write-requests timeout for output stream connection")
 	cmd.PersistentFlags().StringVar(&cfg.SubjectPattern, "out-subject", "", "Output stream subject pattern for writing. Star symbol ('*') will be replaced with shard number etc. Empty means automatic")
 	cmd.PersistentFlags().DurationVar(&cfg.WriteRetryWait, "out-write-retry-wait", jetstream.DefaultPubRetryWait, "Time wait between retries on Publish to output stream if err is NoResponders")
 	cmd.PersistentFlags().IntVar(&cfg.WriteRetryAttempts, "out-write-retry-attempts", jetstream.DefaultPubRetryAttempts, "Number of retries on Publish to output stream if err is NoResponders")

@@ -14,7 +14,7 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/blockio"
 	"github.com/aurora-is-near/stream-most/service/streamstate"
-	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/aurora-is-near/stream-most/stream/streamconnector"
 	"github.com/aurora-is-near/stream-most/util"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -49,8 +49,8 @@ func Start(config *Config) *Output {
 	out := &Output{
 		logger: logrus.
 			WithField("component", "streamoutput").
-			WithField("stream", config.Stream.Stream).
-			WithField("nats", config.Stream.Nats.LogTag),
+			WithField("stream", config.Conn.Stream.Name).
+			WithField("nats", config.Conn.Nats.LogTag),
 
 		config:   config,
 		finished: make(chan struct{}),
@@ -124,7 +124,7 @@ func (out *Output) runReconnectionLoop() error {
 		}
 
 		out.logger.Infof("Connecting stream...")
-		s, err := stream.Connect(out.config.Stream)
+		sc, err := streamconnector.Connect(out.config.Conn)
 		if err != nil {
 			out.logger.Errorf("Unable to connect: %v", err)
 			lastErr = fmt.Errorf("%w: %w", ErrConnectionProblem, err)
@@ -132,7 +132,7 @@ func (out *Output) runReconnectionLoop() error {
 			continue
 		}
 
-		lastErr = out.runStreamConnection(s)
+		lastErr = out.runStreamConnection(sc)
 
 		if errors.Is(lastErr, ErrStopped) {
 			out.logger.Infof("Got stopped externally, finishing...")
@@ -143,7 +143,7 @@ func (out *Output) runReconnectionLoop() error {
 		}
 
 		out.logger.Infof("Disconnecting stream...")
-		s.Disconnect()
+		sc.Disconnect()
 
 		if !errors.Is(lastErr, ErrConnectionProblem) {
 			return lastErr
@@ -153,11 +153,11 @@ func (out *Output) runReconnectionLoop() error {
 	return fmt.Errorf("max reconnects (%d) exceeded: %w", out.config.MaxReconnects, lastErr)
 }
 
-func (out *Output) runStreamConnection(s stream.Interface) error {
+func (out *Output) runStreamConnection(sc *streamconnector.StreamConnector) error {
 	subjectPattern := out.config.SubjectPattern
 	if subjectPattern == "" {
 		out.logger.Infof("Writing subject pattern not provided, figuring it out automatically...")
-		subjects, err := s.GetConfigSubjects(out.ctx)
+		subjects, err := sc.Stream().GetConfigSubjects(out.ctx)
 		if err != nil {
 			if out.ctx.Err() != nil && errors.Is(err, out.ctx.Err()) {
 				return ErrStopped
@@ -175,7 +175,7 @@ func (out *Output) runStreamConnection(s stream.Interface) error {
 		out.logger.Infof("Selected subject pattern '%s'", subjectPattern)
 	}
 
-	out.curConn.Store(newConnection(s, subjectPattern))
+	out.curConn.Store(newConnection(sc.Stream(), subjectPattern))
 
 	return out.handleConnection()
 }

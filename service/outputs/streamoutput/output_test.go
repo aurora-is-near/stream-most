@@ -12,6 +12,7 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/service/blockio"
 	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/aurora-is-near/stream-most/stream/streamconnector"
 	"github.com/aurora-is-near/stream-most/testing/u"
 	"github.com/aurora-is-near/stream-most/transport"
 	"github.com/nats-io/nats-server/v2/test"
@@ -21,15 +22,18 @@ import (
 
 func makeCfg(natsUrl string, natsLogTag string, streamName string, maxReconnects int, reconnectDelay time.Duration, stateFetchInterval time.Duration) *Config {
 	return &Config{
-		Stream: &stream.Options{
+		Conn: &streamconnector.Config{
 			Nats: &transport.NATSConfig{
 				OverrideURL: natsUrl,
 				LogTag:      natsLogTag,
 				Options:     transport.RecommendedNatsOptions(),
 			},
-			Stream:      streamName,
-			RequestWait: time.Second,
-			WriteWait:   time.Second,
+			Stream: &stream.Config{
+				Name:        streamName,
+				RequestWait: time.Second,
+				WriteWait:   time.Second,
+				LogTag:      natsLogTag,
+			},
 		},
 		WriteRetryWait:        jetstream.DefaultPubRetryWait,
 		WriteRetryAttempts:    jetstream.DefaultPubRetryAttempts,

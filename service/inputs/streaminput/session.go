@@ -61,7 +61,7 @@ func (s *session) isClosed() bool {
 	}
 }
 
-func (s *session) runSeek(inputStream stream.Interface, startSeq uint64, endSeq uint64) (_done <-chan error, _cancel func(reset bool)) {
+func (s *session) runSeek(inputStream *stream.Stream, startSeq uint64, endSeq uint64) (_done <-chan error, _cancel func(reset bool)) {
 	done := make(chan error, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 

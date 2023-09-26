@@ -31,7 +31,7 @@ func (s *State) Tip() blockio.Msg {
 	return s.LastMsg
 }
 
-func Fetch(ctx context.Context, input stream.Interface) *State {
+func Fetch(ctx context.Context, input *stream.Stream) *State {
 	res := &State{}
 
 	if res.Info, res.Err = input.GetInfo(ctx); res.Err != nil {

@@ -14,7 +14,7 @@ import (
 	If such sequence is not available yet - it will still be returned.
 */
 
-func SeekSeq(ctx context.Context, input stream.Interface, target uint64, startSeq, endSeq uint64) (uint64, error) {
+func SeekSeq(ctx context.Context, input *stream.Stream, target uint64, startSeq, endSeq uint64) (uint64, error) {
 	logger := logrus.WithField("component", "streamseek").WithField("stream", input.Name())
 
 	logger.Infof("Seeking on stream %s (startSeq=%d, endSeq=%d)", input.Name(), startSeq, endSeq)

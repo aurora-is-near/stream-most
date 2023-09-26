@@ -12,8 +12,8 @@ import (
 	"github.com/aurora-is-near/stream-most/service/blockio"
 	"github.com/aurora-is-near/stream-most/service/streamseek"
 	"github.com/aurora-is-near/stream-most/service/streamstate"
-	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/reader"
+	"github.com/aurora-is-near/stream-most/stream/streamconnector"
 	"github.com/aurora-is-near/stream-most/util"
 	"github.com/sirupsen/logrus"
 )
@@ -31,7 +31,7 @@ type Input struct {
 	logger *logrus.Entry
 
 	config *Config
-	stream stream.Interface
+	sc     *streamconnector.StreamConnector
 
 	curSession atomic.Pointer[session]
 	sessionMtx sync.Mutex // Prevents seeking after finish
@@ -50,8 +50,8 @@ func Start(config *Config) *Input {
 	in := &Input{
 		logger: logrus.
 			WithField("component", "streaminput").
-			WithField("stream", config.Stream.Stream).
-			WithField("nats", config.Stream.Nats.LogTag),
+			WithField("stream", config.Conn.Stream.Name).
+			WithField("tag", config.Conn.Nats.LogTag),
 
 		config:   config,
 		finished: make(chan struct{}),
@@ -181,7 +181,7 @@ func (in *Input) runReconnectionLoop() error {
 		}
 
 		in.logger.Infof("Connecting stream...")
-		if in.stream, lastErr = stream.Connect(in.config.Stream); lastErr != nil {
+		if in.sc, lastErr = streamconnector.Connect(in.config.Conn); lastErr != nil {
 			in.logger.Errorf("Unable to connect: %v", lastErr)
 			lastErr = fmt.Errorf("%w: %w", ErrConnectionProblem, lastErr)
 			continue
@@ -196,8 +196,8 @@ func (in *Input) runReconnectionLoop() error {
 		}
 
 		in.logger.Infof("Disconnecting stream...")
-		in.stream.Disconnect()
-		in.stream = nil
+		in.sc.Disconnect()
+		in.sc = nil
 
 		if !errors.Is(lastErr, ErrConnectionProblem) {
 			return lastErr
@@ -209,7 +209,7 @@ func (in *Input) runReconnectionLoop() error {
 
 func (in *Input) runMultisessionLoop() error {
 	in.stateFetchErrCh = make(chan error, 1)
-	stateFetcher := streamstate.StartFetcher(in.stream, in.config.StateFetchInterval, true, func(s *streamstate.State) {
+	stateFetcher := streamstate.StartFetcher(in.sc.Stream(), in.config.StateFetchInterval, true, func(s *streamstate.State) {
 		if s.Err != nil {
 			in.stateFetchErrCh <- fmt.Errorf("unable to fetch state: %w (%w)", s.Err, ErrConnectionProblem)
 		} else {
@@ -249,7 +249,7 @@ func (in *Input) runMultisessionLoop() error {
 func (in *Input) handleSession(s *session) error {
 	if s.nextSeq == 0 {
 		in.logger.Infof("Starting new reading session. Performing seek...")
-		seekErrCh, cancelSeek := s.runSeek(in.stream, in.config.StartSeq, in.config.EndSeq)
+		seekErrCh, cancelSeek := s.runSeek(in.sc.Stream(), in.config.StartSeq, in.config.EndSeq)
 		select {
 		case <-in.ctx.Done():
 			cancelSeek(true)
@@ -280,8 +280,8 @@ func (in *Input) handleSession(s *session) error {
 
 	in.logger.Infof("Starting reader from seq=%d", s.nextSeq)
 	reader, err := reader.Start(
-		in.stream,
-		&reader.Options{
+		in.sc.Stream(),
+		&reader.Config{
 			FilterSubjects: in.config.FilterSubjects,
 			StartSeq:       s.nextSeq,
 			EndSeq:         in.config.EndSeq,

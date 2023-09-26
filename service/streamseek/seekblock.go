@@ -17,7 +17,7 @@ import (
 	If there's no (and will never be any) available blocks in provided range - ErrEmptyRange will be returned.
 */
 
-func SeekBlock(ctx context.Context, input stream.Interface, target blocks.Block, startSeq, endSeq uint64) (uint64, error) {
+func SeekBlock(ctx context.Context, input *stream.Stream, target blocks.Block, startSeq, endSeq uint64) (uint64, error) {
 	logger := logrus.WithField("component", "streamseek").WithField("stream", input.Name())
 
 	logger.Infof("Seeking on stream %s (startSeq=%d, endSeq=%d)", input.Name(), startSeq, endSeq)

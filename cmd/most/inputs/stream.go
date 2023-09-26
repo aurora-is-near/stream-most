@@ -6,6 +6,7 @@ import (
 	"github.com/aurora-is-near/stream-most/service/blockio"
 	"github.com/aurora-is-near/stream-most/service/inputs/streaminput"
 	"github.com/aurora-is-near/stream-most/stream"
+	"github.com/aurora-is-near/stream-most/stream/streamconnector"
 	"github.com/aurora-is-near/stream-most/transport"
 	"github.com/aurora-is-near/stream-most/util"
 	"github.com/spf13/cobra"
@@ -18,7 +19,7 @@ func StreamCmd() (cmd *cobra.Command, inputFactory func() (blockio.Input, error)
 	}
 
 	cfg := &streaminput.Config{
-		Stream: &stream.Options{
+		Conn: &streamconnector.Config{
 			Nats: &transport.NATSConfig{
 				ContextName:   "",
 				OverrideURL:   "",
@@ -26,9 +27,12 @@ func StreamCmd() (cmd *cobra.Command, inputFactory func() (blockio.Input, error)
 				LogTag:        "input",
 				Options:       transport.RecommendedNatsOptions(),
 			},
-			Stream:      "",
-			RequestWait: time.Second * 10,
-			WriteWait:   time.Second * 10,
+			Stream: &stream.Config{
+				Name:        "",
+				RequestWait: time.Second * 10,
+				WriteWait:   time.Second * 10,
+				LogTag:      "input",
+			},
 		},
 		FilterSubjects:     []string{},
 		StartSeq:           0,
@@ -40,11 +44,11 @@ func StreamCmd() (cmd *cobra.Command, inputFactory func() (blockio.Input, error)
 		StateFetchInterval: time.Second * 15,
 	}
 
-	cmd.PersistentFlags().StringVar(&cfg.Stream.Nats.ContextName, "in-nats", "", "Name of the nats context for input stream. If empty - default one will be used")
-	cmd.PersistentFlags().StringVar(&cfg.Stream.Nats.OverrideURL, "in-url", "", "Override NATS URL for input stream. Comma-separated list is supported")
-	cmd.PersistentFlags().StringVar(&cfg.Stream.Nats.OverrideCreds, "in-creds", "", "Override path to NATS credentials file for input stream. If empty - won't be used")
-	cmd.PersistentFlags().StringVar(&cfg.Stream.Stream, "in-stream", "", "Name of the input stream")
-	cmd.PersistentFlags().DurationVar(&cfg.Stream.RequestWait, "in-request-timeout", time.Second*10, "Read-requests timeout for input stream connection")
+	cmd.PersistentFlags().StringVar(&cfg.Conn.Nats.ContextName, "in-nats", "", "Name of the nats context for input stream. If empty - default one will be used")
+	cmd.PersistentFlags().StringVar(&cfg.Conn.Nats.OverrideURL, "in-url", "", "Override NATS URL for input stream. Comma-separated list is supported")
+	cmd.PersistentFlags().StringVar(&cfg.Conn.Nats.OverrideCreds, "in-creds", "", "Override path to NATS credentials file for input stream. If empty - won't be used")
+	cmd.PersistentFlags().StringVar(&cfg.Conn.Stream.Name, "in-stream", "", "Name of the input stream")
+	cmd.PersistentFlags().DurationVar(&cfg.Conn.Stream.RequestWait, "in-request-timeout", time.Second*10, "Read-requests timeout for input stream connection")
 	cmd.PersistentFlags().StringSliceVar(&cfg.FilterSubjects, "in-subjects", []string{}, "Subject filter-array for input stream (comma separated). If empty - whole stream will be read")
 	cmd.PersistentFlags().Uint64Var(&cfg.StartSeq, "in-start-seq", 0, "Lower bound of allowed sequence range of input stream to read from (inlcusive)")
 	cmd.PersistentFlags().Uint64Var(&cfg.EndSeq, "in-end-seq", 0, "Upper bound of allowed sequence range of input stream to read from (exclusive). 0 means no bound")

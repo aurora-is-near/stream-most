@@ -9,7 +9,7 @@ import (
 const maxQuota = 100
 
 type connection struct {
-	stream         stream.Interface
+	stream         *stream.Stream
 	subjectPattern string
 
 	quota   chan struct{}
@@ -18,7 +18,7 @@ type connection struct {
 	errOnce sync.Once
 }
 
-func newConnection(s stream.Interface, subjectPattern string) *connection {
+func newConnection(s *stream.Stream, subjectPattern string) *connection {
 	c := &connection{
 		stream:         s,
 		subjectPattern: subjectPattern,
