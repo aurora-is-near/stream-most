@@ -22,6 +22,8 @@ type Reader struct {
 	input    *stream.Stream
 	receiver Receiver
 
+	lastKnownSeq atomic.Uint64
+
 	ctx        context.Context
 	cancel     func()
 	err        error
@@ -66,10 +68,6 @@ func (r *Reader) Stop(wait bool) {
 	}
 }
 
-func (r *Reader) IsFake() bool {
-	return false
-}
-
 func (r *Reader) finish(err error) {
 	r.finishOnce.Do(func() {
 		r.err = err
@@ -110,6 +108,8 @@ func (r *Reader) run() {
 				r.finish(fmt.Errorf("unable to parse message metadata: %w", err))
 				return
 			}
+
+			r.updateLastKnownSeq(meta.Sequence.Stream + meta.NumPending)
 
 			if lastConsumedSeq.Load() == 0 {
 				if r.cfg.StrictStart && len(r.cfg.FilterSubjects) == 0 {
@@ -206,6 +206,7 @@ func (r *Reader) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64) {
 		r.finish(fmt.Errorf("unable to get stream info: %w", err))
 		return
 	}
+	r.updateLastKnownSeq(info.State.LastSeq)
 
 	// Is there anything to read potentially?
 	if r.cfg.EndSeq > 0 {
@@ -256,6 +257,7 @@ func (r *Reader) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64) {
 			r.finish(fmt.Errorf("unable to get last stream message for subject '%s': %w", subj, err))
 			return
 		}
+		r.updateLastKnownSeq(msg.GetSequence())
 		if msg.GetSequence() > provenAvailableSeq {
 			provenAvailableSeq = msg.GetSequence()
 		}
@@ -283,4 +285,18 @@ func (r *Reader) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64) {
 
 	// Silence confirmed...
 	r.finish(fmt.Errorf("detected consumer silence :/"))
+}
+
+func (r *Reader) updateLastKnownSeq(seq uint64) {
+	// CAS-based atomic maximum
+	for {
+		prevValue := r.lastKnownSeq.Load()
+		if prevValue >= seq {
+			return
+		}
+		if r.lastKnownSeq.CompareAndSwap(prevValue, seq) {
+			break
+		}
+	}
+	r.receiver.HandleNewKnownSeq(r.lastKnownSeq.Load())
 }

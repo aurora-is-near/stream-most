@@ -40,3 +40,5 @@ func (r *receiver) HandleMsg(ctx context.Context, msg messages.NatsMessage) {
 func (r *receiver) HandleFinish(err error) {
 	r.errCh <- err
 }
+
+func (r *receiver) HandleNewKnownSeq(seq uint64) {}
