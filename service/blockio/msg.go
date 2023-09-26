@@ -13,11 +13,7 @@ type Msg interface {
 	Get() messages.NatsMessage
 
 	/*
-		Waits until block is available and returns it.
-		Primary purpose is asynchronous decoding.
-
-		Error classes:
-			- ErrCantDecode
+		Waits until block is decoded and returns it (or decoding error).
 	*/
 	GetDecoded(ctx context.Context) (*messages.BlockMessage, error)
 }
