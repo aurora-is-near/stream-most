@@ -248,7 +248,7 @@ func TestLimitedReconnects(t *testing.T) {
 	}, time.Second*5, time.Second/20)
 }
 
-func TestWriteReconnect(t *testing.T) {
+func TestProtectedWriteReconnect(t *testing.T) {
 	formats.UseFormat(formats.NearV3)
 
 	// Start everything
@@ -263,7 +263,7 @@ func TestWriteReconnect(t *testing.T) {
 
 	// Wait until first write succeeds
 	require.Eventually(t, func() bool {
-		err := sOut.WriteAfter(context.Background(), 0, "", u.Announcement(1, 101, "AAA", "_", nil))
+		err := sOut.ProtectedWrite(context.Background(), 0, "", u.Announcement(1, 101, "AAA", "_", nil))
 		if err != nil {
 			require.ErrorIs(t, err, ErrNotStartedYet)
 			require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
@@ -273,14 +273,14 @@ func TestWriteReconnect(t *testing.T) {
 	}, time.Second*2, time.Second/20)
 
 	// Check that next write succeeds
-	err := sOut.WriteAfter(context.Background(), 1, "101", u.Shard(2, 101, 3, "AAA", "_", nil))
+	err := sOut.ProtectedWrite(context.Background(), 1, "101", u.Shard(2, 101, 3, "AAA", "_", nil))
 	require.NoError(t, err)
 
 	// Stop server
 	s.Shutdown()
 
 	// Make sure writes don't work now
-	err = sOut.WriteAfter(context.Background(), 2, "101.3", u.Shard(3, 101, 5, "AAA", "_", nil))
+	err = sOut.ProtectedWrite(context.Background(), 2, "101.3", u.Shard(3, 101, 5, "AAA", "_", nil))
 	require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
 
 	// Run server again
@@ -289,7 +289,7 @@ func TestWriteReconnect(t *testing.T) {
 
 	// Wait until writes work again
 	require.Eventually(t, func() bool {
-		err := sOut.WriteAfter(context.Background(), 2, "101.3", u.Shard(3, 101, 5, "AAA", "_", nil))
+		err := sOut.ProtectedWrite(context.Background(), 2, "101.3", u.Shard(3, 101, 5, "AAA", "_", nil))
 		if err != nil {
 			require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
 			return false
@@ -298,11 +298,11 @@ func TestWriteReconnect(t *testing.T) {
 	}, time.Second*2, time.Second/20)
 
 	// Check that next write succeeds as well
-	err = sOut.WriteAfter(context.Background(), 3, "101.5", u.Announcement(4, 105, "BBB", "AAA", nil))
+	err = sOut.ProtectedWrite(context.Background(), 3, "101.5", u.Announcement(4, 105, "BBB", "AAA", nil))
 	require.NoError(t, err)
 }
 
-func TestWritesAffectState(t *testing.T) {
+func TestProtectedWriteAffectsState(t *testing.T) {
 	formats.UseFormat(formats.NearV3)
 
 	// Start everything
@@ -332,7 +332,7 @@ func TestWritesAffectState(t *testing.T) {
 	lastMsgID := ""
 	for i := uint64(1); i <= 100; i++ {
 		newBlock := u.Announcement(i, i+100, toHex(i+100), toHex(i+99), nil)
-		err := sOut.WriteAfter(context.Background(), i-1, lastMsgID, newBlock)
+		err := sOut.ProtectedWrite(context.Background(), i-1, lastMsgID, newBlock)
 		require.NoError(t, err)
 		lastMsgID = blocks.ConstructMsgID(newBlock.Block)
 
@@ -391,7 +391,7 @@ func TestWritesAffectState(t *testing.T) {
 	lastMsgID = "201"
 	for i := uint64(102); i <= 200; i++ {
 		newBlock := u.Shard(i, 201, i, toHex(i+100), toHex(i+99), nil)
-		err := sOut.WriteAfter(context.Background(), i-1, lastMsgID, newBlock)
+		err := sOut.ProtectedWrite(context.Background(), i-1, lastMsgID, newBlock)
 		require.NoError(t, err)
 		lastMsgID = blocks.ConstructMsgID(newBlock.Block)
 
@@ -402,7 +402,7 @@ func TestWritesAffectState(t *testing.T) {
 
 	// Write duplicate
 	duplicateBlock := u.Shard(198, 201, 198, toHex(298), toHex(297), nil)
-	err := sOut.WriteAfter(context.Background(), 197, "201.197", duplicateBlock)
+	err := sOut.ProtectedWrite(context.Background(), 197, "201.197", duplicateBlock)
 	require.NoError(t, err)
 
 	// Make sure that duplicate write doesn't affect the state
@@ -411,7 +411,7 @@ func TestWritesAffectState(t *testing.T) {
 	u.RequireState(t, state, state.FirstSeq(), 200, blocks.Shard, 201, 200, toHex(300), toHex(299), nil)
 }
 
-func TestWriteErrors(t *testing.T) {
+func TestProtectedWriteErrors(t *testing.T) {
 	formats.UseFormat(formats.NearV3)
 
 	// Start everything
@@ -426,7 +426,7 @@ func TestWriteErrors(t *testing.T) {
 
 	// Empty stream + wrong predecessor seq: blockio.ErrWrongPredecessor
 	require.Eventually(t, func() bool {
-		err := sOut.WriteAfter(context.Background(), 1, "", u.Announcement(2, 2, "", "", nil))
+		err := sOut.ProtectedWrite(context.Background(), 1, "", u.Announcement(2, 2, "", "", nil))
 		require.Error(t, err)
 		if errors.Is(err, blockio.ErrTemporarilyUnavailable) {
 			return false
@@ -436,44 +436,44 @@ func TestWriteErrors(t *testing.T) {
 	}, time.Second*5, time.Second/20)
 
 	// Empty stream + wrong predecessor msgid: blockio.ErrWrongPredecessor
-	err := sOut.WriteAfter(context.Background(), 0, "non-existing-msgid", u.Announcement(1, 1, "", "", nil))
+	err := sOut.ProtectedWrite(context.Background(), 0, "non-existing-msgid", u.Announcement(1, 1, "", "", nil))
 	require.ErrorIs(t, err, blockio.ErrWrongPredecessor)
 
 	// Empty stream + wrong predecessor seq + wrong predecessor msgid: blockio.ErrWrongPredecessor
-	err = sOut.WriteAfter(context.Background(), 1, "non-existing-msgid", u.Announcement(2, 2, "", "", nil))
+	err = sOut.ProtectedWrite(context.Background(), 1, "non-existing-msgid", u.Announcement(2, 2, "", "", nil))
 	require.ErrorIs(t, err, blockio.ErrWrongPredecessor)
 
 	// Correct write
-	err = sOut.WriteAfter(context.Background(), 0, "", u.Announcement(1, 1, "", "", nil))
+	err = sOut.ProtectedWrite(context.Background(), 0, "", u.Announcement(1, 1, "", "", nil))
 	require.NoError(t, err)
 
 	// Wrong predecessor seq: blockio.ErrWrongPredecessor
-	err = sOut.WriteAfter(context.Background(), 2, "1", u.Announcement(2, 2, "", "", nil))
+	err = sOut.ProtectedWrite(context.Background(), 2, "1", u.Announcement(2, 2, "", "", nil))
 	require.ErrorIs(t, err, blockio.ErrWrongPredecessor)
 
 	// Wrong predecessor seq + missing predecessor msgid: blockio.ErrWrongPredecessor
-	err = sOut.WriteAfter(context.Background(), 2, "", u.Announcement(2, 2, "", "", nil))
+	err = sOut.ProtectedWrite(context.Background(), 2, "", u.Announcement(2, 2, "", "", nil))
 	require.ErrorIs(t, err, blockio.ErrWrongPredecessor)
 
 	// Wrong predecessor msgid: blockio.ErrWrongPredecessor
-	err = sOut.WriteAfter(context.Background(), 1, "non-existing-msgid", u.Announcement(2, 2, "", "", nil))
+	err = sOut.ProtectedWrite(context.Background(), 1, "non-existing-msgid", u.Announcement(2, 2, "", "", nil))
 	require.ErrorIs(t, err, blockio.ErrWrongPredecessor)
 
 	// Wrong predecessor seq + wrong predecessor msgid: blockio.ErrWrongPredecessor
-	err = sOut.WriteAfter(context.Background(), 2, "non-existing-msgid", u.Announcement(2, 2, "", "", nil))
+	err = sOut.ProtectedWrite(context.Background(), 2, "non-existing-msgid", u.Announcement(2, 2, "", "", nil))
 	require.ErrorIs(t, err, blockio.ErrWrongPredecessor)
 
 	// Correct write
-	err = sOut.WriteAfter(context.Background(), 1, "1", u.Announcement(2, 2, "", "", nil))
+	err = sOut.ProtectedWrite(context.Background(), 1, "1", u.Announcement(2, 2, "", "", nil))
 	require.NoError(t, err)
 
 	// Correct write with no predecessor msgid enforced
-	err = sOut.WriteAfter(context.Background(), 2, "", u.Announcement(3, 3, "", "", nil))
+	err = sOut.ProtectedWrite(context.Background(), 2, "", u.Announcement(3, 3, "", "", nil))
 	require.NoError(t, err)
 
 	// Correct writes
 	for i := uint64(4); i <= 100; i++ {
-		err = sOut.WriteAfter(context.Background(), i-1, strconv.FormatUint(i-1, 10), u.Announcement(i, i, "", "", nil))
+		err = sOut.ProtectedWrite(context.Background(), i-1, strconv.FormatUint(i-1, 10), u.Announcement(i, i, "", "", nil))
 		require.NoError(t, err)
 	}
 
@@ -507,7 +507,7 @@ func TestWriteErrors(t *testing.T) {
 				}
 
 				msg := u.Announcement(elem, elem, "", "", nil)
-				err = sOut.WriteAfter(context.Background(), predecessorSeq, predecessorMsgId, msg)
+				err = sOut.ProtectedWrite(context.Background(), predecessorSeq, predecessorMsgId, msg)
 				if expectedErr != nil {
 					require.ErrorIs(t, err, expectedErr)
 				} else {
@@ -519,7 +519,7 @@ func TestWriteErrors(t *testing.T) {
 
 	// Make sure writes still work after that
 	for i := uint64(101); i <= 200; i++ {
-		err = sOut.WriteAfter(context.Background(), i-1, strconv.FormatUint(i-1, 10), u.Announcement(i, i, "", "", nil))
+		err = sOut.ProtectedWrite(context.Background(), i-1, strconv.FormatUint(i-1, 10), u.Announcement(i, i, "", "", nil))
 		require.NoError(t, err)
 	}
 }

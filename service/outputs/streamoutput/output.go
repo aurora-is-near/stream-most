@@ -202,7 +202,7 @@ func (out *Output) handleConnection() error {
 	}
 }
 
-func (out *Output) WriteAfter(ctx context.Context, predecessorSeq uint64, predecessorMsgID string, msg *messages.BlockMessage) error {
+func (out *Output) ProtectedWrite(ctx context.Context, predecessorSeq uint64, predecessorMsgID string, msg *messages.BlockMessage) error {
 	conn := out.curConn.Load()
 	if err := conn.obtainQuota(); err != nil {
 		if errors.Is(err, blockio.ErrTemporarilyUnavailable) || errors.Is(err, blockio.ErrCompletelyUnavailable) {
@@ -212,7 +212,7 @@ func (out *Output) WriteAfter(ctx context.Context, predecessorSeq uint64, predec
 	}
 	defer conn.returnQuota()
 
-	if err := out.writeAfter(ctx, predecessorSeq, predecessorMsgID, msg, conn); err != nil {
+	if err := out.protectedWrite(ctx, predecessorSeq, predecessorMsgID, msg, conn); err != nil {
 		if ctx.Err() != nil && errors.Is(err, ctx.Err()) {
 			return fmt.Errorf("%w (%w)", ctx.Err(), blockio.ErrCanceled)
 		}
@@ -227,7 +227,7 @@ func (out *Output) WriteAfter(ctx context.Context, predecessorSeq uint64, predec
 	return nil
 }
 
-func (out *Output) writeAfter(ctx context.Context, predecessorSeq uint64, predecessorMsgID string, msg *messages.BlockMessage, conn *connection) error {
+func (out *Output) protectedWrite(ctx context.Context, predecessorSeq uint64, predecessorMsgID string, msg *messages.BlockMessage, conn *connection) error {
 	wMsg := &nats.Msg{
 		Header: make(nats.Header),
 		Data:   msg.Msg.GetData(),

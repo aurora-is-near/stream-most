@@ -30,7 +30,7 @@ type Output interface {
 			- ErrRemovedPredecessor
 			- ErrRemovedPosition
 	*/
-	WriteAfter(ctx context.Context, predecessorSeq uint64, predecessorMsgID string, msg *messages.BlockMessage) error
+	ProtectedWrite(ctx context.Context, predecessorSeq uint64, predecessorMsgID string, msg *messages.BlockMessage) error
 
 	/*
 		Gracefully stops component, terminates all associated goroutines, releases connections etc.
