@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/aurora-is-near/stream-most/domain/messages"
-	"github.com/aurora-is-near/stream-most/service2/blockdecode"
+	"github.com/aurora-is-near/stream-most/service/blockdecode"
 	"github.com/aurora-is-near/stream-most/stream/reader"
 )
 

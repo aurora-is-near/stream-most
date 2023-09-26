@@ -12,8 +12,8 @@ import (
 
 	"github.com/aurora-is-near/stream-most/domain/blocks"
 	"github.com/aurora-is-near/stream-most/domain/messages"
-	"github.com/aurora-is-near/stream-most/service2/blockdecode"
-	"github.com/aurora-is-near/stream-most/service2/blockio"
+	"github.com/aurora-is-near/stream-most/service/blockdecode"
+	"github.com/aurora-is-near/stream-most/service/blockio"
 	"github.com/aurora-is-near/stream-most/transport"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats-server/v2/test"

@@ -5,7 +5,7 @@ import (
 
 	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/domain/messages"
-	"github.com/aurora-is-near/stream-most/service2/blockio"
+	"github.com/aurora-is-near/stream-most/service/blockio"
 )
 
 // Static assertion

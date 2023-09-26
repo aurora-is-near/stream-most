@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/aurora-is-near/stream-most/service2/blockdecode"
-	"github.com/aurora-is-near/stream-most/service2/blockio"
+	"github.com/aurora-is-near/stream-most/service/blockdecode"
+	"github.com/aurora-is-near/stream-most/service/blockio"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/nats-io/nats.go/jetstream"
 )

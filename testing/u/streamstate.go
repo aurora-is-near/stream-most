@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/aurora-is-near/stream-most/domain/blocks"
-	"github.com/aurora-is-near/stream-most/service2/blockio"
+	"github.com/aurora-is-near/stream-most/service/blockio"
 	"github.com/stretchr/testify/require"
 )
 

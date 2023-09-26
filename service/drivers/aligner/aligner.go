@@ -6,8 +6,8 @@ import (
 
 	"github.com/aurora-is-near/stream-most/domain/blocks"
 	"github.com/aurora-is-near/stream-most/domain/messages"
-	"github.com/aurora-is-near/stream-most/service2/drivers"
-	"github.com/aurora-is-near/stream-most/service2/verifier"
+	"github.com/aurora-is-near/stream-most/service/drivers"
+	"github.com/aurora-is-near/stream-most/service/verifier"
 	"github.com/aurora-is-near/stream-most/support/tolerance"
 )
 

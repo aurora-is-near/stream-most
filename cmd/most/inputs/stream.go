@@ -3,8 +3,8 @@ package inputs
 import (
 	"time"
 
-	"github.com/aurora-is-near/stream-most/service2/blockio"
-	"github.com/aurora-is-near/stream-most/service2/inputs/streaminput"
+	"github.com/aurora-is-near/stream-most/service/blockio"
+	"github.com/aurora-is-near/stream-most/service/inputs/streaminput"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/transport"
 	"github.com/aurora-is-near/stream-most/util"

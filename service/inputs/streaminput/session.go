@@ -5,8 +5,8 @@ import (
 	"sync"
 
 	"github.com/aurora-is-near/stream-most/domain/blocks"
-	"github.com/aurora-is-near/stream-most/service2/blockio"
-	"github.com/aurora-is-near/stream-most/service2/streamseek"
+	"github.com/aurora-is-near/stream-most/service/blockio"
+	"github.com/aurora-is-near/stream-most/service/streamseek"
 	"github.com/aurora-is-near/stream-most/stream"
 )
 

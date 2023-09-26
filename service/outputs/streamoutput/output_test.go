@@ -10,7 +10,7 @@ import (
 
 	"github.com/aurora-is-near/stream-most/domain/blocks"
 	"github.com/aurora-is-near/stream-most/domain/formats"
-	"github.com/aurora-is-near/stream-most/service2/blockio"
+	"github.com/aurora-is-near/stream-most/service/blockio"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/testing/u"
 	"github.com/aurora-is-near/stream-most/transport"

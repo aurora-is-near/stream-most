@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/aurora-is-near/stream-most/domain/messages"
-	"github.com/aurora-is-near/stream-most/service2/blockio"
-	"github.com/aurora-is-near/stream-most/service2/streamstate"
+	"github.com/aurora-is-near/stream-most/service/blockio"
+	"github.com/aurora-is-near/stream-most/service/streamstate"
 )
 
 // Static assertions

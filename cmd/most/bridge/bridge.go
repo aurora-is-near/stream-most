@@ -5,7 +5,7 @@ import (
 
 	"github.com/aurora-is-near/stream-most/cmd/most/inputs"
 	"github.com/aurora-is-near/stream-most/cmd/most/outputs"
-	"github.com/aurora-is-near/stream-most/service2/blockio"
+	"github.com/aurora-is-near/stream-most/service/blockio"
 	"github.com/spf13/cobra"
 )
 
