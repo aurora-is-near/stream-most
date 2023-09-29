@@ -29,7 +29,6 @@ func Connect(cfg *Config) (*StreamConnector, error) {
 		cfg: cfg,
 	}
 
-	sc.logger.Infof("Connecting to NATS...")
 	var err error
 	sc.nc, err = transport.ConnectNATS(cfg.Nats)
 	if err != nil {
@@ -37,7 +36,6 @@ func Connect(cfg *Config) (*StreamConnector, error) {
 		sc.logger.Errorf("%v", err)
 		return nil, err
 	}
-	sc.logger.Infof("NATS connected")
 
 	sc.logger.Infof("Connecting to JetStream...")
 	sc.js, err = jetstream.New(sc.nc.Conn())
@@ -49,7 +47,6 @@ func Connect(cfg *Config) (*StreamConnector, error) {
 	}
 	sc.logger.Infof("JetStream connected")
 
-	sc.logger.Infof("Connecting stream...")
 	sc.stream, err = stream.Connect(cfg.Stream, sc.js)
 	if err != nil {
 		err = fmt.Errorf("unable to connect stream: %w", err)
@@ -57,7 +54,6 @@ func Connect(cfg *Config) (*StreamConnector, error) {
 		sc.nc.Drain()
 		return nil, err
 	}
-	sc.logger.Infof("Stream connected")
 
 	return sc, nil
 }
