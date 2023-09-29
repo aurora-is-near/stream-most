@@ -7,14 +7,7 @@ import (
 )
 
 type Output interface {
-	/*
-		Returns stream state.
-
-		Error classes:
-			- ErrTemporarilyUnavailable
-			- ErrCompletelyUnavailable
-	*/
-	State() (State, error)
+	StateProvider
 
 	/*
 		Tries to write message immediately after provided predecessor.

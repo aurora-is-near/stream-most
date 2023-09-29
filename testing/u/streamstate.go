@@ -4,37 +4,70 @@ import (
 	"context"
 	"testing"
 
-	"github.com/aurora-is-near/stream-most/domain/blocks"
+	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/blockio"
 	"github.com/stretchr/testify/require"
 )
 
-func RequireEmptyState(t *testing.T, state blockio.State) {
-	require.Less(t, state.FirstSeq(), uint64(2))
-	require.Equal(t, uint64(0), state.LastSeq())
-	require.Nil(t, state.Tip())
+func ExtractState(sp blockio.StateProvider) (lastKnownDeletedSeq uint64, lastKnownSeq uint64, lastKnownMsg blockio.Msg, err error) {
+	if lastKnownDeletedSeq, err = sp.LastKnownDeletedSeq(); err != nil {
+		return
+	}
+	if lastKnownSeq, err = sp.LastKnownSeq(); err != nil {
+		return
+	}
+	if lastKnownMsg, err = sp.LastKnownMessage(); err != nil {
+		return
+	}
+	return
 }
 
-func RequireState(t *testing.T, state blockio.State, firstSeq uint64, lastSeq uint64, blockType blocks.BlockType, height uint64, shardID uint64, hash string, prevHash string, shardMask []bool) {
-	require.Equal(t, firstSeq, state.FirstSeq())
-	require.Equal(t, lastSeq, state.LastSeq())
-	require.NotNil(t, state.Tip())
-	require.NotNil(t, state.Tip().Get())
-	require.NotNil(t, state.Tip().Get().GetData())
-	require.Positive(t, len(state.Tip().Get().GetData()))
-	require.Equal(t, lastSeq, state.Tip().Get().GetSequence())
-	blockMsg, err := state.Tip().GetDecoded(context.Background())
+func RequireSeq(t *testing.T, actualSeq uint64, minAllowedSeq uint64, expectedSeq uint64) bool {
+	require.GreaterOrEqual(t, actualSeq, minAllowedSeq)
+	require.LessOrEqual(t, actualSeq, expectedSeq)
+	return actualSeq == expectedSeq
+}
+
+func RequireLastKnownMsg(t *testing.T, target blockio.Msg, msgs ...*messages.BlockMessage) bool {
+	oneof, last := false, false
+
+	for _, msg := range msgs {
+		last = matchLastKnownMsg(t, target, msg)
+		oneof = oneof || last
+	}
+
+	require.True(t, oneof)
+	return last
+}
+
+func matchLastKnownMsg(t *testing.T, actual blockio.Msg, required *messages.BlockMessage) bool {
+	if actual == nil && required == nil {
+		return true
+	}
+	if actual == nil || required == nil {
+		return false
+	}
+
+	require.NotNil(t, actual.Get())
+	if actual.Get().GetSequence() != required.Msg.GetSequence() {
+		return false
+	}
+
+	require.Equal(t, required.Msg.GetData(), actual.Get().GetData())
+
+	blockMsg, err := actual.GetDecoded(context.Background())
 	require.NoError(t, err)
 	require.NotNil(t, blockMsg)
 	require.NotNil(t, blockMsg.Msg)
-	require.NotNil(t, blockMsg.Msg.GetData())
-	require.Positive(t, len(blockMsg.Msg.GetData()))
-	require.Equal(t, lastSeq, blockMsg.Msg.GetSequence())
+	require.Equal(t, required.Msg.GetData(), blockMsg.Msg.GetData())
+	require.Equal(t, required.Msg.GetSequence(), blockMsg.Msg.GetSequence())
 	require.NotNil(t, blockMsg.Block)
-	require.Equal(t, blockType, blockMsg.Block.GetBlockType())
-	require.Equal(t, height, blockMsg.Block.GetHeight())
-	require.Equal(t, shardID, blockMsg.Block.GetShardID())
-	require.Equal(t, hash, blockMsg.Block.GetHash())
-	require.Equal(t, prevHash, blockMsg.Block.GetPrevHash())
-	require.Equal(t, shardMask, blockMsg.Block.GetShardMask())
+	require.Equal(t, required.Block.GetBlockType(), blockMsg.Block.GetBlockType())
+	require.Equal(t, required.Block.GetHeight(), blockMsg.Block.GetHeight())
+	require.Equal(t, required.Block.GetShardID(), blockMsg.Block.GetShardID())
+	require.Equal(t, required.Block.GetHash(), blockMsg.Block.GetHash())
+	require.Equal(t, required.Block.GetPrevHash(), blockMsg.Block.GetPrevHash())
+	require.Equal(t, required.Block.GetShardMask(), blockMsg.Block.GetShardMask())
+
+	return true
 }
