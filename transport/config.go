@@ -5,14 +5,16 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/sirupsen/logrus"
 )
 
 type NATSConfig struct {
-	ContextName   string
-	OverrideURL   string
-	OverrideCreds string
-	LogTag        string
-	Options       nats.Options
+	ContextName    string
+	OverrideURL    string
+	OverrideCreds  string
+	LogTag         string
+	Options        nats.Options
+	OverrideLogger *logrus.Logger
 }
 
 func RecommendedNatsOptions() nats.Options {

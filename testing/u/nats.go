@@ -18,6 +18,7 @@ import (
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats-server/v2/test"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/sirupsen/logrus"
 )
 
 func GetFreePorts(n int) []int {
@@ -56,10 +57,14 @@ func GetTestNATSServerOpts(t *testing.T) server.Options {
 }
 
 func ConnectTestNATS(natsUrl string, connName string) (*transport.NatsConnection, jetstream.JetStream) {
+	logger := logrus.New()
+	logger.SetLevel(logrus.WarnLevel)
+
 	natsCfg := &transport.NATSConfig{
-		OverrideURL: natsUrl,
-		LogTag:      connName,
-		Options:     transport.RecommendedNatsOptions(),
+		OverrideURL:    natsUrl,
+		LogTag:         connName,
+		Options:        transport.RecommendedNatsOptions(),
+		OverrideLogger: logger,
 	}
 	nc, err := transport.ConnectNATS(natsCfg)
 	if err != nil {

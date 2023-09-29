@@ -65,8 +65,13 @@ func (c *NatsConnection) connect() error {
 }
 
 func ConnectNATS(config *NATSConfig) (*NatsConnection, error) {
+	logger := logrus.StandardLogger()
+	if config.OverrideLogger != nil {
+		logger = config.OverrideLogger
+	}
+
 	conn := &NatsConnection{
-		logger: logrus.WithField("component", "nats").WithField("nats", config.LogTag),
+		logger: logger.WithField("component", "nats").WithField("nats", config.LogTag),
 		config: config,
 		closed: make(chan struct{}),
 	}
