@@ -40,3 +40,15 @@ func (cr *CbReceiver) WithHandleNewKnownSeqCb(cb func(seq uint64)) *CbReceiver {
 	cr.HandleNewKnownSeqCb = cb
 	return cr
 }
+
+func (cr *CbReceiver) HandleMsg(ctx context.Context, msg messages.NatsMessage) {
+	cr.HandleMsgCb(ctx, msg)
+}
+
+func (cr *CbReceiver) HandleFinish(err error) {
+	cr.HandleFinishCb(err)
+}
+
+func (cr *CbReceiver) HandleNewKnownSeq(seq uint64) {
+	cr.HandleNewKnownSeqCb(seq)
+}
