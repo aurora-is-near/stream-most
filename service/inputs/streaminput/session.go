@@ -1,86 +1,96 @@
 package streaminput
 
 import (
-	"context"
 	"sync"
 
-	"github.com/aurora-is-near/stream-most/domain/blocks"
 	"github.com/aurora-is-near/stream-most/service/blockio"
-	"github.com/aurora-is-near/stream-most/service/streamseek"
-	"github.com/aurora-is-near/stream-most/stream"
 )
 
-type seekSettings struct {
-	seekBlockAfter blocks.Block
-	seekSeq        uint64
-}
+// Static assertion
+var _ blockio.InputSession = (*session)(nil)
 
 type session struct {
-	seekOpts *seekSettings
+	seekOpts *seekOptions
 	nextSeq  uint64
 
-	ch        chan blockio.Msg
-	closeOnce sync.Once
-	closed    chan struct{}
+	ch chan blockio.Msg
+
 	err       error
+	finalized chan struct{}
+	acquired  bool
+	mtx       sync.Mutex
 
 	outdated chan struct{}
 }
 
-func newSession(seekOpts *seekSettings, bufferSize uint) *session {
+func newSession(seekOpts *seekOptions, bufferSize uint) *session {
 	return &session{
-		seekOpts: seekOpts,
-		ch:       make(chan blockio.Msg, bufferSize),
-		closed:   make(chan struct{}),
-		outdated: make(chan struct{}),
+		seekOpts:  seekOpts,
+		ch:        make(chan blockio.Msg, bufferSize),
+		finalized: make(chan struct{}),
+		outdated:  make(chan struct{}),
 	}
 }
 
-func (s *session) close(err error) *session {
-	s.closeOnce.Do(func() {
-		s.err = err
-		close(s.closed)
+func (s *session) finalize(err error) *session {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	select {
+	case <-s.finalized:
+		return s
+	default:
+	}
+
+	s.err = err
+	close(s.finalized)
+
+	if !s.acquired {
 		close(s.ch)
-	})
+	}
+
 	return s
 }
 
-func (s *session) getError() error {
-	if s.isClosed() {
-		return s.err
-	}
-	return nil
-}
+func (s *session) acquire() bool {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
 
-func (s *session) isClosed() bool {
 	select {
-	case <-s.closed:
-		return true
-	default:
+	case <-s.finalized:
 		return false
+	default:
+	}
+
+	s.acquired = true
+	return true
+}
+
+func (s *session) release() {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	if !s.acquired {
+		return
+	}
+	s.acquired = false
+
+	select {
+	case <-s.finalized:
+		close(s.ch)
+	default:
 	}
 }
 
-func (s *session) runSeek(inputStream *stream.Stream, startSeq uint64, endSeq uint64) (_done <-chan error, _cancel func(reset bool)) {
-	done := make(chan error, 1)
-	ctx, cancel := context.WithCancel(context.Background())
+func (s *session) Msgs() <-chan blockio.Msg {
+	return s.ch
+}
 
-	go func() {
-		var err error
-		if s.seekOpts.seekBlockAfter != nil {
-			s.nextSeq, err = streamseek.SeekBlock(ctx, inputStream, s.seekOpts.seekBlockAfter, startSeq, endSeq)
-		} else {
-			s.nextSeq, err = streamseek.SeekSeq(ctx, inputStream, s.seekOpts.seekSeq, startSeq, endSeq)
-		}
-		done <- err
-		close(done)
-	}()
-
-	return done, func(reset bool) {
-		cancel()
-		if reset {
-			<-done
-			s.nextSeq = 0
-		}
+func (s *session) Error() error {
+	select {
+	case <-s.finalized:
+		return s.err
+	default:
+		return nil
 	}
 }

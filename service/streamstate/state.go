@@ -10,25 +10,10 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-// Static assertion
-var _ blockio.State = (*State)(nil)
-
 type State struct {
 	Info    *jetstream.StreamInfo
 	LastMsg blockio.Msg
 	Err     error
-}
-
-func (s *State) FirstSeq() uint64 {
-	return s.Info.State.FirstSeq
-}
-
-func (s *State) LastSeq() uint64 {
-	return s.Info.State.LastSeq
-}
-
-func (s *State) Tip() blockio.Msg {
-	return s.LastMsg
 }
 
 func Fetch(ctx context.Context, input *stream.Stream) *State {

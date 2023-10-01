@@ -10,4 +10,5 @@ var (
 	ErrWrongPredecessor       = errors.New("wrong predecessor")
 	ErrRemovedPredecessor     = errors.New("removed predecessor")
 	ErrRemovedPosition        = errors.New("removed position")
+	ErrReseeked               = errors.New("reseeked")
 )
