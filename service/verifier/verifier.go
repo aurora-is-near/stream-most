@@ -17,6 +17,7 @@ var (
 	ErrReannouncement    = fmt.Errorf("reannouncement (%w)", ErrAlreadyIrrelevant)
 	ErrLowShard          = fmt.Errorf("low shard (%w)", ErrAlreadyIrrelevant)
 	ErrUnwantedShard     = fmt.Errorf("unwanted shard (%w)", ErrAlreadyIrrelevant)
+	ErrShardHashConflict = fmt.Errorf("shard hash conflict (%w)", ErrAlreadyIrrelevant)
 
 	ErrMayBeRelevantLater      = errors.New("may be relevant later")
 	ErrHeightGap               = fmt.Errorf("height gap (%w)", ErrMayBeRelevantLater)

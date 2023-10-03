@@ -67,6 +67,10 @@ func (s *Sequential) CanAppend(last, next *messages.BlockMessage) error {
 		}
 	}
 
+	if s.CheckHashes && next.Block.GetHash() != last.Block.GetHash() {
+		return ErrShardHashConflict
+	}
+
 	return nil
 }
 
