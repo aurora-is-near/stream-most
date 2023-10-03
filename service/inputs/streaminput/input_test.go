@@ -236,4 +236,5 @@ func TestLimitedReconnects(t *testing.T) {
 		7. Reseek during reconnect (+ invisible writes)
 		8. Reseek after stop
 		9. Reseek after connection death
+		10. Reading affects state
 */
