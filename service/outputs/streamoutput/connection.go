@@ -252,6 +252,8 @@ func (c *connection) doProtectedWrite(ctx context.Context, predecessorSeq uint64
 				if realPredecessorMsgID := realPredecessor.GetHeader().Get(jetstream.MsgIDHeader); realPredecessorMsgID != predecessorMsgID {
 					return fmt.Errorf("expected predecessor msgid='%s' on seq=%d but got '%s' (%w)", predecessorMsgID, predecessorSeq, realPredecessorMsgID, blockio.ErrWrongPredecessor)
 				}
+				c.out.logger.Infof("predecessor msgid is alright, but nats-server doesn't like our expect-last-msgid header, perhaps we fell out of dedup window, let's try removing this header...")
+				return c.doProtectedWrite(ctx, predecessorSeq, "", msg)
 			}
 			return fmt.Errorf("expect-checks failed for unknown reason (%w), predecessor on seq=%d confirmed to be right, see logs (%w)", writeErr, predecessorSeq, ErrConnectionProblem)
 		}

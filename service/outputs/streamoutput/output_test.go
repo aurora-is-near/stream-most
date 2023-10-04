@@ -513,7 +513,48 @@ func TestProtectedWriteErrors(t *testing.T) {
 		err = sOut.ProtectedWrite(context.Background(), i-1, strconv.FormatUint(i-1, 10), u.Announcement(i, i, "", "", nil))
 		require.NoError(t, err)
 	}
+
+	// Making dedup cache window as small as possible
+	u.UpdateStream(s.ClientURL(), "teststream", []string{"teststream.*"}, 3, time.Millisecond*100)
+
+	// Restart server to reset dedup cache
+	s.Shutdown()
+	s = test.RunServer(&opts)
+	_ = s
+
+	// Wait until writes start working again
+	require.Eventually(t, func() bool {
+		err := sOut.ProtectedWrite(context.Background(), 200, "200", u.Announcement(201, 201, "", "", nil))
+		if err != nil {
+			require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
+			return false
+		}
+		require.NoError(t, err)
+		return true
+	}, time.Second*5, time.Second/20)
+
+	// Do some writes to get past old dedup window
+	for i := uint64(202); i <= 1000; i++ {
+		err = sOut.ProtectedWrite(context.Background(), i-1, strconv.FormatUint(i-1, 10), u.Announcement(i, i, "", "", nil))
+		require.NoError(t, err)
+	}
+
+	// Waiting to until all existing messages fell out from dedup window
+	time.Sleep(time.Millisecond * 110)
+
+	// Make sure next writes work normally (including duplicate writes)
+	for i := uint64(998); i <= 2000; i++ {
+		err = sOut.ProtectedWrite(context.Background(), i-1, strconv.FormatUint(i-1, 10), u.Announcement(i, i, "", "", nil))
+		require.NoError(t, err)
+	}
 }
+
+/*
+	TODO: fill remaining misc test-coverage gaps
+
+	go test -v -coverprofile cover.out .
+	go tool cover -html cover.out -o cover.html
+*/
 
 func toHex(n uint64) string {
 	return fmt.Sprintf("%x", n)

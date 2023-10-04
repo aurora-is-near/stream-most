@@ -103,6 +103,30 @@ func CreateStream(natsUrl string, streamName string, subjects []string, maxMsgs 
 	}
 }
 
+func UpdateStream(natsUrl string, streamName string, subjects []string, maxMsgs int64, dedup time.Duration) {
+	nc, js := ConnectTestNATS(natsUrl, "stream-updating")
+	defer nc.Drain()
+
+	_, err := js.UpdateStream(context.Background(), jetstream.StreamConfig{
+		Name:              streamName,
+		Subjects:          subjects,
+		Retention:         jetstream.LimitsPolicy,
+		MaxConsumers:      -1,
+		MaxMsgs:           maxMsgs,
+		MaxBytes:          -1,
+		Discard:           jetstream.DiscardOld,
+		Storage:           jetstream.FileStorage,
+		MaxMsgsPerSubject: -1,
+		MaxMsgSize:        -1,
+		Replicas:          1,
+		Duplicates:        dedup,
+		AllowDirect:       true,
+	})
+	if err != nil {
+		panic(fmt.Errorf("unable to update jetstream '%s' on nats '%s': %v", streamName, natsUrl, err))
+	}
+}
+
 func WriteBlocks(natsUrl string, streamName string, subjectPattern string, preserveSequence bool, msgs ...*messages.BlockMessage) {
 	nc, js := ConnectTestNATS(natsUrl, "blocks-writing")
 	defer nc.Drain()
