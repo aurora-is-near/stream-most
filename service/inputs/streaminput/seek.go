@@ -9,8 +9,9 @@ import (
 )
 
 type seekOptions struct {
-	seekBlockAfter blocks.Block
-	seekSeq        uint64
+	seekBlock             blocks.Block
+	seekOnlyGreaterBlocks bool
+	seekSeq               uint64
 
 	startSeq uint64
 	endSeq   uint64
@@ -27,8 +28,8 @@ func (so *seekOptions) seek(ctx context.Context, s *stream.Stream) <-chan seekRe
 	go func() {
 		var res seekResult
 
-		if so.seekBlockAfter != nil {
-			res.seq, res.err = streamseek.SeekBlock(ctx, s, so.seekBlockAfter, so.startSeq, so.endSeq)
+		if so.seekBlock != nil {
+			res.seq, res.err = streamseek.SeekBlock(ctx, s, so.seekBlock, so.startSeq, so.endSeq, so.seekOnlyGreaterBlocks)
 		} else {
 			res.seq, res.err = streamseek.SeekSeq(ctx, s, so.seekSeq, so.startSeq, so.endSeq)
 		}

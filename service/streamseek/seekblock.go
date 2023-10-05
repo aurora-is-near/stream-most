@@ -11,17 +11,22 @@ import (
 )
 
 /*
-	Seeks earliest block that is greater than provided block (by using binsearch).
-	If all available blocks are lower or equal to provided, next (not yet available) sequence will be selected.
+	Seeks earliest block that is greater (or equal) than provided block (by using binsearch).
+	If none of existing blocks match this condition, next (not yet available) sequence will be selected.
 	If there's no (but will be in theory) available blocks, next (not yet available) sequence will be selected.
 	If there's no (and will never be any) available blocks in provided range - ErrEmptyRange will be returned.
 */
 
-func SeekBlock(ctx context.Context, input *stream.Stream, target blocks.Block, startSeq, endSeq uint64) (uint64, error) {
+func SeekBlock(ctx context.Context, input *stream.Stream, target blocks.Block, startSeq, endSeq uint64, onlyGreater bool) (uint64, error) {
 	logger := logrus.WithField("component", "streamseek").WithField("stream", input.Name())
 
 	logger.Infof("Seeking on stream %s (startSeq=%d, endSeq=%d)", input.Name(), startSeq, endSeq)
-	logger.Infof("Looking for earliest block that is greater than '%s'", blocks.ConstructMsgID(target))
+
+	if onlyGreater {
+		logger.Infof("Looking for earliest block that is greater than '%s'", blocks.ConstructMsgID(target))
+	} else {
+		logger.Infof("Looking for earliest block that is greater or equal to '%s'", blocks.ConstructMsgID(target))
+	}
 
 	if endSeq > 0 && startSeq >= endSeq {
 		logger.Warnf("Weird configuration (startSeq (%d) >= endSeq (%d))", startSeq, endSeq)
@@ -97,32 +102,27 @@ func SeekBlock(ctx context.Context, input *stream.Stream, target blocks.Block, s
 			continue
 		}
 
-		if blocks.Less(target, msgBlock.Block) {
-			logger.Infof(
-				"Block on seq (%d) is greater than target ('%s' > '%s')",
-				m,
-				blocks.ConstructMsgID(msgBlock.Block),
-				blocks.ConstructMsgID(target),
-			)
+		matches := blocks.Less(target, msgBlock.Block)
+		if !onlyGreater {
+			matches = matches || blocks.Equal(target, msgBlock.Block)
+		}
+
+		if matches {
+			logger.Infof("Block on seq %d with msgid '%s' matches the condition", m, blocks.ConstructMsgID(msgBlock.Block))
 			r = m
 		} else {
-			logger.Infof(
-				"Block on seq (%d) is lower or equal to target ('%s' <= '%s')",
-				m,
-				blocks.ConstructMsgID(msgBlock.Block),
-				blocks.ConstructMsgID(target),
-			)
+			logger.Infof("Block on seq %d with msgid '%s' doesn't match the condition", m, blocks.ConstructMsgID(msgBlock.Block))
 			l = m
 		}
 	}
 
 	if endSeq > 0 && r >= endSeq {
-		logger.Warnf("All elements with seq < endSeq (%d) are lower or equal to given target", endSeq)
-		return 0, fmt.Errorf("%w: all elements with seq < endSeq (%d) are lower or equal to given target", ErrEmptyRange, endSeq)
+		logger.Warnf("All elements with seq < endSeq (%d) don't match the condition", endSeq)
+		return 0, fmt.Errorf("%w: all elements with seq < endSeq (%d) don't match the condition", ErrEmptyRange, endSeq)
 	}
 
 	if r > state.LastSeq {
-		logger.Warnf("All existing elements are lower or equal to given target, returning next (not yet available seq %d)", r)
+		logger.Warnf("All existing elements don't match the condition, returning next (not yet available) seq %d", r)
 		return r, nil
 	}
 

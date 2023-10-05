@@ -154,8 +154,8 @@ func (in *Input) CurrentSession() blockio.InputSession {
 	return in.curSession.Load()
 }
 
-func (in *Input) SeekNextBlock(block blocks.Block, startSeq uint64, endSeq uint64) blockio.InputSession {
-	return in.seek(&seekOptions{seekBlockAfter: block, startSeq: startSeq, endSeq: endSeq})
+func (in *Input) SeekBlock(block blocks.Block, startSeq uint64, endSeq uint64, onlyGreater bool) blockio.InputSession {
+	return in.seek(&seekOptions{seekBlock: block, startSeq: startSeq, endSeq: endSeq, seekOnlyGreaterBlocks: onlyGreater})
 }
 
 func (in *Input) SeekSeq(seq uint64, startSeq uint64, endSeq uint64) blockio.InputSession {

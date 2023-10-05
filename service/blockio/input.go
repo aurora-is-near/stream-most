@@ -15,10 +15,10 @@ type Input interface {
 
 	/*
 		Asynchronously initiates new reading session that will start from seeking earliest block that is
-		greater than provided block (by using binsearch).
-		If all available blocks are lower or equal to provided, next (not yet available) sequence will be selected.
+		greater (or equal) than provided block (by using binsearch).
+		If all available blocks are lower (or equal) than provided, next (not yet available) sequence will be selected.
 	*/
-	SeekNextBlock(block blocks.Block, startSeq uint64, endSeq uint64) InputSession
+	SeekBlock(block blocks.Block, startSeq uint64, endSeq uint64, onlyGreater bool) InputSession
 
 	/*
 		Asynchronously initiates new reading session that will start from seeking earliest sequence
