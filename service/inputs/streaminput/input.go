@@ -83,7 +83,7 @@ func (in *Input) runLoop() error {
 		}
 
 		in.logger.Errorf("Got connection problem: %v", err)
-		if in.config.MaxReconnects >= 0 && i > in.config.MaxReconnects {
+		if in.config.MaxReconnects >= 0 && i >= in.config.MaxReconnects {
 			return fmt.Errorf("max reconnects (%d) exceeded: %w", in.config.MaxReconnects, err)
 		}
 
