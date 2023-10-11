@@ -9,14 +9,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func ExtractState(sp blockio.StateProvider) (lastKnownDeletedSeq uint64, lastKnownSeq uint64, lastKnownMsg blockio.Msg, err error) {
+func ExtractState(sp blockio.StateProvider) (lastKnownDeletedSeq uint64, lastKnownSeq uint64, lastKnownMsg blockio.Msg, lastKnownMsgSeq uint64, err error) {
 	if lastKnownDeletedSeq, err = sp.LastKnownDeletedSeq(); err != nil {
 		return
 	}
 	if lastKnownSeq, err = sp.LastKnownSeq(); err != nil {
 		return
 	}
-	if lastKnownMsg, err = sp.LastKnownMessage(); err != nil {
+	if lastKnownMsg, lastKnownMsgSeq, err = sp.LastKnownMessage(); err != nil {
 		return
 	}
 	return

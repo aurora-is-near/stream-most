@@ -29,7 +29,7 @@ type connection struct {
 
 	lastKnownDeletedSeq atomic.Uint64
 	lastKnownSeq        atomic.Uint64
-	lastKnownMsg        atomic.Pointer[blockio.Msg]
+	lastKnownMsg        atomic.Pointer[sequencedMsg]
 	firstStateFetchDone atomic.Bool
 
 	err       error
@@ -128,9 +128,10 @@ func (c *connection) run() {
 			c.updateLastKnownDeletedSeq(s.Info.State.FirstSeq - 1)
 		}
 		c.updateLastKnownSeq(s.Info.State.LastSeq)
-		if s.LastMsg != nil {
-			c.updateLastKnownMsg(s.LastMsg)
-		}
+		c.updateLastKnownMsg(&sequencedMsg{
+			seq: s.LastMsgSeq,
+			msg: s.LastMsg,
+		})
 		c.firstStateFetchDone.Store(true)
 	})
 	defer stateFetcher.Stop(true)
@@ -354,14 +355,14 @@ func (c *connection) updateLastKnownSeq(seq uint64) {
 	}
 }
 
-func (c *connection) updateLastKnownMsg(msg blockio.Msg) {
-	c.updateLastKnownSeq(msg.Get().GetSequence())
+func (c *connection) updateLastKnownMsg(msg *sequencedMsg) {
+	c.updateLastKnownSeq(msg.seq)
 	for { // CAS-based atomic maximum
 		prev := c.lastKnownMsg.Load()
-		if prev != nil && *prev != nil && (*prev).Get().GetSequence() >= msg.Get().GetSequence() {
+		if prev != nil && (prev.seq > msg.seq || (prev.seq == msg.seq && prev.msg != nil)) {
 			return
 		}
-		if c.lastKnownMsg.CompareAndSwap(prev, &msg) {
+		if c.lastKnownMsg.CompareAndSwap(prev, msg) {
 			return
 		}
 	}
@@ -383,7 +384,10 @@ func (c *connection) saveLastWrittenMsg(msg *nats.Msg, block blocks.Block, seq u
 		},
 	}
 
-	c.updateLastKnownMsg(blockdecode.NewPredecodedMsg(bmsg))
+	c.updateLastKnownMsg(&sequencedMsg{
+		seq: seq,
+		msg: blockdecode.NewPredecodedMsg(bmsg),
+	})
 }
 
 func (c *connection) getStateError() error {
@@ -410,13 +414,13 @@ func (c *connection) getLastKnownSeq() (uint64, error) {
 	return c.lastKnownSeq.Load(), nil
 }
 
-func (c *connection) getLastKnownMsg() (blockio.Msg, error) {
+func (c *connection) getLastKnownMsg() (blockio.Msg, uint64, error) {
 	if err := c.getStateError(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	msg := c.lastKnownMsg.Load()
 	if msg == nil {
-		return nil, nil
+		return nil, 0, nil
 	}
-	return *msg, nil
+	return msg.msg, msg.seq, nil
 }

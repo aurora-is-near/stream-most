@@ -139,10 +139,10 @@ func (out *Output) LastKnownSeq() (uint64, error) {
 	return conn.getLastKnownSeq()
 }
 
-func (out *Output) LastKnownMessage() (blockio.Msg, error) {
+func (out *Output) LastKnownMessage() (blockio.Msg, uint64, error) {
 	conn, err := out.getConn()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	return conn.getLastKnownMsg()
 }

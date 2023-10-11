@@ -20,11 +20,12 @@ type StateProvider interface {
 	LastKnownSeq() (uint64, error)
 
 	/*
-		Returns last known message or nil if there's none.
+		Returns last known message or nil if there's none (or it was deleted).
+		Also returns sequence of this message - which is useful for identifying tip position when msg is nil.
 
 		Error classes:
 			- ErrTemporarilyUnavailable
 			- ErrCompletelyUnavailable
 	*/
-	LastKnownMessage() (Msg, error)
+	LastKnownMessage() (Msg, uint64, error)
 }
