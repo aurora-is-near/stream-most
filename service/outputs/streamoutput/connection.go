@@ -230,7 +230,7 @@ func (c *connection) doProtectedWrite(ctx context.Context, predecessorSeq uint64
 			if realMsg == nil {
 				return fmt.Errorf("can't check write on seq=%d (%w)", predecessorSeq+1, blockio.ErrRemovedPosition)
 			}
-			if realMsgID := realMsg.GetHeader().Get(jetstream.MsgIDHeader); realMsgID != msgID {
+			if realMsgID := realMsg.Get().GetHeader().Get(jetstream.MsgIDHeader); realMsgID != msgID {
 				return fmt.Errorf("expected msgid='%s' on seq=%d but already got '%s' (%w)", msgID, predecessorSeq+1, realMsgID, blockio.ErrCollision)
 			}
 			c.out.logger.Infof("msgid on this seq is actually right, we probably just fell out of dedup window, ignoring...")
@@ -250,10 +250,10 @@ func (c *connection) doProtectedWrite(ctx context.Context, predecessorSeq uint64
 				if realPredecessor == nil {
 					return fmt.Errorf("can't check predecessor msgid on seq=%d (%w)", predecessorSeq, blockio.ErrRemovedPredecessor)
 				}
-				if realPredecessorMsgID := realPredecessor.GetHeader().Get(jetstream.MsgIDHeader); realPredecessorMsgID != predecessorMsgID {
+				if realPredecessorMsgID := realPredecessor.Get().GetHeader().Get(jetstream.MsgIDHeader); realPredecessorMsgID != predecessorMsgID {
 					return fmt.Errorf("expected predecessor msgid='%s' on seq=%d but got '%s' (%w)", predecessorMsgID, predecessorSeq, realPredecessorMsgID, blockio.ErrWrongPredecessor)
 				}
-				c.out.logger.Infof("predecessor msgid is alright, but nats-server doesn't like our expect-last-msgid header, perhaps we fell out of dedup window, let's try removing this header...")
+				c.out.logger.Infof("predecessor msgid is alright, but nats-server doesn't like our expect-last-msgid header, perhaps msgid server cache just died, let's try removing this header...")
 				return c.doProtectedWrite(ctx, predecessorSeq, "", msg)
 			}
 			return fmt.Errorf("expect-checks failed for unknown reason (%w), predecessor on seq=%d confirmed to be right, see logs (%w)", writeErr, predecessorSeq, ErrConnectionProblem)
@@ -276,7 +276,7 @@ func (c *connection) doProtectedWrite(ctx context.Context, predecessorSeq uint64
 	return nil
 }
 
-func (c *connection) analyzeVicinity(ctx context.Context, centers ...uint64) (map[uint64]messages.NatsMessage, error) {
+func (c *connection) analyzeVicinity(ctx context.Context, centers ...uint64) (map[uint64]blockio.Msg, error) {
 	dedup := map[uint64]struct{}{}
 	elements := []uint64{}
 	for _, center := range centers {
@@ -300,13 +300,19 @@ func (c *connection) analyzeVicinity(ctx context.Context, centers ...uint64) (ma
 		return nil, fmt.Errorf("unable to fetch stream info: %w (%w)", infoErr, ErrConnectionProblem)
 	}
 	c.out.logger.Infof("analysis: firstSeq=%d, lastSeq=%d", info.State.FirstSeq, info.State.LastSeq)
+	if info.State.FirstSeq > 0 {
+		c.updateLastKnownDeletedSeq(info.State.FirstSeq - 1)
+	}
+	c.updateLastKnownSeq(info.State.LastSeq)
 
-	res := make(map[uint64]messages.NatsMessage)
+	blockdecode.EnsureDecodersRunning()
+	res := make(map[uint64]blockio.Msg)
 
 	for _, seq := range elements {
 		if seq < info.State.FirstSeq {
 			c.out.logger.Infof("analysis: seq=%d fell out from stream", seq)
 			res[seq] = nil
+			c.updateLastKnownMsg(&sequencedMsg{seq: seq})
 			continue
 		}
 		if seq > info.State.LastSeq {
@@ -319,9 +325,14 @@ func (c *connection) analyzeVicinity(ctx context.Context, centers ...uint64) (ma
 			if infoErr != nil {
 				return nil, fmt.Errorf("unable to fetch stream info: %w (%w)", infoErr, ErrConnectionProblem)
 			}
+			if info.State.FirstSeq > 0 {
+				c.updateLastKnownDeletedSeq(info.State.FirstSeq - 1)
+			}
+			c.updateLastKnownSeq(info.State.LastSeq)
 			if seq < info.State.FirstSeq {
 				c.out.logger.Infof("analysis: seq=%d fell out from stream", seq)
 				res[seq] = nil
+				c.updateLastKnownMsg(&sequencedMsg{seq: seq})
 				continue
 			}
 			if seq > info.State.LastSeq {
@@ -331,7 +342,16 @@ func (c *connection) analyzeVicinity(ctx context.Context, centers ...uint64) (ma
 			return nil, fmt.Errorf("unable to fetch msg on seq=%d: %w (%w)", seq, err, ErrConnectionProblem)
 		}
 		c.out.logger.Infof("analysis: seq=%d has msgid='%s'", seq, msg.GetHeader().Get(jetstream.MsgIDHeader))
-		res[seq] = msg
+
+		decMsg, ok := blockdecode.ScheduleBlockDecoding(ctx, msg)
+		if !ok {
+			return nil, fmt.Errorf("unable to schedule block decoding: %w", ctx.Err())
+		}
+		res[seq] = decMsg
+		c.updateLastKnownMsg(&sequencedMsg{
+			seq: seq,
+			msg: decMsg,
+		})
 	}
 
 	return res, nil
