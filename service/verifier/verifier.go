@@ -28,5 +28,8 @@ var (
 )
 
 type Verifier interface {
+	WithHeadersOnly() Verifier
+	WithNoShardFilter() Verifier
+
 	CanAppend(last, next *messages.BlockMessage) error
 }

@@ -8,11 +8,32 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/messages"
 )
 
+// Static assertion
+var _ Verifier = (*Transparent)(nil)
+
 type Sequential struct {
 	AllowHeightGaps       bool
 	CheckBlocksCompletion bool
 	CheckHashes           bool
 	ShardFilter           []bool
+}
+
+func (s *Sequential) WithHeadersOnly() Verifier {
+	return &Sequential{
+		AllowHeightGaps:       s.AllowHeightGaps,
+		CheckBlocksCompletion: false,
+		CheckHashes:           false,
+		ShardFilter:           s.ShardFilter,
+	}
+}
+
+func (s *Sequential) WithNoShardFilter() Verifier {
+	return &Sequential{
+		AllowHeightGaps:       s.AllowHeightGaps,
+		CheckBlocksCompletion: s.CheckBlocksCompletion,
+		CheckHashes:           s.CheckHashes,
+		ShardFilter:           nil,
+	}
 }
 
 func (s *Sequential) CanAppend(last, next *messages.BlockMessage) error {
