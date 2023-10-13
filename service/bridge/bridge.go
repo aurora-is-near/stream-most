@@ -346,7 +346,26 @@ func (b *Bridge) tryAppend(tip, msg *messages.BlockMessage, tipSeq uint64, tipMs
 
 	case err == nil:
 		b.tuneTolerance(false, 0)
-		return b.waitWrite(tipSeq, tipMsgID, msg)
+		if b.config.EndBlock != nil && !blocks.Less(msg.Block, b.config.EndBlock) {
+			return fmt.Errorf(
+				"%w: next block to write (%s) >= end block (%s)",
+				ErrTerminalConditionReached,
+				blocks.ConstructMsgID(msg.Block),
+				blocks.ConstructMsgID(b.config.EndBlock),
+			)
+		}
+		if err := b.waitWrite(tipSeq, tipMsgID, msg); err != nil {
+			return err
+		}
+		if b.config.LastBlock != nil && !blocks.Less(msg.Block, b.config.LastBlock) {
+			return fmt.Errorf(
+				"%w: last written block (%s) >= last block (%s)",
+				ErrTerminalConditionReached,
+				blocks.ConstructMsgID(msg.Block),
+				blocks.ConstructMsgID(b.config.LastBlock),
+			)
+		}
+		return nil
 
 	case errors.Is(err, verifier.ErrCompletelyIrrelevant):
 		if errors.Is(err, verifier.ErrFilteredShard) {
