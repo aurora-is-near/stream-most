@@ -9,3 +9,6 @@ prod_info:
 
 peek_message:
 	nats stream view --creds $(CREDS) -s $(NATS_SERVER) --raw $(INPUT_QUEUE) 1
+
+test:
+	go test -v ./... -ci
