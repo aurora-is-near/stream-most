@@ -135,10 +135,10 @@ func (c *connection) handleSession(s *session) {
 		c.in.logger.Infof("Resuming reading session from nextSeq=%d", s.nextSeq)
 	}
 
-	rcv := reader.NewCbReceiver().WithHandleMsgCb(func(ctx context.Context, msg messages.NatsMessage) {
+	rcv := reader.NewCbReceiver().WithHandleMsgCb(func(ctx context.Context, msg messages.NatsMessage) bool {
 		m, ok := blockdecode.ScheduleBlockDecoding(ctx, msg)
 		if !ok {
-			return
+			return true
 		}
 
 		c.updateLastKnownMsg(&sequencedMsg{
@@ -148,15 +148,18 @@ func (c *connection) handleSession(s *session) {
 
 		select {
 		case <-ctx.Done():
-			return
+			return true
 		case s.ch <- m:
 		}
 
 		s.nextSeq = msg.GetSequence() + 1
+
+		return true
 	})
 
-	rcv = rcv.WithHandleNewKnownSeqCb(func(seq uint64) {
+	rcv = rcv.WithHandleNewKnownSeqCb(func(seq uint64) bool {
 		c.updateLastKnownSeq(seq)
+		return true
 	})
 
 	rcv = rcv.WithHandleFinishCb(func(err error) {

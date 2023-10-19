@@ -144,7 +144,11 @@ func (r *Reader) run() {
 				return
 			}
 
-			r.receiver.HandleMsg(r.ctx, &messages.StreamMessage{Msg: msg, Meta: meta})
+			if !r.receiver.HandleMsg(r.ctx, &messages.StreamMessage{Msg: msg, Meta: meta}) {
+				r.logger.Info("stopped by receiver, finishing")
+				r.finish(nil)
+				return
+			}
 
 			lastFiredSeq.Store(meta.Sequence.Stream)
 
@@ -298,5 +302,8 @@ func (r *Reader) updateLastKnownSeq(seq uint64) {
 			break
 		}
 	}
-	r.receiver.HandleNewKnownSeq(r.lastKnownSeq.Load())
+	if !r.receiver.HandleNewKnownSeq(r.lastKnownSeq.Load()) {
+		r.logger.Info("stopped by receiver, finishing")
+		r.finish(nil)
+	}
 }
