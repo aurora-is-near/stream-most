@@ -70,7 +70,7 @@ func main() {
 	})
 
 	// Override receiver's tip sequence handler (optional)
-	rcv = rcv.WithHandleNewKnownSeqCb(func(seq uint64) bool {
+	rcv = rcv.WithHandleNewKnownSeqCb(func(ctx context.Context, seq uint64) bool {
 
 		log.Printf("Last known stream tip sequence is: %d", seq)
 
@@ -96,29 +96,35 @@ func main() {
 		inputStream,
 		&reader.Config{
 
-			// Optional. Provide specific subjects to read, otherwise it will read all subjects of given stream.
-			FilterSubjects: []string{
-				"a.b.c",
-				"c.d.>",
-				"e.f.*",
+			// Inner ordered consumer configuration
+			Consumer: jetstream.OrderedConsumerConfig{
+				// Minimum sequence to start reading from. Zero-value defaults to 1
+				OptStartSeq: 5,
+
+				// See OrderedConsumerConfig in github.com/nats-io/nats.go/jetstream
+				// for other useful fields such as FilterSubjects, OptStartTime, DeliverPolicy, HeadersOnly etc
 			},
 
-			// Optional. Minimum sequence to start reading from. Zero-value defaults to 1.
-			StartSeq: 5,
+			// Optional. Consumer fine-tuning. Default (empty array or nil) works perfect
+			// See github.com/nats-io/nats.go/jetstream for details
+			PullOpts: []jetstream.PullConsumeOpt{},
 
-			// Optional. Sequence to stop at (exclusive). Zero-value means infinite reading.
+			// Optional. Sequence to stop at (exclusive). Zero-value means no end sequence
 			EndSeq: 100,
 
-			// Optional. Means that reader should strictly start from StartSeq.
-			// If first received sequence will be greater than StartSeq it will fail.
+			// Optional. Msg-time to stop at (exclusive). Zero-value means no end time
+			EndTime: time.Now(),
+
+			// Optional. Means that reader should strictly start from StartSeq
+			// If first received sequence will be greater than StartSeq it will fail
 			StrictStart: true,
 
-			// Optional. Max amount of time with no incoming messages after which health-check will be triggered.
-			// Recommended to be greater than expected stream update rate.
+			// Optional. Max amount of time with no incoming messages after which health-check will be triggered
+			// Recommended to be greater than expected stream update rate
 			// Zero-value defaults to 5s.
 			MaxSilence: time.Second * 5,
 
-			// Optional. Use to elaborate logging if there are multiple active stream readers.
+			// Optional. Use to elaborate logging if there are multiple active stream readers
 			LogTag: "mystream-reader",
 		},
 		rcv,

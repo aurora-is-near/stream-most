@@ -14,6 +14,7 @@ import (
 	"github.com/aurora-is-near/stream-most/service/streamstate"
 	"github.com/aurora-is-near/stream-most/stream/reader"
 	"github.com/aurora-is-near/stream-most/stream/streamconnector"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 type connection struct {
@@ -157,7 +158,7 @@ func (c *connection) handleSession(s *session) {
 		return true
 	})
 
-	rcv = rcv.WithHandleNewKnownSeqCb(func(seq uint64) bool {
+	rcv = rcv.WithHandleNewKnownSeqCb(func(ctx context.Context, seq uint64) bool {
 		c.updateLastKnownSeq(seq)
 		return true
 	})
@@ -174,11 +175,13 @@ func (c *connection) handleSession(s *session) {
 	reader, err := reader.Start(
 		c.sc.Stream(),
 		&reader.Config{
-			FilterSubjects: c.in.config.FilterSubjects,
-			StartSeq:       s.nextSeq,
-			EndSeq:         s.seekOpts.endSeq,
-			MaxSilence:     c.in.config.MaxSilence,
-			LogTag:         c.in.config.Conn.Stream.LogTag,
+			Consumer: jetstream.OrderedConsumerConfig{
+				FilterSubjects: c.in.config.FilterSubjects,
+				OptStartSeq:    s.nextSeq,
+			},
+			EndSeq:     s.seekOpts.endSeq,
+			MaxSilence: c.in.config.MaxSilence,
+			LogTag:     c.in.config.Conn.Stream.LogTag,
 		},
 		rcv,
 	)
