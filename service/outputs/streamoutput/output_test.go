@@ -10,6 +10,7 @@ import (
 
 	"github.com/aurora-is-near/stream-most/domain/blocks"
 	"github.com/aurora-is-near/stream-most/domain/formats"
+	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/blockio"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/streamconnector"
@@ -64,14 +65,12 @@ func TestState(t *testing.T) {
 	defer sOut.Stop(true)
 
 	// Wait until initial empty state is loaded
-	require.Eventually(t, func() bool {
-		lds, ls, lm, lms, err := u.ExtractState(sOut)
-		if err != nil {
-			require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
-			return false
-		}
-		return u.RequireSeq(t, lds, 0, 0) && u.RequireSeq(t, ls, 0, 0) && u.RequireLastKnownMsg(t, lm, nil) && u.RequireSeq(t, lms, 0, 0)
-	}, time.Second, time.Second/20)
+	u.WaitState(t, time.Second, sOut, &u.ExpectedState{
+		LastDeletedSeq: u.SeqRange{Min: 0, Max: 0},
+		LastSeq:        u.SeqRange{Min: 0, Max: 0},
+		LastMsg:        []*messages.BlockMessage{nil},
+		AllowedErrors:  []error{blockio.ErrTemporarilyUnavailable},
+	})
 
 	// Write first block
 	u.WriteBlocks(s.ClientURL(), "teststream", "teststream.*", true,
@@ -79,14 +78,14 @@ func TestState(t *testing.T) {
 	)
 
 	// Wait until first block is loaded in state
-	require.Eventually(t, func() bool {
-		lds, ls, lm, lms, err := u.ExtractState(sOut)
-		require.NoError(t, err)
-		return u.RequireSeq(t, lds, 0, 0) && u.RequireSeq(t, ls, 0, 1) && u.RequireLastKnownMsg(t, lm,
+	u.WaitState(t, time.Second, sOut, &u.ExpectedState{
+		LastDeletedSeq: u.SeqRange{Min: 0, Max: 0},
+		LastSeq:        u.SeqRange{Min: 0, Max: 1},
+		LastMsg: []*messages.BlockMessage{
 			nil,
 			u.Announcement(1, 555, "AAA", "_", nil),
-		) && u.RequireSeq(t, lms, 0, 1)
-	}, time.Second, time.Second/20)
+		},
+	})
 
 	// Write multiple new blocks
 	u.WriteBlocks(s.ClientURL(), "teststream", "teststream.*", true,
@@ -98,35 +97,29 @@ func TestState(t *testing.T) {
 	)
 
 	// Make sure last block is loaded eventually
-	require.Eventually(t, func() bool {
-		lds, ls, lm, lms, err := u.ExtractState(sOut)
-		require.NoError(t, err)
-		return u.RequireSeq(t, lds, 0, 1) && u.RequireSeq(t, ls, 1, 6) && u.RequireLastKnownMsg(t, lm,
+	u.WaitState(t, time.Second, sOut, &u.ExpectedState{
+		LastDeletedSeq: u.SeqRange{Min: 0, Max: 1},
+		LastSeq:        u.SeqRange{Min: 1, Max: 6},
+		LastMsg: []*messages.BlockMessage{
 			u.Announcement(1, 555, "AAA", "_", nil),
 			u.Shard(2, 555, 0, "AAA", "_", nil),
 			u.Shard(3, 555, 3, "AAA", "_", nil),
 			u.Announcement(4, 557, "BBB", "AAA", nil),
 			u.Announcement(5, 558, "CCC", "BBB", nil),
 			u.Announcement(6, 600, "DDD", "CCC", nil),
-		) && u.RequireSeq(t, lms, 1, 6)
-	}, time.Second, time.Second/20)
+		},
+	})
 
 	// Shutdown server
 	s.Shutdown()
 
 	// Wait until streamoutput has noticed that server has been shut down
-	require.Eventually(t, func() bool {
-		lds, ls, lm, lms, err := u.ExtractState(sOut)
-		if err != nil {
-			require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
-			return true
-		}
-		u.RequireSeq(t, lds, 1, 1)
-		u.RequireSeq(t, ls, 6, 6)
-		u.RequireLastKnownMsg(t, lm, u.Announcement(6, 600, "DDD", "CCC", nil))
-		u.RequireSeq(t, lms, 6, 6)
-		return false
-	}, time.Second*5, time.Second/20)
+	u.WaitState(t, time.Second*5, sOut, &u.ExpectedState{
+		LastDeletedSeq: u.SeqRange{Min: 1, Max: 1},
+		LastSeq:        u.SeqRange{Min: 6, Max: 6},
+		LastMsg:        []*messages.BlockMessage{u.Announcement(6, 600, "DDD", "CCC", nil)},
+		RequiredErrors: []error{blockio.ErrTemporarilyUnavailable},
+	})
 
 	// Start server on another port to make a couple of writes while
 	// stream is invisible for streamoutput
@@ -145,16 +138,12 @@ func TestState(t *testing.T) {
 	s = test.RunServer(&opts)
 
 	// Make sure that new blocks are eventually noticed by streamoutput
-	require.Eventually(t, func() bool {
-		lds, ls, lm, lms, err := u.ExtractState(sOut)
-		if err != nil {
-			require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
-			return false
-		}
-		return u.RequireSeq(t, lds, 3, 3) && u.RequireSeq(t, ls, 8, 8) && u.RequireLastKnownMsg(t, lm,
-			u.Announcement(8, 608, "FFF", "EEE", nil),
-		) && u.RequireSeq(t, lms, 8, 8)
-	}, time.Second*5, time.Second/20)
+	u.WaitState(t, time.Second*5, sOut, &u.ExpectedState{
+		LastDeletedSeq: u.SeqRange{Min: 3, Max: 3},
+		LastSeq:        u.SeqRange{Min: 8, Max: 8},
+		LastMsg:        []*messages.BlockMessage{u.Announcement(8, 608, "FFF", "EEE", nil)},
+		AllowedErrors:  []error{blockio.ErrTemporarilyUnavailable},
+	})
 
 	// Write a couple of new blocks
 	u.WriteBlocks(s.ClientURL(), "teststream", "teststream.*", true,
@@ -163,32 +152,27 @@ func TestState(t *testing.T) {
 	)
 
 	// Make sure that writes after restart are noticed as well
-	require.Eventually(t, func() bool {
-		lds, ls, lm, lms, err := u.ExtractState(sOut)
-		require.NoError(t, err)
-		return u.RequireSeq(t, lds, 3, 5) && u.RequireSeq(t, ls, 8, 10) && u.RequireLastKnownMsg(t, lm,
+	u.WaitState(t, time.Second, sOut, &u.ExpectedState{
+		LastDeletedSeq: u.SeqRange{Min: 3, Max: 5},
+		LastSeq:        u.SeqRange{Min: 8, Max: 10},
+		LastMsg: []*messages.BlockMessage{
 			u.Announcement(8, 608, "FFF", "EEE", nil),
 			u.Announcement(9, 609, "GGG", "FFF", nil),
 			u.Announcement(10, 610, "HHH", "GGG", nil),
-		) && u.RequireSeq(t, lms, 8, 10)
-	}, time.Second, time.Second/20)
+		},
+	})
 
 	// Stop streamoutput
 	sOut.Stop(true)
 
 	// Make sure that state eventually becomes completely unavailable
-	require.Eventually(t, func() bool {
-		lds, ls, lm, lms, err := u.ExtractState(sOut)
-		if err != nil {
-			require.ErrorIs(t, err, blockio.ErrCompletelyUnavailable)
-			return true
-		}
-		u.RequireSeq(t, lds, 5, 5)
-		u.RequireSeq(t, ls, 10, 10)
-		u.RequireLastKnownMsg(t, lm, u.Announcement(10, 610, "HHH", "GGG", nil))
-		u.RequireSeq(t, lms, 10, 10)
-		return false
-	}, time.Second*5, time.Second/20)
+	u.WaitState(t, time.Second*5, sOut, &u.ExpectedState{
+		LastDeletedSeq: u.SeqRange{Min: 5, Max: 5},
+		LastSeq:        u.SeqRange{Min: 10, Max: 10},
+		LastMsg:        []*messages.BlockMessage{u.Announcement(10, 610, "HHH", "GGG", nil)},
+		AllowedErrors:  []error{blockio.ErrTemporarilyUnavailable},
+		RequiredErrors: []error{blockio.ErrCompletelyUnavailable},
+	})
 }
 
 func TestLimitedReconnects(t *testing.T) {
@@ -205,34 +189,24 @@ func TestLimitedReconnects(t *testing.T) {
 	defer sOut.Stop(true)
 
 	// Wait until initial empty state is loaded
-	require.Eventually(t, func() bool {
-		lds, ls, lm, lms, err := u.ExtractState(sOut)
-		if err != nil {
-			require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
-			return false
-		}
-		return u.RequireSeq(t, lds, 0, 0) && u.RequireSeq(t, ls, 0, 0) && u.RequireLastKnownMsg(t, lm, nil) && u.RequireSeq(t, lms, 0, 0)
-	}, time.Second, time.Second/20)
+	u.WaitState(t, time.Second, sOut, &u.ExpectedState{
+		LastDeletedSeq: u.SeqRange{Min: 0, Max: 0},
+		LastSeq:        u.SeqRange{Min: 0, Max: 0},
+		LastMsg:        []*messages.BlockMessage{nil},
+		AllowedErrors:  []error{blockio.ErrTemporarilyUnavailable},
+	})
 
 	// Shutting down server
 	s.Shutdown()
 
 	// Wait until state becomes completely unavailable
-	require.Eventually(t, func() bool {
-		lds, ls, lm, lms, err := u.ExtractState(sOut)
-		if err != nil {
-			if errors.Is(err, blockio.ErrCompletelyUnavailable) {
-				return true
-			}
-			require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
-			return false
-		}
-		u.RequireSeq(t, lds, 0, 0)
-		u.RequireSeq(t, ls, 0, 0)
-		u.RequireLastKnownMsg(t, lm, nil)
-		u.RequireSeq(t, lms, 0, 0)
-		return false
-	}, time.Second*5, time.Second/20)
+	u.WaitState(t, time.Second*5, sOut, &u.ExpectedState{
+		LastDeletedSeq: u.SeqRange{Min: 0, Max: 0},
+		LastSeq:        u.SeqRange{Min: 0, Max: 0},
+		LastMsg:        []*messages.BlockMessage{nil},
+		AllowedErrors:  []error{blockio.ErrTemporarilyUnavailable},
+		RequiredErrors: []error{blockio.ErrCompletelyUnavailable},
+	})
 }
 
 func TestProtectedWriteReconnect(t *testing.T) {
@@ -302,14 +276,12 @@ func TestProtectedWriteAffectsState(t *testing.T) {
 	defer sOut.Stop(true)
 
 	// Wait until initial empty state is loaded
-	require.Eventually(t, func() bool {
-		lds, ls, lm, lms, err := u.ExtractState(sOut)
-		if err != nil {
-			require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
-			return false
-		}
-		return u.RequireSeq(t, lds, 0, 0) && u.RequireSeq(t, ls, 0, 0) && u.RequireLastKnownMsg(t, lm, nil) && u.RequireSeq(t, lms, 0, 0)
-	}, time.Second*5, time.Second/20)
+	u.WaitState(t, time.Second, sOut, &u.ExpectedState{
+		LastDeletedSeq: u.SeqRange{Min: 0, Max: 0},
+		LastSeq:        u.SeqRange{Min: 0, Max: 0},
+		LastMsg:        []*messages.BlockMessage{nil},
+		AllowedErrors:  []error{blockio.ErrTemporarilyUnavailable},
+	})
 
 	// Test that every write immediately affects the state
 	lastMsgID := ""
@@ -319,17 +291,15 @@ func TestProtectedWriteAffectsState(t *testing.T) {
 		require.NoError(t, err)
 		lastMsgID = blocks.ConstructMsgID(newBlock.Block)
 
-		lds, ls, lm, lms, err := u.ExtractState(sOut)
-		require.NoError(t, err)
-
 		maxLds := uint64(0)
 		if i > 5 {
 			maxLds = i - 5
 		}
-		u.RequireSeq(t, lds, 0, maxLds)
-		u.RequireSeq(t, ls, i, i)
-		u.RequireLastKnownMsg(t, lm, newBlock)
-		u.RequireSeq(t, lms, i, i)
+		u.MatchState(t, sOut, &u.ExpectedState{
+			LastDeletedSeq: u.SeqRange{Min: 0, Max: maxLds},
+			LastSeq:        u.SeqRange{Min: i, Max: i},
+			LastMsg:        []*messages.BlockMessage{newBlock},
+		})
 	}
 
 	// Do external write
@@ -338,47 +308,37 @@ func TestProtectedWriteAffectsState(t *testing.T) {
 	)
 
 	// Makes sure external write affects state as well
-	require.Eventually(t, func() bool {
-		lds, ls, lm, lms, err := u.ExtractState(sOut)
-		require.NoError(t, err)
-		return u.RequireSeq(t, lds, 0, 96) && u.RequireSeq(t, ls, 100, 101) && u.RequireLastKnownMsg(t, lm,
+	u.WaitState(t, time.Second*5, sOut, &u.ExpectedState{
+		LastDeletedSeq: u.SeqRange{Min: 0, Max: 96},
+		LastSeq:        u.SeqRange{Min: 100, Max: 101},
+		LastMsg: []*messages.BlockMessage{
 			u.Announcement(100, 200, toHex(200), toHex(199), nil),
 			u.Announcement(101, 201, toHex(201), toHex(200), nil),
-		) && u.RequireSeq(t, lms, 100, 101)
-	}, time.Second*5, time.Second/20)
+		},
+	})
 
 	// Stop server
 	s.Shutdown()
 
 	// Wait until streamoutput has noticed that server has been shut down
-	require.Eventually(t, func() bool {
-		lds, ls, lm, lms, err := u.ExtractState(sOut)
-		if err != nil {
-			require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
-			return true
-		}
-		u.RequireSeq(t, lds, 96, 96)
-		u.RequireSeq(t, ls, 101, 101)
-		u.RequireLastKnownMsg(t, lm, u.Announcement(101, 201, toHex(201), toHex(200), nil))
-		u.RequireSeq(t, lms, 101, 101)
-		return false
-	}, time.Second*5, time.Second/20)
+	u.WaitState(t, time.Second*5, sOut, &u.ExpectedState{
+		LastDeletedSeq: u.SeqRange{Min: 96, Max: 96},
+		LastSeq:        u.SeqRange{Min: 101, Max: 101},
+		LastMsg:        []*messages.BlockMessage{u.Announcement(101, 201, toHex(201), toHex(200), nil)},
+		RequiredErrors: []error{blockio.ErrTemporarilyUnavailable},
+	})
 
 	// Run server again
 	s = test.RunServer(&opts)
 	_ = s
 
 	// Wait until streamoutput state is loaded again
-	require.Eventually(t, func() bool {
-		lds, ls, lm, lms, err := u.ExtractState(sOut)
-		if err != nil {
-			require.ErrorIs(t, err, blockio.ErrTemporarilyUnavailable)
-			return false
-		}
-		return u.RequireSeq(t, lds, 96, 96) && u.RequireSeq(t, ls, 101, 101) && u.RequireLastKnownMsg(t, lm,
-			u.Announcement(101, 201, toHex(201), toHex(200), nil),
-		) && u.RequireSeq(t, lms, 101, 101)
-	}, time.Second*5, time.Second/20)
+	u.WaitState(t, time.Second*5, sOut, &u.ExpectedState{
+		LastDeletedSeq: u.SeqRange{Min: 96, Max: 96},
+		LastSeq:        u.SeqRange{Min: 101, Max: 101},
+		LastMsg:        []*messages.BlockMessage{u.Announcement(101, 201, toHex(201), toHex(200), nil)},
+		AllowedErrors:  []error{blockio.ErrTemporarilyUnavailable},
+	})
 
 	// Test that every write immediately affects the state again
 	lastMsgID = "201"
@@ -388,12 +348,11 @@ func TestProtectedWriteAffectsState(t *testing.T) {
 		require.NoError(t, err)
 		lastMsgID = blocks.ConstructMsgID(newBlock.Block)
 
-		lds, ls, lm, lms, err := u.ExtractState(sOut)
-		require.NoError(t, err)
-		u.RequireSeq(t, lds, 96, i-5)
-		u.RequireSeq(t, ls, i, i)
-		u.RequireLastKnownMsg(t, lm, newBlock)
-		u.RequireSeq(t, lms, i, i)
+		u.MatchState(t, sOut, &u.ExpectedState{
+			LastDeletedSeq: u.SeqRange{Min: 96, Max: i - 5},
+			LastSeq:        u.SeqRange{Min: i, Max: i},
+			LastMsg:        []*messages.BlockMessage{newBlock},
+		})
 	}
 
 	// Write duplicate
@@ -402,12 +361,11 @@ func TestProtectedWriteAffectsState(t *testing.T) {
 	require.NoError(t, err)
 
 	// Make sure that duplicate write doesn't affect the state
-	lds, ls, lm, lms, err := u.ExtractState(sOut)
-	require.NoError(t, err)
-	u.RequireSeq(t, lds, 96, 195)
-	u.RequireSeq(t, ls, 200, 200)
-	u.RequireLastKnownMsg(t, lm, u.Shard(200, 201, 200, toHex(300), toHex(299), nil))
-	u.RequireSeq(t, lms, 200, 200)
+	u.MatchState(t, sOut, &u.ExpectedState{
+		LastDeletedSeq: u.SeqRange{Min: 96, Max: 195},
+		LastSeq:        u.SeqRange{Min: 200, Max: 200},
+		LastMsg:        []*messages.BlockMessage{u.Shard(200, 201, 200, toHex(300), toHex(299), nil)},
+	})
 }
 
 func TestProtectedWriteErrors(t *testing.T) {
