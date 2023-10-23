@@ -87,10 +87,7 @@ func (c *connection) run() {
 			c.setError(fmt.Errorf("unable to fetch stream state: %w (%w)", s.Err, ErrConnectionProblem))
 			return
 		}
-		if s.Info.State.FirstSeq > 0 {
-			c.updateLastKnownDeletedSeq(s.Info.State.FirstSeq - 1)
-		}
-		c.updateLastKnownSeq(s.Info.State.LastSeq)
+		c.acknowledgeInfo(s.Info)
 		c.updateLastKnownMsg(&sequencedMsg{
 			seq: s.LastMsgSeq,
 			msg: s.LastMsg,
@@ -229,6 +226,7 @@ func (c *connection) seekSession(s *session) bool {
 }
 
 func (c *connection) updateLastKnownDeletedSeq(seq uint64) {
+	c.updateLastKnownMsg(&sequencedMsg{seq: seq})
 	for { // CAS-based atomic maximum
 		prev := c.lastKnownDeletedSeq.Load()
 		if prev >= seq || c.lastKnownDeletedSeq.CompareAndSwap(prev, seq) {
@@ -250,13 +248,30 @@ func (c *connection) updateLastKnownMsg(msg *sequencedMsg) {
 	c.updateLastKnownSeq(msg.seq)
 	for { // CAS-based atomic maximum
 		prev := c.lastKnownMsg.Load()
-		if prev != nil && (prev.seq > msg.seq || (prev.seq == msg.seq && prev.msg != nil)) {
-			return
-		}
-		if c.lastKnownMsg.CompareAndSwap(prev, msg) {
+		if !c.shouldReplaceLastKnownMsg(prev, msg) || c.lastKnownMsg.CompareAndSwap(prev, msg) {
 			return
 		}
 	}
+}
+
+func (c *connection) shouldReplaceLastKnownMsg(old *sequencedMsg, new *sequencedMsg) bool {
+	if new == nil {
+		return false
+	}
+	if old == nil {
+		return true
+	}
+	if old.msg == nil {
+		return new.msg != nil || new.seq > old.seq
+	}
+	return new.msg != nil && new.seq > old.seq
+}
+
+func (c *connection) acknowledgeInfo(info *jetstream.StreamInfo) {
+	if info.State.FirstSeq > 0 {
+		c.updateLastKnownDeletedSeq(info.State.FirstSeq - 1)
+	}
+	c.updateLastKnownSeq(info.State.LastSeq)
 }
 
 func (c *connection) getStateError() error {
