@@ -15,6 +15,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var ErrInterrupted = fmt.Errorf("interrupted")
+
 type Reader struct {
 	logger *logrus.Entry
 
@@ -61,8 +63,12 @@ func (r *Reader) Error() error {
 	}
 }
 
-func (r *Reader) Stop(wait bool) {
-	r.finish(nil)
+func (r *Reader) Stop(err error, wait bool) {
+	if err != nil {
+		r.finish(fmt.Errorf("%w: %w", ErrInterrupted, err))
+	} else {
+		r.finish(ErrInterrupted)
+	}
 	if wait {
 		r.wg.Wait()
 	}
@@ -147,9 +153,9 @@ func (r *Reader) run() {
 				return
 			}
 
-			if !r.receiver.HandleMsg(r.ctx, &messages.StreamMessage{Msg: msg, Meta: meta}) {
+			if err := r.receiver.HandleMsg(r.ctx, &messages.StreamMessage{Msg: msg, Meta: meta}); err != nil {
 				r.logger.Info("stopped by receiver, finishing")
-				r.finish(nil)
+				r.finish(fmt.Errorf("%w: %w", ErrInterrupted, err))
 				return
 			}
 
@@ -306,8 +312,8 @@ func (r *Reader) updateLastKnownSeq(seq uint64) {
 			break
 		}
 	}
-	if !r.receiver.HandleNewKnownSeq(r.ctx, r.lastKnownSeq.Load()) {
+	if err := r.receiver.HandleNewKnownSeq(r.ctx, r.lastKnownSeq.Load()); err != nil {
 		r.logger.Info("stopped by receiver, finishing")
-		r.finish(nil)
+		r.finish(fmt.Errorf("%w: %w", ErrInterrupted, err))
 	}
 }

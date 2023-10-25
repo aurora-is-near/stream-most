@@ -133,10 +133,10 @@ func (c *connection) handleSession(s *session) {
 		c.in.logger.Infof("Resuming reading session from nextSeq=%d", s.nextSeq)
 	}
 
-	rcv := reader.NewCbReceiver().WithHandleMsgCb(func(ctx context.Context, msg messages.NatsMessage) bool {
+	rcv := reader.NewCbReceiver().WithHandleMsgCb(func(ctx context.Context, msg messages.NatsMessage) error {
 		m, ok := blockdecode.ScheduleBlockDecoding(ctx, msg)
 		if !ok {
-			return true
+			return fmt.Errorf("can't schedule block decoding: %v", ctx.Err())
 		}
 
 		c.updateLastKnownMsg(&sequencedMsg{
@@ -146,18 +146,18 @@ func (c *connection) handleSession(s *session) {
 
 		select {
 		case <-ctx.Done():
-			return true
+			return nil
 		case s.ch <- m:
 		}
 
 		s.nextSeq = msg.GetSequence() + 1
 
-		return true
+		return nil
 	})
 
-	rcv = rcv.WithHandleNewKnownSeqCb(func(ctx context.Context, seq uint64) bool {
+	rcv = rcv.WithHandleNewKnownSeqCb(func(ctx context.Context, seq uint64) error {
 		c.updateLastKnownSeq(seq)
-		return true
+		return nil
 	})
 
 	rcv = rcv.WithHandleFinishCb(func(err error) {
@@ -165,7 +165,9 @@ func (c *connection) handleSession(s *session) {
 			s.finalize(nil)
 			return
 		}
-		c.setError(fmt.Errorf("got reader error: %w (%w)", err, ErrConnectionProblem))
+		if !errors.Is(err, reader.ErrInterrupted) {
+			c.setError(fmt.Errorf("got reader error: %w (%w)", err, ErrConnectionProblem))
+		}
 	})
 
 	c.in.logger.Infof("Starting reader from seq=%d", s.nextSeq)
@@ -186,7 +188,7 @@ func (c *connection) handleSession(s *session) {
 		c.setError(fmt.Errorf("unable to start reader: %w (%w)", err, ErrConnectionProblem))
 		return
 	}
-	defer reader.Stop(true)
+	defer reader.Stop(nil, true)
 
 	select {
 	case <-c.hasErr:

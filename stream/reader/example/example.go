@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -54,7 +56,7 @@ func main() {
 	rcv := reader.NewCbReceiver()
 
 	// Override receiver's message handler (optional)
-	rcv = rcv.WithHandleMsgCb(func(ctx context.Context, msg messages.NatsMessage) bool {
+	rcv = rcv.WithHandleMsgCb(func(ctx context.Context, msg messages.NatsMessage) error {
 
 		// Handle message itself
 		log.Printf("Got message with seq=%d on subject '%s': %s", msg.GetSequence(), msg.GetSubject(), msg.GetData())
@@ -62,30 +64,33 @@ func main() {
 		// We can tell reader to stop any time we want
 		if string(msg.GetData()) == "halt" {
 			log.Printf("Got special 'halt' message! Telling reader to stop consumption...")
-			return false
+			return fmt.Errorf("special halt message detected")
 		}
 
-		// Or return true if we want to continue consumption
-		return true
+		// Or return nil if we want to continue consumption
+		return nil
 	})
 
 	// Override receiver's tip sequence handler (optional)
-	rcv = rcv.WithHandleNewKnownSeqCb(func(ctx context.Context, seq uint64) bool {
+	rcv = rcv.WithHandleNewKnownSeqCb(func(ctx context.Context, seq uint64) error {
 
 		log.Printf("Last known stream tip sequence is: %d", seq)
 
-		// Return true to continue consumption
-		return true
+		// Return nil to continue consumption
+		return nil
 	})
 
 	// Override receiver's finish handler (optional)
 	readerFinished := make(chan struct{})
 	rcv = rcv.WithHandleFinishCb(func(err error) {
 
-		if err != nil {
-			log.Printf("Reader finished because of error: %v", err)
-		} else {
+		switch {
+		case err == nil:
 			log.Printf("Reader finished gracefully")
+		case errors.Is(err, reader.ErrInterrupted):
+			log.Printf("Reader finished because it was interrupted: %v", err)
+		default:
+			log.Printf("Reader finished because of error: %v", err)
 		}
 
 		close(readerFinished)
@@ -136,7 +141,7 @@ func main() {
 	// Defer reader stopping
 	defer func() {
 		// Wait for reader to stop
-		reader.Stop(true)
+		reader.Stop(nil, true)
 
 		// Check reader error
 		if reader.Error() != nil {
