@@ -79,7 +79,11 @@ func (r *Reader) finish(err error) {
 		r.err = err
 		r.cancel()
 		if err != nil {
-			r.logger.Errorf("finished with error: %v", r.err)
+			if errors.Is(err, ErrInterrupted) {
+				r.logger.Infof("finished because of interruption: %v", r.err)
+			} else {
+				r.logger.Errorf("finished with error: %v", r.err)
+			}
 		} else {
 			r.logger.Infof("finished normally")
 		}
