@@ -10,7 +10,7 @@ type Config struct {
 	Consumer    jetstream.OrderedConsumerConfig
 	PullOpts    []jetstream.PullConsumeOpt
 	EndSeq      uint64
-	EndTime     time.Time
+	EndTime     *time.Time
 	StrictStart bool
 	MaxSilence  time.Duration
 	LogTag      string

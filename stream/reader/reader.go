@@ -147,7 +147,7 @@ func (r *Reader) run() {
 				return
 			}
 
-			if !r.cfg.EndTime.IsZero() && !meta.Timestamp.Before(r.cfg.EndTime) {
+			if r.cfg.EndTime != nil && !meta.Timestamp.Before(*r.cfg.EndTime) {
 				r.logger.Info("end time reached, finishing")
 				r.finish(nil)
 				return

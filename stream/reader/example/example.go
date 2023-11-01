@@ -14,6 +14,7 @@ import (
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/reader"
 	"github.com/aurora-is-near/stream-most/transport"
+	"github.com/aurora-is-near/stream-most/util"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -117,8 +118,8 @@ func main() {
 			// Optional. Sequence to stop at (exclusive). Zero-value means no end sequence
 			EndSeq: 100,
 
-			// Optional. Msg-time to stop at (exclusive). Zero-value means no end time
-			EndTime: time.Now(),
+			// Optional. Msg-time to stop at (exclusive). Nil-value means no end time
+			EndTime: util.Ptr(time.Now()),
 
 			// Optional. Means that reader should strictly start from StartSeq
 			// If first received sequence will be greater than StartSeq it will fail
