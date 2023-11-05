@@ -7,6 +7,7 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/blockio"
+	"github.com/aurora-is-near/stream-most/service/metrics"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/streamconnector"
 	"github.com/aurora-is-near/stream-most/testing/u"
@@ -34,6 +35,7 @@ func makeCfg(natsUrl string, natslogTag string, streamName string, bufferSize ui
 		MaxReconnects:      maxReconnects,
 		ReconnectDelay:     reconnectDelay,
 		StateFetchInterval: stateFetchInterval,
+		LogInterval:        time.Second,
 	}
 }
 
@@ -53,7 +55,7 @@ func TestState(t *testing.T) {
 
 	u.CreateStream(s.ClientURL(), "teststream", []string{"teststream.*"}, 5, time.Hour)
 
-	sIn := Start(makeCfg(s.ClientURL(), "streamin", "teststream", 1024, -1, time.Second/5, time.Second/5))
+	sIn := Start(makeCfg(s.ClientURL(), "streamin", "teststream", 1024, -1, time.Second/5, time.Second/5), metrics.Dummy)
 	defer sIn.Stop(true)
 
 	// Wait until initial empty state is loaded
@@ -181,7 +183,7 @@ func TestLimitedReconnects(t *testing.T) {
 
 	u.CreateStream(s.ClientURL(), "teststream", []string{"teststream.*"}, 5, time.Hour)
 
-	sIn := Start(makeCfg(s.ClientURL(), "streamin", "teststream", 1024, 2, time.Second/5, time.Second/5))
+	sIn := Start(makeCfg(s.ClientURL(), "streamin", "teststream", 1024, 2, time.Second/5, time.Second/5), metrics.Dummy)
 	defer sIn.Stop(true)
 
 	// Wait until initial empty state is loaded

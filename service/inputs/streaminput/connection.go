@@ -81,6 +81,9 @@ func (c *connection) run() {
 	defer c.sc.Disconnect()
 	defer c.in.logger.Infof("Disconnecting stream...")
 
+	c.in.metrics.observeConnection(c.sc)
+	defer c.in.metrics.stopConnectionObserving()
+
 	stateFetcher := streamstate.StartFetcher(c.sc.Stream(), c.in.config.StateFetchInterval, true, func(s *streamstate.State) {
 		if s.Err != nil {
 			c.in.logger.Errorf("unable to fetch stream state: %v", s.Err)
@@ -138,6 +141,8 @@ func (c *connection) handleSession(s *session) {
 		if !ok {
 			return fmt.Errorf("can't schedule block decoding: %v", ctx.Err())
 		}
+
+		c.in.metrics.readerMsgWaiter.PutNextMsg(m)
 
 		c.updateLastKnownMsg(&sequencedMsg{
 			seq: m.Get().GetSequence(),
@@ -198,6 +203,14 @@ func (c *connection) handleSession(s *session) {
 }
 
 func (c *connection) seekSession(s *session) bool {
+	if s.seekOpts.seekBlock != nil {
+		c.in.metrics.lastSeekHeight.Set(float64(s.seekOpts.seekBlock.GetHeight()))
+		c.in.metrics.lastSeekSeq.Set(0)
+	} else {
+		c.in.metrics.lastSeekHeight.Set(0)
+		c.in.metrics.lastSeekSeq.Set(float64(s.seekOpts.seekSeq))
+	}
+
 	seekCtx, cancelSeek := context.WithCancel(context.Background())
 	seekResCh := s.seekOpts.seek(seekCtx, c.sc.Stream())
 	defer func() {
@@ -231,7 +244,11 @@ func (c *connection) updateLastKnownDeletedSeq(seq uint64) {
 	c.updateLastKnownMsg(&sequencedMsg{seq: seq})
 	for { // CAS-based atomic maximum
 		prev := c.lastKnownDeletedSeq.Load()
-		if prev >= seq || c.lastKnownDeletedSeq.CompareAndSwap(prev, seq) {
+		if prev >= seq {
+			return
+		}
+		if c.lastKnownDeletedSeq.CompareAndSwap(prev, seq) {
+			c.in.metrics.lastKnownDeletedSeq.Set(float64(seq))
 			return
 		}
 	}
@@ -240,7 +257,11 @@ func (c *connection) updateLastKnownDeletedSeq(seq uint64) {
 func (c *connection) updateLastKnownSeq(seq uint64) {
 	for { // CAS-based atomic maximum
 		prev := c.lastKnownSeq.Load()
-		if prev >= seq || c.lastKnownSeq.CompareAndSwap(prev, seq) {
+		if prev >= seq {
+			return
+		}
+		if c.lastKnownSeq.CompareAndSwap(prev, seq) {
+			c.in.metrics.lastKnownSeq.Set(float64(seq))
 			return
 		}
 	}
@@ -250,7 +271,13 @@ func (c *connection) updateLastKnownMsg(msg *sequencedMsg) {
 	c.updateLastKnownSeq(msg.seq)
 	for { // CAS-based atomic maximum
 		prev := c.lastKnownMsg.Load()
-		if !c.shouldReplaceLastKnownMsg(prev, msg) || c.lastKnownMsg.CompareAndSwap(prev, msg) {
+		if !c.shouldReplaceLastKnownMsg(prev, msg) {
+			return
+		}
+		if c.lastKnownMsg.CompareAndSwap(prev, msg) {
+			if msg.msg != nil {
+				c.in.metrics.lastKnownMsgWaiter.PutNextMsg(msg.msg)
+			}
 			return
 		}
 	}

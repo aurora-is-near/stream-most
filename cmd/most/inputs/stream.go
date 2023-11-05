@@ -5,6 +5,7 @@ import (
 
 	"github.com/aurora-is-near/stream-most/service/blockio"
 	"github.com/aurora-is-near/stream-most/service/inputs/streaminput"
+	"github.com/aurora-is-near/stream-most/service/metrics"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/streamconnector"
 	"github.com/aurora-is-near/stream-most/transport"
@@ -40,6 +41,7 @@ func StreamCmd() (cmd *cobra.Command, inputFactory func() (blockio.Input, error)
 		MaxReconnects:      -1,
 		ReconnectDelay:     time.Second,
 		StateFetchInterval: time.Second * 15,
+		LogInterval:        time.Minute,
 	}
 
 	cmd.PersistentFlags().StringVar(&cfg.Conn.Nats.ContextName, "in-nats", "", "Name of the nats context for input stream. If empty - default one will be used")
@@ -57,6 +59,6 @@ func StreamCmd() (cmd *cobra.Command, inputFactory func() (blockio.Input, error)
 	util.NoErr(cmd.MarkPersistentFlagRequired("in-stream"))
 
 	return cmd, func() (blockio.Input, error) {
-		return streaminput.Start(cfg), nil
+		return streaminput.Start(cfg, metrics.Dummy), nil
 	}
 }
