@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/aurora-is-near/stream-most/service/blockio"
+	"github.com/aurora-is-near/stream-most/service/metrics"
 	"github.com/aurora-is-near/stream-most/service/outputs/streamoutput"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/streamconnector"
@@ -42,6 +43,7 @@ func StreamCmd() (cmd *cobra.Command, outputFactory func() (blockio.Output, erro
 		MaxReconnects:         -1,
 		ReconnectDelay:        time.Second,
 		StateFetchInterval:    time.Second * 15,
+		LogInterval:           time.Minute,
 	}
 
 	cmd.PersistentFlags().StringVar(&cfg.Conn.Nats.ContextName, "out-nats", "", "Name of the nats context for output stream. If empty - default one will be used")
@@ -61,6 +63,6 @@ func StreamCmd() (cmd *cobra.Command, outputFactory func() (blockio.Output, erro
 	util.NoErr(cmd.MarkPersistentFlagRequired("out-stream"))
 
 	return cmd, func() (blockio.Output, error) {
-		return streamoutput.Start(cfg), nil
+		return streamoutput.Start(cfg, metrics.Dummy), nil
 	}
 }

@@ -15,4 +15,5 @@ type Config struct {
 	MaxReconnects         int
 	ReconnectDelay        time.Duration
 	StateFetchInterval    time.Duration
+	LogInterval           time.Duration
 }

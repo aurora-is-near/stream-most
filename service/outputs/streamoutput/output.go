@@ -8,6 +8,7 @@ import (
 
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/blockio"
+	"github.com/aurora-is-near/stream-most/service/metrics"
 	"github.com/aurora-is-near/stream-most/util"
 	"github.com/sirupsen/logrus"
 )
@@ -22,7 +23,8 @@ var (
 var _ blockio.Output = (*Output)(nil)
 
 type Output struct {
-	logger *logrus.Entry
+	logger  *logrus.Entry
+	metrics *componentMetrics
 
 	config *Config
 
@@ -34,7 +36,7 @@ type Output struct {
 	finalErr error
 }
 
-func Start(config *Config) *Output {
+func Start(config *Config, metricSink metrics.Sink) *Output {
 	out := &Output{
 		logger: logrus.
 			WithField("component", "streamoutput").
@@ -44,6 +46,8 @@ func Start(config *Config) *Output {
 		config:   config,
 		finished: make(chan struct{}),
 	}
+
+	out.metrics = startComponentMetrics(metricSink, out.config.LogInterval, out.logger)
 
 	out.ctx, out.cancel = context.WithCancel(context.Background())
 
@@ -62,6 +66,8 @@ func (out *Output) Stop(wait bool) {
 }
 
 func (out *Output) run() {
+	defer out.metrics.stop()
+
 	out.finalErr = out.runLoop()
 	if errors.Is(out.finalErr, ErrStopped) {
 		out.logger.Infof("Stopped externally")

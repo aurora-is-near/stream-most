@@ -118,6 +118,9 @@ func (c *connection) run() {
 	defer c.out.logger.Infof("Disconnecting stream...")
 	defer c.clientsWg.Wait()
 
+	c.out.metrics.observeConnection(c.sc)
+	defer c.out.metrics.stopConnectionObserving()
+
 	stateFetcher := streamstate.StartFetcher(c.sc.Stream(), c.out.config.StateFetchInterval, true, func(s *streamstate.State) {
 		if s.Err != nil {
 			c.out.logger.Errorf("unable to fetch stream state: %v", s.Err)
@@ -210,6 +213,7 @@ func (c *connection) doProtectedWrite(ctx context.Context, predecessorSeq uint64
 	ack, writeErr := c.sc.Stream().Write(ctx, wMsg, opts...)
 	if writeErr != nil {
 		if !isFailedExpectErr(writeErr) {
+			c.out.metrics.acknowledgeWrite(predecessorSeq+1, msg, wstatusError)
 			return fmt.Errorf("unable to write msgid='%s' at seq=%d: %w (%w)", msgID, predecessorSeq+1, writeErr, ErrConnectionProblem)
 		}
 
@@ -220,42 +224,52 @@ func (c *connection) doProtectedWrite(ctx context.Context, predecessorSeq uint64
 
 		analysis, err := c.analyzeVicinity(ctx, predecessorSeq+1)
 		if err != nil {
+			c.out.metrics.acknowledgeWrite(predecessorSeq+1, msg, wstatusError)
 			return err
 		}
 
 		if realMsg, realMsgPresent := analysis[predecessorSeq+1]; realMsgPresent {
 			if realMsg == nil {
+				c.out.metrics.acknowledgeWrite(predecessorSeq+1, msg, wstatusDesync)
 				return fmt.Errorf("can't check write on seq=%d (%w)", predecessorSeq+1, blockio.ErrRemovedPosition)
 			}
 			if realMsgID := realMsg.Get().GetHeader().Get(jetstream.MsgIDHeader); realMsgID != msgID {
+				c.out.metrics.acknowledgeWrite(predecessorSeq+1, msg, wstatusCollision)
 				return fmt.Errorf("expected msgid='%s' on seq=%d but already got '%s' (%w)", msgID, predecessorSeq+1, realMsgID, blockio.ErrCollision)
 			}
 			c.out.logger.Infof("msgid on this seq is actually right, we probably just fell out of dedup window, ignoring...")
 			c.saveLastWrittenMsg(wMsg, msg.Block, predecessorSeq+1, msgID)
+			c.out.metrics.acknowledgeWrite(predecessorSeq+1, msg, wstatusDuplicate)
 			return nil
 		}
 
 		if predecessorSeq == 0 {
 			if predecessorMsgID != "" {
+				c.out.metrics.acknowledgeWrite(predecessorSeq+1, msg, wstatusCollision)
 				return fmt.Errorf("it's not possible to have predesessor with msgid='%s' and seq=%d (%w)", predecessorMsgID, predecessorSeq, blockio.ErrWrongPredecessor)
 			}
+			c.out.metrics.acknowledgeWrite(predecessorSeq+1, msg, wstatusError)
 			return fmt.Errorf("can't write to empty stream for unknown reason: %w (%w)", writeErr, ErrConnectionProblem)
 		}
 
 		if realPredecessor, realPredecessorPresent := analysis[predecessorSeq]; realPredecessorPresent {
 			if predecessorMsgID != "" {
 				if realPredecessor == nil {
+					c.out.metrics.acknowledgeWrite(predecessorSeq+1, msg, wstatusDesync)
 					return fmt.Errorf("can't check predecessor msgid on seq=%d (%w)", predecessorSeq, blockio.ErrRemovedPredecessor)
 				}
 				if realPredecessorMsgID := realPredecessor.Get().GetHeader().Get(jetstream.MsgIDHeader); realPredecessorMsgID != predecessorMsgID {
+					c.out.metrics.acknowledgeWrite(predecessorSeq+1, msg, wstatusCollision)
 					return fmt.Errorf("expected predecessor msgid='%s' on seq=%d but got '%s' (%w)", predecessorMsgID, predecessorSeq, realPredecessorMsgID, blockio.ErrWrongPredecessor)
 				}
 				c.out.logger.Infof("predecessor msgid is alright, but nats-server doesn't like our expect-last-msgid header, perhaps msgid server cache just died, let's try removing this header...")
 				return c.doProtectedWrite(ctx, predecessorSeq, "", msg)
 			}
+			c.out.metrics.acknowledgeWrite(predecessorSeq+1, msg, wstatusError)
 			return fmt.Errorf("expect-checks failed for unknown reason (%w), predecessor on seq=%d confirmed to be right, see logs (%w)", writeErr, predecessorSeq, ErrConnectionProblem)
 		}
 
+		c.out.metrics.acknowledgeWrite(predecessorSeq+1, msg, wstatusCollision)
 		return fmt.Errorf("expected predecessor on seq=%d, but it doesn't exist yet (%w)", predecessorSeq, blockio.ErrWrongPredecessor)
 	}
 
@@ -263,13 +277,20 @@ func (c *connection) doProtectedWrite(ctx context.Context, predecessorSeq uint64
 		c.out.logger.Errorf("Wanted to write msgid='%s' on seq=%d, but it's already present on seq=%d, running analysis...", msgID, predecessorSeq+1, ack.Sequence)
 
 		if _, err := c.analyzeVicinity(ctx, predecessorSeq+1, ack.Sequence); err != nil {
+			c.out.metrics.acknowledgeWrite(predecessorSeq+1, msg, wstatusError)
 			return err
 		}
 
+		c.out.metrics.acknowledgeWrite(predecessorSeq+1, msg, wstatusCollision)
 		return fmt.Errorf("wanted to write msgid='%s' on seq=%d, but it's already present on seq=%d, see logs (%w)", msgID, predecessorSeq+1, ack.Sequence, blockio.ErrCollision)
 	}
 
 	c.saveLastWrittenMsg(wMsg, msg.Block, predecessorSeq+1, msgID)
+	if ack.Duplicate {
+		c.out.metrics.acknowledgeWrite(predecessorSeq+1, msg, wstatusDuplicate)
+	} else {
+		c.out.metrics.acknowledgeWrite(predecessorSeq+1, msg, wstatusSuccess)
+	}
 	return nil
 }
 
@@ -350,7 +371,11 @@ func (c *connection) updateLastKnownDeletedSeq(seq uint64) {
 	c.updateLastKnownMsg(&sequencedMsg{seq: seq})
 	for { // CAS-based atomic maximum
 		prev := c.lastKnownDeletedSeq.Load()
-		if prev >= seq || c.lastKnownDeletedSeq.CompareAndSwap(prev, seq) {
+		if prev >= seq {
+			return
+		}
+		if c.lastKnownDeletedSeq.CompareAndSwap(prev, seq) {
+			c.out.metrics.lastKnownDeletedSeq.Set(float64(seq))
 			return
 		}
 	}
@@ -359,7 +384,11 @@ func (c *connection) updateLastKnownDeletedSeq(seq uint64) {
 func (c *connection) updateLastKnownSeq(seq uint64) {
 	for { // CAS-based atomic maximum
 		prev := c.lastKnownSeq.Load()
-		if prev >= seq || c.lastKnownSeq.CompareAndSwap(prev, seq) {
+		if prev >= seq {
+			return
+		}
+		if c.lastKnownSeq.CompareAndSwap(prev, seq) {
+			c.out.metrics.lastKnownSeq.Set(float64(seq))
 			return
 		}
 	}
@@ -369,7 +398,13 @@ func (c *connection) updateLastKnownMsg(msg *sequencedMsg) {
 	c.updateLastKnownSeq(msg.seq)
 	for { // CAS-based atomic maximum
 		prev := c.lastKnownMsg.Load()
-		if !c.shouldReplaceLastKnownMsg(prev, msg) || c.lastKnownMsg.CompareAndSwap(prev, msg) {
+		if !c.shouldReplaceLastKnownMsg(prev, msg) {
+			return
+		}
+		if c.lastKnownMsg.CompareAndSwap(prev, msg) {
+			if msg.msg != nil {
+				c.out.metrics.lastKnownMsgWaiter.PutNextMsg(msg.msg)
+			}
 			return
 		}
 	}

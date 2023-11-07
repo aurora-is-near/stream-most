@@ -12,6 +12,7 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/service/blockio"
+	"github.com/aurora-is-near/stream-most/service/metrics"
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/stream/streamconnector"
 	"github.com/aurora-is-near/stream-most/testing/u"
@@ -42,6 +43,7 @@ func makeCfg(natsUrl string, natsLogTag string, streamName string, maxReconnects
 		MaxReconnects:         maxReconnects,
 		ReconnectDelay:        reconnectDelay,
 		StateFetchInterval:    stateFetchInterval,
+		LogInterval:           time.Second,
 	}
 }
 
@@ -61,7 +63,7 @@ func TestState(t *testing.T) {
 
 	u.CreateStream(s.ClientURL(), "teststream", []string{"teststream.*"}, 5, time.Hour)
 
-	sOut := Start(makeCfg(s.ClientURL(), "streamout", "teststream", -1, time.Second/5, time.Second/5))
+	sOut := Start(makeCfg(s.ClientURL(), "streamout", "teststream", -1, time.Second/5, time.Second/5), metrics.Dummy)
 	defer sOut.Stop(true)
 
 	// Wait until initial empty state is loaded
@@ -185,7 +187,7 @@ func TestLimitedReconnects(t *testing.T) {
 
 	u.CreateStream(s.ClientURL(), "teststream", []string{"teststream.*"}, 5, time.Hour)
 
-	sOut := Start(makeCfg(s.ClientURL(), "streamout", "teststream", 2, time.Second/5, time.Second/5))
+	sOut := Start(makeCfg(s.ClientURL(), "streamout", "teststream", 2, time.Second/5, time.Second/5), metrics.Dummy)
 	defer sOut.Stop(true)
 
 	// Wait until initial empty state is loaded
@@ -219,7 +221,7 @@ func TestProtectedWriteReconnect(t *testing.T) {
 
 	u.CreateStream(s.ClientURL(), "teststream", []string{"teststream.*"}, 5, time.Hour)
 
-	sOut := Start(makeCfg(s.ClientURL(), "streamout", "teststream", -1, time.Second/5, time.Second/5))
+	sOut := Start(makeCfg(s.ClientURL(), "streamout", "teststream", -1, time.Second/5, time.Second/5), metrics.Dummy)
 	defer sOut.Stop(true)
 
 	// Wait until first write succeeds
@@ -272,7 +274,7 @@ func TestProtectedWriteAffectsState(t *testing.T) {
 
 	u.CreateStream(s.ClientURL(), "teststream", []string{"teststream.*"}, 5, time.Hour)
 
-	sOut := Start(makeCfg(s.ClientURL(), "streamout", "teststream", -1, time.Second/5, time.Second))
+	sOut := Start(makeCfg(s.ClientURL(), "streamout", "teststream", -1, time.Second/5, time.Second), metrics.Dummy)
 	defer sOut.Stop(true)
 
 	// Wait until initial empty state is loaded
@@ -378,7 +380,7 @@ func TestProtectedWriteErrors(t *testing.T) {
 
 	u.CreateStream(s.ClientURL(), "teststream", []string{"teststream.*"}, 3, time.Hour)
 
-	sOut := Start(makeCfg(s.ClientURL(), "streamout", "teststream", -1, time.Second/5, time.Second/5))
+	sOut := Start(makeCfg(s.ClientURL(), "streamout", "teststream", -1, time.Second/5, time.Second/5), metrics.Dummy)
 	defer sOut.Stop(true)
 
 	// Empty stream + wrong predecessor seq: blockio.ErrWrongPredecessor
