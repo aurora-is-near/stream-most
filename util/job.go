@@ -80,6 +80,10 @@ func (j *Job) Stop(ctx context.Context) bool {
 	}
 }
 
+func (j *Job) Stopped() <-chan struct{} {
+	return j.stopped
+}
+
 func (j *Job) Error() error {
 	select {
 	case <-j.stopped:
