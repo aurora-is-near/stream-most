@@ -203,6 +203,11 @@ func (r *Reader) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64) {
 	// Let's consider that reader might be stuck on this sequence
 	silenceCandidateSeq := lastConsumedSeq.Load()
 
+	// Prevent start-on-tip problem. TODO: handle better
+	if silenceCandidateSeq == 0 {
+		return
+	}
+
 	// If it wasn't fired yet - it's not stuck, it's in process of firing
 	if lastFiredSeq.Load() < silenceCandidateSeq {
 		return
