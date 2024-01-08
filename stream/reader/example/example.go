@@ -22,8 +22,7 @@ func main() {
 	// Connect to NATS & JetStream. Using `transport` package is optional,
 	// any other preferred method will work as well.
 	nc, err := transport.ConnectNATS(&transport.NATSConfig{
-		OverrideURL: "nats://localhost:4222",
-		Options:     transport.RecommendedNatsOptions(),
+		ServerURL: "nats://localhost:4222",
 	})
 	if err != nil {
 		panic(err)

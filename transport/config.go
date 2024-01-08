@@ -10,37 +10,36 @@ import (
 
 type NATSConfig struct {
 	ContextName    string
-	OverrideURL    string
-	OverrideCreds  string
+	ServerURL      string
+	Creds          string
 	LogTag         string
-	Options        nats.Options
+	Options        *nats.Options
 	OverrideLogger *logrus.Logger
 }
 
-func RecommendedNatsOptions() nats.Options {
+func RecommendedNatsOptions(applyOpts ...nats.Option) *nats.Options {
 	opts := nats.GetDefaultOptions()
 	opts.MaxReconnect = -1
 	opts.Timeout = time.Second * 10
 	opts.PingInterval = time.Minute * 10
 	opts.MaxPingsOut = 5
 
-	return opts
+	return MustApplyNatsOptions(&opts, applyOpts...)
 }
 
-func ApplyNatsOptions(opts nats.Options, applyOpts ...nats.Option) (nats.Options, error) {
+func ApplyNatsOptions(opts *nats.Options, applyOpts ...nats.Option) error {
 	for _, opt := range applyOpts {
 		if opt != nil {
-			if err := opt(&opts); err != nil {
-				return opts, fmt.Errorf("unable to apply NATS option: %w", err)
+			if err := opt(opts); err != nil {
+				return fmt.Errorf("unable to apply NATS option: %w", err)
 			}
 		}
 	}
-	return opts, nil
+	return nil
 }
 
-func MustApplyNatsOptions(opts nats.Options, applyOpts ...nats.Option) nats.Options {
-	opts, err := ApplyNatsOptions(opts, applyOpts...)
-	if err != nil {
+func MustApplyNatsOptions(opts *nats.Options, applyOpts ...nats.Option) *nats.Options {
+	if err := ApplyNatsOptions(opts, applyOpts...); err != nil {
 		panic(err)
 	}
 	return opts

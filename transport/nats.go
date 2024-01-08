@@ -20,11 +20,11 @@ type NatsConnection struct {
 
 func (c *NatsConnection) connect() error {
 	ctxOptions := []natscontext.Option{}
-	if c.config.OverrideURL != "" {
-		ctxOptions = append(ctxOptions, natscontext.WithServerURL(c.config.OverrideURL))
+	if c.config.ServerURL != "" {
+		ctxOptions = append(ctxOptions, natscontext.WithServerURL(c.config.ServerURL))
 	}
-	if c.config.OverrideCreds != "" {
-		ctxOptions = append(ctxOptions, natscontext.WithCreds(c.config.OverrideCreds))
+	if c.config.Creds != "" {
+		ctxOptions = append(ctxOptions, natscontext.WithCreds(c.config.Creds))
 	}
 
 	natsCtx, err := natscontext.New(c.config.ContextName, true, ctxOptions...)
@@ -54,13 +54,19 @@ func (c *NatsConnection) connect() error {
 		return fmt.Errorf("unable to get NATS options from NATS context: %w", err)
 	}
 
-	opts := c.config.Options
-	opts.Servers = processUrlString(natsCtx.ServerURL())
-	if opts, err = ApplyNatsOptions(opts, natsOptsList...); err != nil {
+	// Options will further be modified, but we don't want to modify the config, so we copy it first.
+	optsPtr := c.config.Options
+	if optsPtr == nil {
+		optsPtr = RecommendedNatsOptions()
+	}
+	optsCopy := *optsPtr
+
+	optsCopy.Servers = processUrlString(natsCtx.ServerURL())
+	if err := ApplyNatsOptions(&optsCopy, natsOptsList...); err != nil {
 		return err
 	}
 
-	c.connection, err = opts.Connect()
+	c.connection, err = optsCopy.Connect()
 	return err
 }
 

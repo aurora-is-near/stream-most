@@ -22,11 +22,10 @@ func StreamCmd() (cmd *cobra.Command, inputFactory func() (blockio.Input, error)
 	cfg := &streaminput.Config{
 		Conn: &streamconnector.Config{
 			Nats: &transport.NATSConfig{
-				ContextName:   "",
-				OverrideURL:   "",
-				OverrideCreds: "",
-				LogTag:        "input",
-				Options:       transport.RecommendedNatsOptions(),
+				ContextName: "",
+				ServerURL:   "",
+				Creds:       "",
+				LogTag:      "input",
 			},
 			Stream: &stream.Config{
 				Name:        "",
@@ -45,8 +44,8 @@ func StreamCmd() (cmd *cobra.Command, inputFactory func() (blockio.Input, error)
 	}
 
 	cmd.PersistentFlags().StringVar(&cfg.Conn.Nats.ContextName, "in-nats", "", "Name of the nats context for input stream. If empty - default one will be used")
-	cmd.PersistentFlags().StringVar(&cfg.Conn.Nats.OverrideURL, "in-url", "", "Override NATS URL for input stream. Comma-separated list is supported")
-	cmd.PersistentFlags().StringVar(&cfg.Conn.Nats.OverrideCreds, "in-creds", "", "Override path to NATS credentials file for input stream. If empty - won't be used")
+	cmd.PersistentFlags().StringVar(&cfg.Conn.Nats.ServerURL, "in-url", "", "Override NATS URL for input stream. Comma-separated list is supported")
+	cmd.PersistentFlags().StringVar(&cfg.Conn.Nats.Creds, "in-creds", "", "Override path to NATS credentials file for input stream. If empty - won't be used")
 	cmd.PersistentFlags().StringVar(&cfg.Conn.Stream.Name, "in-stream", "", "Name of the input stream")
 	cmd.PersistentFlags().DurationVar(&cfg.Conn.Stream.RequestWait, "in-request-timeout", time.Second*10, "Read-requests timeout for input stream connection")
 	cmd.PersistentFlags().StringSliceVar(&cfg.FilterSubjects, "in-subjects", []string{}, "Subject filter-array for input stream (comma separated). If empty - whole stream will be read")

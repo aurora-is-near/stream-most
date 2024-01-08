@@ -61,9 +61,8 @@ func ConnectTestNATS(natsUrl string, connName string) (*transport.NatsConnection
 	logger.SetLevel(logrus.WarnLevel)
 
 	natsCfg := &transport.NATSConfig{
-		OverrideURL:    natsUrl,
+		ServerURL:      natsUrl,
 		LogTag:         connName,
-		Options:        transport.RecommendedNatsOptions(),
 		OverrideLogger: logger,
 	}
 	nc, err := transport.ConnectNATS(natsCfg)

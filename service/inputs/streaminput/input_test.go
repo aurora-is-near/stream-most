@@ -19,9 +19,8 @@ func makeCfg(natsUrl string, natslogTag string, streamName string, bufferSize ui
 	return &Config{
 		Conn: &streamconnector.Config{
 			Nats: &transport.NATSConfig{
-				OverrideURL: natsUrl,
-				LogTag:      natslogTag,
-				Options:     transport.RecommendedNatsOptions(),
+				ServerURL: natsUrl,
+				LogTag:    natslogTag,
 			},
 			Stream: &stream.Config{
 				Name:        streamName,

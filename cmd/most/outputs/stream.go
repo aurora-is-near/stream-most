@@ -23,11 +23,10 @@ func StreamCmd() (cmd *cobra.Command, outputFactory func() (blockio.Output, erro
 	cfg := &streamoutput.Config{
 		Conn: &streamconnector.Config{
 			Nats: &transport.NATSConfig{
-				ContextName:   "",
-				OverrideURL:   "",
-				OverrideCreds: "",
-				LogTag:        "output",
-				Options:       transport.RecommendedNatsOptions(),
+				ContextName: "",
+				ServerURL:   "",
+				Creds:       "",
+				LogTag:      "output",
 			},
 			Stream: &stream.Config{
 				Name:        "",
@@ -47,8 +46,8 @@ func StreamCmd() (cmd *cobra.Command, outputFactory func() (blockio.Output, erro
 	}
 
 	cmd.PersistentFlags().StringVar(&cfg.Conn.Nats.ContextName, "out-nats", "", "Name of the nats context for output stream. If empty - default one will be used")
-	cmd.PersistentFlags().StringVar(&cfg.Conn.Nats.OverrideURL, "out-url", "", "Override NATS URL for output stream. Comma-separated list is supported")
-	cmd.PersistentFlags().StringVar(&cfg.Conn.Nats.OverrideCreds, "out-creds", "", "Override path to NATS credentials file for output stream. If empty - won't be used")
+	cmd.PersistentFlags().StringVar(&cfg.Conn.Nats.ServerURL, "out-url", "", "Override NATS URL for output stream. Comma-separated list is supported")
+	cmd.PersistentFlags().StringVar(&cfg.Conn.Nats.Creds, "out-creds", "", "Override path to NATS credentials file for output stream. If empty - won't be used")
 	cmd.PersistentFlags().StringVar(&cfg.Conn.Stream.Name, "out-stream", "", "Name of the output stream")
 	cmd.PersistentFlags().DurationVar(&cfg.Conn.Stream.RequestWait, "out-request-timeout", time.Second*10, "Read-requests timeout for output stream connection")
 	cmd.PersistentFlags().DurationVar(&cfg.Conn.Stream.WriteWait, "out-write-timeout", time.Second*10, "Write-requests timeout for output stream connection")
