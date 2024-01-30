@@ -183,6 +183,7 @@ func (c *connection) handleSession(s *session) {
 				FilterSubjects: c.in.config.FilterSubjects,
 				OptStartSeq:    s.nextSeq,
 			},
+			PullOpts:   c.in.config.PullOpts,
 			EndSeq:     s.seekOpts.endSeq,
 			MaxSilence: c.in.config.MaxSilence,
 			LogTag:     c.in.config.Conn.Stream.LogTag,

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/aurora-is-near/stream-most/stream/streamconnector"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 type Config struct {
@@ -15,4 +16,5 @@ type Config struct {
 	ReconnectDelay     time.Duration
 	StateFetchInterval time.Duration
 	LogInterval        time.Duration
+	PullOpts           []jetstream.PullConsumeOpt
 }
