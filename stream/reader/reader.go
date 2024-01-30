@@ -92,7 +92,9 @@ func (r *Reader) finish(err error) {
 
 func (r *Reader) run() {
 	defer r.wg.Done()
-	defer r.receiver.HandleFinish(r.err)
+	defer func() {
+		r.receiver.HandleFinish(r.err)
+	}()
 
 	consumer, err := r.input.Stream().OrderedConsumer(r.ctx, r.cfg.Consumer)
 	if err != nil {
