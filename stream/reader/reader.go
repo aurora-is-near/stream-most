@@ -205,11 +205,6 @@ func (r *Reader) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64) {
 	// Let's consider that reader might be stuck on this sequence
 	silenceCandidateSeq := lastConsumedSeq.Load()
 
-	// Prevent start-on-tip problem. TODO: handle better
-	if silenceCandidateSeq == 0 {
-		return
-	}
-
 	// If it wasn't fired yet - it's not stuck, it's in process of firing
 	if lastFiredSeq.Load() < silenceCandidateSeq {
 		return
@@ -257,44 +252,70 @@ func (r *Reader) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64) {
 	}
 
 	// Is there anything to read after the cursor?
-	provenAvailableSeq := lastConsumedSeq.Load()
+	if len(r.cfg.Consumer.FilterSubjects) == 0 {
+		// For read-all-subjects mode we simply check last message of stream
 
-	// For read-all-subjects mode we simply check stream last seq
-	if len(r.cfg.Consumer.FilterSubjects) == 0 && info.State.LastSeq > provenAvailableSeq {
-		provenAvailableSeq = info.State.LastSeq
-	}
-
-	// For custom subjects we check last msg per subject
-	for _, subj := range r.cfg.Consumer.FilterSubjects {
-		// If cursor suddenly changed - all ok, return
-		if lastConsumedSeq.Load() > silenceCandidateSeq {
+		// If no messages after StartSeq - it's fine, nothing to read yet
+		if info.State.LastSeq < r.cfg.Consumer.OptStartSeq {
 			return
 		}
-		// If we already have some proven continuation, let's not waste time
-		if provenAvailableSeq > silenceCandidateSeq {
-			break
+		// If no messages after StartTime - it's fine, nothing to read yet
+		if r.cfg.Consumer.OptStartTime != nil && info.State.LastTime.Before(*r.cfg.Consumer.OptStartTime) {
+			return
 		}
-		msg, err := r.input.GetLastMsgForSubject(r.ctx, subj)
-		if err != nil {
-			if errors.Is(err, jetstream.ErrMsgNotFound) {
+		// If last message is already behind - it's fine, nothing to read yet
+		if info.State.LastSeq <= silenceCandidateSeq {
+			return
+		}
+
+		// OK, there's a proof of continuation (there's something more to read)
+
+	} else {
+		// For custom subjects we check last msg per subject
+
+		provenContinuation := false
+
+		for _, subj := range r.cfg.Consumer.FilterSubjects {
+			// If cursor suddenly changed - all ok, return
+			if lastConsumedSeq.Load() > silenceCandidateSeq {
+				return
+			}
+			msg, err := r.input.GetLastMsgForSubject(r.ctx, subj)
+			if err != nil {
+				if errors.Is(err, jetstream.ErrMsgNotFound) {
+					continue
+				}
+				r.finish(fmt.Errorf("unable to get last stream message for subject '%s': %w", subj, err))
+				return
+			}
+			r.updateLastKnownSeq(msg.GetSequence())
+
+			// If message is before StartSeq - it's fine, it's not a proven continuation
+			if msg.GetSequence() < r.cfg.Consumer.OptStartSeq {
 				continue
 			}
-			r.finish(fmt.Errorf("unable to get last stream message for subject '%s': %w", subj, err))
-			return
+			// If no messages after StartTime - it's fine, it's not a proven continuation
+			if r.cfg.Consumer.OptStartTime != nil && msg.GetTimestamp().Before(*r.cfg.Consumer.OptStartTime) {
+				continue
+			}
+			// If this message is already behind - it's fine, it's not a proven continuation
+			if msg.GetSequence() <= silenceCandidateSeq {
+				return
+			}
+
+			// OK, there's a proof of continuation (there's something more to read)
+			provenContinuation = true
+			break
 		}
-		r.updateLastKnownSeq(msg.GetSequence())
-		if msg.GetSequence() > provenAvailableSeq {
-			provenAvailableSeq = msg.GetSequence()
+
+		// If no proof of continuation - it's fine, nothing to read
+		if !provenContinuation {
+			return
 		}
 	}
 
 	// If cursor suddenly changed - all ok, return
 	if lastConsumedSeq.Load() > silenceCandidateSeq {
-		return
-	}
-
-	// If there's no proof of continuation - it's ok, stream itself is silent, return
-	if provenAvailableSeq <= silenceCandidateSeq {
 		return
 	}
 
