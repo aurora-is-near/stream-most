@@ -181,6 +181,7 @@ func (c *connection) handleSession(s *session) {
 		&reader.Config{
 			Consumer: jetstream.OrderedConsumerConfig{
 				FilterSubjects: c.in.config.FilterSubjects,
+				DeliverPolicy:  jetstream.DeliverByStartSequencePolicy,
 				OptStartSeq:    s.nextSeq,
 			},
 			PullOpts:   c.in.config.PullOpts,

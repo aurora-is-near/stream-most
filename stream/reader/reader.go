@@ -300,7 +300,7 @@ func (r *Reader) ensureNoSilence(lastConsumedSeq, lastFiredSeq *atomic.Uint64) {
 			}
 			// If this message is already behind - it's fine, it's not a proven continuation
 			if msg.GetSequence() <= silenceCandidateSeq {
-				return
+				continue
 			}
 
 			// OK, there's a proof of continuation (there's something more to read)
