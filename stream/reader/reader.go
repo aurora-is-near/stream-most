@@ -104,12 +104,26 @@ func (r *Reader) run() {
 
 	var lastConsumedSeq, lastFiredSeq atomic.Uint64
 
+	// Apparently handler can be called concurrently
+	handlerLock := make(chan struct{}, 1)
+	unlockHandler := func() {
+		handlerLock <- struct{}{}
+	}
+	unlockHandler()
+
 	consume, err := consumer.Consume(
 		func(msg jetstream.Msg) {
 			select {
 			case <-r.ctx.Done():
 				return
 			default:
+			}
+
+			select {
+			case <-r.ctx.Done():
+				return
+			case <-handlerLock:
+				defer unlockHandler()
 			}
 
 			meta, err := msg.Metadata()
