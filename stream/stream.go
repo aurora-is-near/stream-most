@@ -19,6 +19,10 @@ type Stream struct {
 }
 
 func Connect(cfg *Config, js jetstream.JetStream) (*Stream, error) {
+	return ConnectWithContext(context.Background(), cfg, js)
+}
+
+func ConnectWithContext(ctx context.Context, cfg *Config, js jetstream.JetStream) (*Stream, error) {
 	cfg = cfg.WithDefaults()
 
 	s := &Stream{
@@ -32,7 +36,7 @@ func Connect(cfg *Config, js jetstream.JetStream) (*Stream, error) {
 	}
 
 	s.logger.Infof("Getting stream '%s'", cfg.Name)
-	streamRequestCtx, cancelStreamRequest := context.WithTimeout(context.Background(), s.cfg.RequestWait)
+	streamRequestCtx, cancelStreamRequest := context.WithTimeout(ctx, s.cfg.RequestWait)
 	defer cancelStreamRequest()
 
 	var err error
@@ -101,6 +105,12 @@ func (s *Stream) GetLastMsgForSubject(ctx context.Context, subject string) (mess
 		return nil, err
 	}
 	return messages.RawStreamMessage{RawStreamMsg: msg}, nil
+}
+
+func (s *Stream) OrderedConsumer(ctx context.Context, cfg jetstream.OrderedConsumerConfig) (jetstream.Consumer, error) {
+	tctx, cancel := context.WithTimeout(ctx, s.cfg.RequestWait)
+	defer cancel()
+	return s.stream.OrderedConsumer(tctx, cfg)
 }
 
 func (s *Stream) Write(ctx context.Context, msg *nats.Msg, opts ...jetstream.PublishOpt) (*jetstream.PubAck, error) {

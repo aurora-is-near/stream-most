@@ -96,7 +96,7 @@ func (r *Reader) run() {
 		r.receiver.HandleFinish(r.err)
 	}()
 
-	consumer, err := r.input.Stream().OrderedConsumer(r.ctx, r.cfg.Consumer)
+	consumer, err := r.input.OrderedConsumer(r.ctx, r.cfg.Consumer)
 	if err != nil {
 		r.finish(fmt.Errorf("unable to create ordered consumer: %w", err))
 		return
