@@ -16,7 +16,11 @@ func CtxSleep(ctx context.Context, d time.Duration) bool {
 	select {
 	case <-ctx.Done():
 		if !t.Stop() {
-			<-t.C
+			// Needed for compatibility with both pre-1.23 and post-1.23 go versions
+			select {
+			case <-t.C:
+			default:
+			}
 		}
 		return false
 	case <-t.C:
