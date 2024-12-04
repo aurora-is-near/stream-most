@@ -1,6 +1,6 @@
 module github.com/aurora-is-near/stream-most
 
-go 1.20
+go 1.23
 
 require (
 	github.com/aurora-is-near/borealis-prototypes v0.10.2-0.20230726063017-c0a473f96ffe
