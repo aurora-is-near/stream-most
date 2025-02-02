@@ -19,6 +19,7 @@ type NATSConfig struct {
 
 func RecommendedNatsOptions(applyOpts ...nats.Option) *nats.Options {
 	opts := nats.GetDefaultOptions()
+	opts.AllowReconnect = true
 	opts.MaxReconnect = -1
 	opts.Timeout = time.Second * 10
 	opts.PingInterval = time.Minute * 10
