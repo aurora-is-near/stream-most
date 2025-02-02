@@ -15,7 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var ErrInterrupted = fmt.Errorf("interrupted")
+var ErrInterrupted = fmt.Errorf("streamreader interrupted")
 
 type Reader struct {
 	logger *logrus.Entry
