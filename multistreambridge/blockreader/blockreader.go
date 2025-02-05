@@ -2,7 +2,6 @@ package blockreader
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"runtime"
 	"sync"
@@ -126,7 +125,11 @@ func (b *BlockReader) run() {
 		}).WithHandleMsgCb(func(ctx context.Context, msg messages.NatsMessage) error {
 			skip, err := b.options.FilterCb(ctx, msg)
 			if err != nil {
-				return newReceiverInterruptedError(err, "interrupted via filter callback on msg at seq %d", msg.GetSequence())
+				b.initiateStop(
+					fmt.Errorf("interrupted via filter callback on msg at seq %d: %w", msg.GetSequence(), err),
+					true,
+				)
+				return fmt.Errorf("block-reader is stopping")
 			}
 			if skip {
 				return nil
@@ -157,7 +160,7 @@ func (b *BlockReader) run() {
 		return
 	}
 	defer func() {
-		b.reader.Stop(b.lifecycle.StoppingReason(), true)
+		b.reader.Stop(fmt.Errorf("block-reader is stopping"), true)
 	}()
 
 	b.logger.Infof("stream reader started")
@@ -196,12 +199,7 @@ func (b *BlockReader) runPublisher() {
 			return
 		case job, ok := <-b.publishQueue:
 			if !ok {
-				var rcvIntErr *receiverInterruptedError
-				if errors.As(b.reader.Error(), &rcvIntErr) {
-					b.initiateStop(rcvIntErr, true)
-				} else {
-					b.initiateStop(fmt.Errorf("got stream reader error: %w", b.reader.Error()), false)
-				}
+				b.initiateStop(fmt.Errorf("got stream reader error: %w", b.reader.Error()), false)
 				return
 			}
 
