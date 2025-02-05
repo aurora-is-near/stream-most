@@ -125,7 +125,7 @@ func (b *BlockReader) finish(err error) {
 func (b *BlockReader) run() {
 	defer b.lifecycle.MarkDone()
 	defer func() {
-		b.options.FinishCb(b.finalError)
+		b.options.FinishCb(b.Error())
 	}()
 	defer b.workersWg.Wait()
 
