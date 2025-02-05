@@ -12,12 +12,9 @@ import (
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/multistreambridge/lifecycle"
 	"github.com/aurora-is-near/stream-most/stream/reader"
-	"github.com/aurora-is-near/stream-most/util"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/sirupsen/logrus"
 )
-
-var ErrInterrupted = errors.New("blockreader interrupted")
 
 type BlockReader struct {
 	options       *Options
@@ -26,8 +23,6 @@ type BlockReader struct {
 	decodingQueue chan *DecodingJob
 	publishQueue  chan *DecodingJob
 	workersWg     sync.WaitGroup
-	finishOnce    sync.Once
-	finalError    error
 	reader        *reader.Reader
 }
 
@@ -46,7 +41,7 @@ func StartBlockReader(ctx context.Context, options *Options) (*BlockReader, erro
 			WithField("component", "blockreader").
 			WithField("stream", options.Stream.Name()).
 			WithField("tag", options.LogTag),
-		lifecycle:     lifecycle.NewLifecycle(ctx),
+		lifecycle:     lifecycle.NewLifecycle(ctx, fmt.Errorf("block-reader interrupted")),
 		decodingQueue: make(chan *DecodingJob, 128),
 		publishQueue:  make(chan *DecodingJob, 128),
 	}
@@ -84,48 +79,26 @@ func StartBlockReader(ctx context.Context, options *Options) (*BlockReader, erro
 	return b, nil
 }
 
-func (b *BlockReader) Error() error {
-	if b.lifecycle.StopSent() {
-		b.finish(ErrInterrupted) // fallback if block-reader was stopped via parent context
-		return b.finalError
-	}
-	return nil
+func (b *BlockReader) Lifecycle() lifecycle.External {
+	return b.lifecycle
 }
 
-// Pass `util.FinishedContext()` context to not wait for stop
-func (b *BlockReader) Stop(ctx context.Context, err error) bool {
-	if err != nil {
-		b.finish(fmt.Errorf("%w: %w", ErrInterrupted, err))
-	} else {
-		b.finish(ErrInterrupted)
-	}
-	return b.lifecycle.Stop(ctx)
-}
-
-func (b *BlockReader) DoneCtx() context.Context {
-	return b.lifecycle.DoneCtx()
-}
-
-func (b *BlockReader) finish(err error) {
-	b.finishOnce.Do(func() {
-		b.finalError = err
-		b.lifecycle.Stop(util.FinishedContext())
-		if err != nil {
-			if errors.Is(err, ErrInterrupted) {
-				b.logger.Infof("finished because of interruption: %v", err)
-			} else {
-				b.logger.Errorf("finished with error: %v", err)
-			}
+func (b *BlockReader) initiateStop(reason error, markAsInterruption bool) {
+	if b.lifecycle.SendStop(reason, markAsInterruption) {
+		if b.lifecycle.InterruptedExternally() {
+			b.logger.Infof("stopping because of interruption: %v", reason)
+		} else if b.lifecycle.StoppingReason() != nil {
+			b.logger.Errorf("stopping because of error: %v", reason)
 		} else {
-			b.logger.Infof("finished normally")
+			b.logger.Infof("finishing")
 		}
-	})
+	}
 }
 
 func (b *BlockReader) run() {
 	defer b.lifecycle.MarkDone()
 	defer func() {
-		b.options.FinishCb(b.Error())
+		b.options.FinishCb(b.lifecycle.StoppingReason())
 	}()
 	defer b.workersWg.Wait()
 
@@ -153,7 +126,7 @@ func (b *BlockReader) run() {
 		}).WithHandleMsgCb(func(ctx context.Context, msg messages.NatsMessage) error {
 			skip, err := b.options.FilterCb(ctx, msg)
 			if err != nil {
-				return fmt.Errorf("%w: interrupted via receiver at msg on seq %d: %w", ErrInterrupted, msg.GetSequence(), err)
+				return newReceiverInterruptedError(err, "interrupted via filter callback on msg at seq %d", msg.GetSequence())
 			}
 			if skip {
 				return nil
@@ -165,13 +138,13 @@ func (b *BlockReader) run() {
 			}
 
 			select {
-			case <-b.lifecycle.StopCtx().Done():
+			case <-b.lifecycle.Ctx().Done():
 				return nil
 			case b.decodingQueue <- job:
 			}
 
 			select {
-			case <-b.lifecycle.StopCtx().Done():
+			case <-b.lifecycle.Ctx().Done():
 				return nil
 			case b.publishQueue <- job:
 			}
@@ -180,28 +153,28 @@ func (b *BlockReader) run() {
 		}),
 	)
 	if err != nil {
-		b.finish(fmt.Errorf("unable to start reader: %w", err))
+		b.initiateStop(fmt.Errorf("unable to start reader: %w", err), false)
 		return
 	}
 	defer func() {
-		b.reader.Stop(b.Error(), true)
+		b.reader.Stop(b.lifecycle.StoppingReason(), true)
 	}()
 
 	b.logger.Infof("stream reader started")
 
-	<-b.lifecycle.StopCtx().Done()
+	<-b.lifecycle.Ctx().Done()
 }
 
 func (b *BlockReader) runDecoder() {
 	defer b.workersWg.Done()
 
 	for {
-		if b.lifecycle.StopSent() {
+		if b.lifecycle.StopInitiated() {
 			return
 		}
 
 		select {
-		case <-b.lifecycle.StopCtx().Done():
+		case <-b.lifecycle.Ctx().Done():
 			return
 		case job := <-b.decodingQueue:
 			job.blockMessage, job.decodingError = formats.Active().ParseMsg(job.msg)
@@ -214,45 +187,46 @@ func (b *BlockReader) runPublisher() {
 	defer b.workersWg.Done()
 
 	for {
-		if b.lifecycle.StopSent() {
+		if b.lifecycle.StopInitiated() {
 			return
 		}
 
 		select {
-		case <-b.lifecycle.StopCtx().Done():
+		case <-b.lifecycle.Ctx().Done():
 			return
 		case job, ok := <-b.publishQueue:
 			if !ok {
-				if errors.Is(b.reader.Error(), ErrInterrupted) {
-					b.finish(fmt.Errorf("got interrupted via stream reader: %w", b.reader.Error()))
+				var rcvIntErr *receiverInterruptedError
+				if errors.As(b.reader.Error(), &rcvIntErr) {
+					b.initiateStop(rcvIntErr, true)
 				} else {
-					b.finish(fmt.Errorf("got stream reader error: %w", b.reader.Error()))
+					b.initiateStop(fmt.Errorf("got stream reader error: %w", b.reader.Error()), false)
 				}
 				return
 			}
 
 			select {
-			case <-b.lifecycle.StopCtx().Done():
+			case <-b.lifecycle.Ctx().Done():
 				return
 			case <-job.done:
 			}
 
 			if job.decodingError != nil {
-				if err := b.options.CorruptedBlockCb(b.lifecycle.StopCtx(), job.msg, job.decodingError); err != nil {
-					b.finish(fmt.Errorf(
-						"%w: interrupted via receiver on corrupted block at seq %d: %w",
-						ErrInterrupted, job.msg.GetSequence(), err,
-					))
+				if err := b.options.CorruptedBlockCb(b.lifecycle.Ctx(), job.msg, job.decodingError); err != nil {
+					b.initiateStop(
+						fmt.Errorf("interrupted via receiver on corrupted block at seq %d: %w", job.msg.GetSequence(), err),
+						true,
+					)
 					return
 				}
 				continue
 			}
 
-			if err := b.options.BlockCb(b.lifecycle.StopCtx(), job.blockMessage); err != nil {
-				b.finish(fmt.Errorf(
-					"%w: interrupted via receiver on block at seq %d: %w",
-					ErrInterrupted, job.msg.GetSequence(), err,
-				))
+			if err := b.options.BlockCb(b.lifecycle.Ctx(), job.blockMessage); err != nil {
+				b.initiateStop(
+					fmt.Errorf("interrupted via receiver on block at seq %d: %w", job.msg.GetSequence(), err),
+					true,
+				)
 				return
 			}
 		}
