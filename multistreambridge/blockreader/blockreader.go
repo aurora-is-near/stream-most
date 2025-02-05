@@ -61,7 +61,7 @@ func StartBlockReader(ctx context.Context, options *Options) (*BlockReader, erro
 		}
 	}
 	if b.options.FinishCb == nil {
-		b.options.FinishCb = func(err error) {}
+		b.options.FinishCb = func(err error, isInterrupted bool) {}
 	}
 
 	b.workersWg.Add(1)
@@ -97,7 +97,7 @@ func (b *BlockReader) initiateStop(reason error, markAsInterruption bool) {
 func (b *BlockReader) run() {
 	defer b.lifecycle.MarkDone()
 	defer func() {
-		b.options.FinishCb(b.lifecycle.StoppingReason())
+		b.options.FinishCb(b.lifecycle.StoppingReason(), b.lifecycle.InterruptedExternally())
 	}()
 	defer b.workersWg.Wait()
 
