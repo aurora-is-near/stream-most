@@ -92,6 +92,13 @@ func (ht *HeadTracker) run() {
 	logTicker := time.NewTicker(time.Second * 5)
 	defer logTicker.Stop()
 
+	var lastLoggedSeq uint64
+	if head := ht.GetHeadInfo(); head != nil {
+		lastLoggedSeq = head.sequence
+	}
+
+	lastLogTime := time.Now()
+
 	for !ht.lifecycle.StopInitiated() {
 		select {
 		case <-ht.lifecycle.Ctx().Done():
@@ -103,6 +110,12 @@ func (ht *HeadTracker) run() {
 				} else {
 					ht.logger.Infof("current seq=%d, no head", head.sequence)
 				}
+				ht.logger.Infof(
+					"msgs/sec: %0.2f",
+					float64(head.sequence-lastLoggedSeq)/time.Since(lastLogTime).Seconds(),
+				)
+				lastLoggedSeq = head.sequence
+				lastLogTime = time.Now()
 			}
 		}
 	}
