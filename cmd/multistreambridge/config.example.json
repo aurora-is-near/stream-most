@@ -1,0 +1,38 @@
+{
+  "BlocksFormat": "aurora",
+  "Output": {
+    "NatsEndpoints": [
+      "clusterX-1.aurora.dev",
+      "clusterX-2.aurora.dev"
+    ],
+    "NatsCredsPath": "credsX.creds",
+    "StreamName": "v100_mainnet_aurora_blocks",
+    "Subject": "v100.mainnet.aurora.blocks",
+    "LogTag": "x-aurora-out",
+    "StartHeight": 1337
+  },
+  "Inputs": [
+    {
+      "NatsEndpoints": [
+        "clusterY-1.aurora.dev",
+        "clusterY-2.aurora.dev"
+      ],
+      "NatsCredsPath": "credsY.creds",
+      "StreamName": "v100_refiner_mainnet_aurora_blocks",
+      "MinSeq": 42,
+      "LogTag": "y-refiner-aurora-in",
+      "TrustHeaders": false
+    },
+    {
+      "NatsEndpoints": [
+        "clusterZ-1.aurora.dev",
+        "clusterZ-2.aurora.dev"
+      ],
+      "NatsCredsPath": "credsZ.creds",
+      "StreamName": "v100_mainnet_aurora_blocks",
+      "MinSeq": 555,
+      "LogTag": "z-refiner-aurora-in",
+      "TrustHeaders": true
+    }
+  ]
+}
