@@ -13,7 +13,11 @@ jobs:
     strategy:
       fail-fast: false  # if one job in the matrix fails, the rest will NOT be cancelled
       matrix:
-        app: [streamcopier]
+        include:
+          - image: streamcopier
+            app: streamcopier
+          - image: multi-stream-bridge
+            app: multistreambridge
 
     permissions:
       contents: read
@@ -37,7 +41,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/aurora-is-near/${{ matrix.app }}
+          images: ${{ env.REGISTRY }}/aurora-is-near/${{ matrix.image }}
           tags: |
             type=ref,event=branch  # Tag the image based on the branch name
             type=sha  # Tag the image with the commit SHA
