@@ -45,6 +45,11 @@ func StartBlockReader(ctx context.Context, options *Options) (*BlockReader, erro
 		publishQueue:  make(chan *DecodingJob, 128),
 	}
 
+	if b.options.HandleNewKnownSeqCb == nil {
+		b.options.HandleNewKnownSeqCb = func(ctx context.Context, seq uint64) (err error) {
+			return nil
+		}
+	}
 	if b.options.FilterCb == nil {
 		b.options.FilterCb = func(ctx context.Context, msg messages.NatsMessage) (skip bool, err error) {
 			return false, nil
@@ -152,6 +157,15 @@ func (b *BlockReader) run() {
 			case b.publishQueue <- job:
 			}
 
+			return nil
+		}).WithHandleNewKnownSeqCb(func(ctx context.Context, seq uint64) error {
+			if err := b.options.HandleNewKnownSeqCb(ctx, seq); err != nil {
+				b.initiateStop(
+					fmt.Errorf("interrupted via new-known-seq callback at seq %d: %w", seq, err),
+					true,
+				)
+				return fmt.Errorf("block-reader is stopping")
+			}
 			return nil
 		}),
 	)
