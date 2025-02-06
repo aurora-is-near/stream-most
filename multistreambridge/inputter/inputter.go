@@ -3,10 +3,12 @@ package inputter
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/aurora-is-near/stream-most/domain/blocks"
 	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/domain/formats/headers"
 	"github.com/aurora-is-near/stream-most/domain/messages"
@@ -21,7 +23,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const maxLookupIterations = 100
+const maxLookupIterations = 200
 const goldenWindowWidth = 100
 const maxTimeOutsideGoldenWindow = time.Minute
 const loggingInterval = time.Second * 5
@@ -33,6 +35,7 @@ type Inputter struct {
 	logger *logrus.Entry
 	cfg    *Config
 	out    *outputter.Outputter
+	rnd    *rand.Rand
 }
 
 func NewInputter(cfg *Config, out *outputter.Outputter) (*Inputter, error) {
@@ -42,6 +45,7 @@ func NewInputter(cfg *Config, out *outputter.Outputter) (*Inputter, error) {
 			WithField("tag", cfg.LogTag),
 		cfg: cfg,
 		out: out,
+		rnd: rand.New(rand.NewPCG(rand.Uint64(), uint64(time.Now().UnixNano()))),
 	}
 	return in, nil
 }
@@ -322,6 +326,28 @@ func (in *Inputter) lookupTargetHeight(ctx context.Context, s *stream.Stream, ta
 	minSeq := max(in.cfg.MinSeq, state.FirstSeq)
 	curSeq := state.LastSeq
 
+	cache := make(map[uint64]blocks.Block)
+
+	fetchSeq := func(seq uint64) (blocks.Block, error) {
+		if block, ok := cache[seq]; ok {
+			return block, nil
+		}
+		in.logger.Infof("lookup: checking height of msg on seq=%d...", seq)
+		msg, err := s.Get(ctx, seq)
+		if err != nil {
+			return nil, fmt.Errorf("unable to fetch stream msg on seq=%d: %w", seq, err)
+		}
+		blockMsg, err := formats.Active().ParseMsg(msg)
+		if err != nil {
+			in.logger.Warnf("lookup: unable to parse block from msg on seq=%d: %v", seq, err)
+			cache[seq] = nil
+			return nil, nil
+		}
+		in.logger.Infof("lookup: seq=%d, height=%d", seq, blockMsg.Block.GetHeight())
+		cache[seq] = blockMsg.Block
+		return blockMsg.Block, nil
+	}
+
 	for i := 0; i < maxLookupIterations; i++ {
 		select {
 		case <-ctx.Done():
@@ -329,36 +355,42 @@ func (in *Inputter) lookupTargetHeight(ctx context.Context, s *stream.Stream, ta
 		default:
 		}
 
-		in.logger.Infof("checking height of msg on seq=%d...", curSeq)
-		msg, err := s.Get(ctx, curSeq)
+		in.logger.Infof("lookup: current seq=%d", curSeq)
+		block, err := fetchSeq(curSeq)
 		if err != nil {
-			return 0, fmt.Errorf("unable to fetch stream msg on seq=%d: %w", curSeq, err)
+			return 0, err
 		}
 
-		blockMsg, err := formats.Active().ParseMsg(msg)
-		if err != nil {
-			in.logger.Warnf("unable to parse block from msg on seq=%d: %v", curSeq, err)
-			jump := min(curSeq-minSeq, 1000)
-			if jump == 0 {
-				return 0, fmt.Errorf("reached lower bound, cannot jump any lower")
+		var maxJump uint64
+
+		if block != nil {
+			if block.GetHeight() <= targetHeight {
+				in.logger.Infof("will start from block height=%d on seq=%d", block.GetHeight(), curSeq)
+				return curSeq, nil
 			}
-			curSeq -= jump
+			maxJump = min(curSeq-minSeq, block.GetHeight()-targetHeight)
+		} else {
+			maxJump = min(curSeq-minSeq, 10000)
+		}
+		if maxJump == 0 {
+			return 0, fmt.Errorf("reached lower bound, cannot jump any lower")
+		}
+		if maxJump == 1 || curSeq-minSeq == 1 {
+			curSeq--
 			continue
 		}
 
-		curHeight := blockMsg.Block.GetHeight()
-		in.logger.Infof("lookup: seq=%d, height=%d", curSeq, curHeight)
+		jump := in.rnd.Uint64N(maxJump) + 1
+		jumpSeq := curSeq - jump
 
-		if curHeight <= targetHeight {
-			in.logger.Infof("will start from block height=%d on seq=%d", curHeight, curSeq)
-			return curSeq, nil
+		jumpBlock, err := fetchSeq(jumpSeq)
+		if err != nil {
+			return 0, err
 		}
 
-		jump := min(curSeq-minSeq, curHeight-targetHeight)
-		if jump == 0 {
-			return 0, fmt.Errorf("reached lower bound, cannot jump any lower")
+		if jumpBlock == nil || jumpBlock.GetHeight() > targetHeight {
+			curSeq = jumpSeq
 		}
-		curSeq -= jump
 	}
 
 	return 0, fmt.Errorf("reached max lookup iterations (%d), can't find the target height", maxLookupIterations)
