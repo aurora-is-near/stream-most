@@ -358,6 +358,7 @@ func (in *Inputter) lookupTargetHeight(ctx context.Context, s *stream.Stream, ta
 		if jump == 0 {
 			return 0, fmt.Errorf("reached lower bound, cannot jump any lower")
 		}
+		curSeq -= jump
 	}
 
 	return 0, fmt.Errorf("reached max lookup iterations (%d), can't find the target height", maxLookupIterations)
