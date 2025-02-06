@@ -11,6 +11,7 @@ import (
 	"github.com/aurora-is-near/stream-most/multistreambridge"
 	"github.com/aurora-is-near/stream-most/multistreambridge/inputter"
 	"github.com/aurora-is-near/stream-most/multistreambridge/outputter"
+	"github.com/sirupsen/logrus"
 )
 
 var configExample = &multistreambridge.Config{
@@ -60,6 +61,10 @@ func main() {
 }
 
 func run() error {
+	logrus.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp: true,
+	})
+
 	if len(os.Args) < 2 {
 		data, err := json.MarshalIndent(configExample, "", "  ")
 		if err != nil {
