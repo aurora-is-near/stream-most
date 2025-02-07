@@ -267,6 +267,10 @@ func (out *Outputter) waitGreaterHead(
 	ctx context.Context, ht *headtracker.HeadTracker, curHead *headtracker.HeadInfo,
 ) error {
 
+	if newHead := ht.GetHeadInfo(); newHead == nil || newHead.Sequence() > curHead.Sequence() {
+		return nil
+	}
+
 	ticker := time.NewTicker(time.Millisecond * 10)
 	defer ticker.Stop()
 
@@ -286,8 +290,7 @@ func (out *Outputter) waitGreaterHead(
 		case <-ctx.Done():
 			return fmt.Errorf("interrupted while waiting for newer head from head-tracker")
 		case <-ticker.C:
-			newHead := ht.GetHeadInfo()
-			if newHead == nil || newHead.Sequence() > curHead.Sequence() {
+			if newHead := ht.GetHeadInfo(); newHead == nil || newHead.Sequence() > curHead.Sequence() {
 				return nil
 			}
 		}
