@@ -244,7 +244,7 @@ func (in *Inputter) Run(ctx context.Context) {
 				highestKnownSeq.Load(),
 			)
 			in.logger.Infof(
-				"corrupted:%d, high:%d, hashMismatches:%d, outside golden window for: %s",
+				"corrupted:%d, high:%d, hashMismatches:%d, far from target for: %s",
 				corruptedBlocksCnt.Load(),
 				highBlocksCnt.Load(),
 				hashMismatchCnt.Load(),
