@@ -210,12 +210,16 @@ func (out *Outputter) handleWrite(ctx context.Context, s *stream.Stream, ht *hea
 		jetstream.WithRetryWait(time.Second),
 	)
 
-	if err == nil {
-		ht.UpdateHeadInfo(ack.Sequence, j.block)
-		return nil
-	}
+	if err != nil {
+		if isWrongExpectedLastSequence(err) {
+			return out.handleWriteRace(ctx, ht, j,
+				fmt.Errorf(
+					"wrong-expected-last-seq (height=%d, expectedLastSeq=%d): %w",
+					j.block.GetHeight(), j.head.Sequence(), err,
+				),
+			)
+		}
 
-	if !isWrongExpectedLastSequence(err) {
 		j.status = OutputterUnavailable
 		return fmt.Errorf(
 			"unable to write block with height=%d to jetstream at seq=%d, got error: %w",
@@ -223,12 +227,26 @@ func (out *Outputter) handleWrite(ctx context.Context, s *stream.Stream, ht *hea
 		)
 	}
 
+	if ack.Duplicate {
+		return out.handleWriteRace(ctx, ht, j,
+			fmt.Errorf(
+				"duplicate height %d (trying to write on seq=%d)",
+				j.block.GetHeight(), j.head.Sequence()+1,
+			),
+		)
+	}
+
+	ht.UpdateHeadInfo(ack.Sequence, j.block)
+	return nil
+}
+
+func (out *Outputter) handleWriteRace(ctx context.Context, ht *headtracker.HeadTracker, j *writeJob, race error) error {
 	if waitErr := out.waitGreaterHead(ctx, ht, j.head); waitErr != nil {
 		j.status = OutputterUnavailable
 		return fmt.Errorf(
-			"unable to write block with height=%d to jetstream at seq=%d:"+
-				"got wrong-last-seq error (%w), but wasn't able to wait for greater head: %w",
-			j.block.GetHeight(), j.head.Sequence()+1, err, waitErr,
+			"unable to write block with height=%d to jetstream at seq=%d: got race (%w),"+
+				"but wasn't able to wait for greater head: %w",
+			j.block.GetHeight(), j.head.Sequence()+1, race, waitErr,
 		)
 	}
 
@@ -240,8 +258,8 @@ func (out *Outputter) handleWrite(ctx context.Context, s *stream.Stream, ht *hea
 
 	j.status = OutputterUnavailable
 	return fmt.Errorf(
-		"getting non-sensical results: block with height=%d can be appended after both seq=%d and seq=%d",
-		j.block.GetHeight(), oldHead.Sequence(), j.head.Sequence(),
+		"getting non-sensical results: block with height=%d can be appended after both seq=%d and seq=%d (caused by race: %w)",
+		j.block.GetHeight(), oldHead.Sequence(), j.head.Sequence(), race,
 	)
 }
 
