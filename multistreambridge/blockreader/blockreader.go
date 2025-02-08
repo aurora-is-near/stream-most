@@ -120,7 +120,7 @@ func (b *BlockReader) run() {
 			PullOpts: []jetstream.PullConsumeOpt{
 				jetstream.PullMaxBytes(32 * 1024 * 1024), // 32MB buffer
 			},
-			StrictStart: true,
+			StrictStart: b.options.StrictStart,
 			MaxSilence:  time.Second * 5,
 			LogTag:      b.options.LogTag,
 		},

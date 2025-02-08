@@ -118,9 +118,10 @@ func (in *Inputter) Run(ctx context.Context) {
 
 	in.logger.Infof("starting block reader from seq=%d", startSeq)
 	reader, err := blockreader.StartBlockReader(ctx, &blockreader.Options{
-		Stream:   sc.Stream(),
-		StartSeq: startSeq,
-		LogTag:   in.cfg.LogTag,
+		Stream:      sc.Stream(),
+		StartSeq:    startSeq,
+		StrictStart: true,
+		LogTag:      in.cfg.LogTag,
 		HandleNewKnownSeqCb: func(ctx context.Context, seq uint64) (err error) {
 			highestKnownSeq.Store(seq)
 			return nil

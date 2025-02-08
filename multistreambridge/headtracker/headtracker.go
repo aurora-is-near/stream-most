@@ -162,9 +162,10 @@ func (ht *HeadTracker) startHeadReader() error {
 
 	var err error
 	ht.blockReader, err = blockreader.StartBlockReader(ht.lifecycle.Ctx(), &blockreader.Options{
-		Stream:   ht.stream,
-		StartSeq: ht.headInfo.Load().sequence + 1,
-		LogTag:   ht.logTag,
+		Stream:      ht.stream,
+		StartSeq:    ht.headInfo.Load().sequence + 1,
+		StrictStart: true,
+		LogTag:      ht.logTag,
 		FilterCb: func(ctx context.Context, msg messages.NatsMessage) (skip bool, err error) {
 			head := ht.headInfo.Load()
 			if head == nil {

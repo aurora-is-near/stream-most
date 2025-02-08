@@ -10,6 +10,7 @@ import (
 type Options struct {
 	Stream              *stream.Stream
 	StartSeq            uint64
+	StrictStart         bool
 	LogTag              string
 	HandleNewKnownSeqCb func(ctx context.Context, seq uint64) (err error)
 	FilterCb            func(ctx context.Context, msg messages.NatsMessage) (skip bool, err error)
