@@ -18,6 +18,8 @@ jobs:
             app: streamcopier
           - image: multi-stream-bridge
             app: multistreambridge
+          - image: stream-validator
+            app: streamvalidator
 
     permissions:
       contents: read
