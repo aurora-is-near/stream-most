@@ -1,0 +1,21 @@
+---
+services:
+  stream_validator:
+    image: ghcr.io/aurora-is-near/stream-validator:sha-380724a
+    restart: unless-stopped
+    init: true
+    volumes:
+      - ./workdir:/etc/stream-validator
+    command:
+      - "-nats"
+      - "ac-nats-de01.aurora.dev"
+      - "-creds"
+      - "/etc/stream-validator/ac-user.creds"
+      - "-stream"
+      - "v2_mainnet_near_blocks"
+      - "-format"
+      - "near"
+      - "-state"
+      - "/etc/stream-validator/state.txt"
+      - "-require-start-seq"
+      - "1"
