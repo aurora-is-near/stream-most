@@ -389,7 +389,7 @@ func (in *Inputter) lookupTargetHeight(ctx context.Context, s *stream.Stream, ta
 			return 0, err
 		}
 
-		if jumpBlock == nil || jumpBlock.GetHeight() > targetHeight {
+		if jumpBlock == nil || jumpBlock.GetHeight() >= targetHeight {
 			curSeq = jumpSeq
 		}
 	}
