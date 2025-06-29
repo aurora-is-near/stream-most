@@ -1,11 +1,22 @@
 package v2
 
 import (
+	"bytes"
 	"fmt"
 
-	"github.com/aurora-is-near/borealis.go"
 	"github.com/fxamacker/cbor/v2"
 )
+
+type BorealisUniqueID = [16]byte
+
+type BorealisEnvelope struct {
+	_            struct{} `json:"-" cbor:",toarray"`
+	Type         uint16
+	SequentialID uint64
+	TimestampS   uint32
+	TimestampMS  uint16
+	UniqueID     BorealisUniqueID
+}
 
 var cborDecMode cbor.DecMode
 
@@ -20,12 +31,27 @@ func init() {
 }
 
 func DecodeBorealisPayload[T any](data []byte) (*T, error) {
-	var msg borealis.BusMessage
-	msg.OverrideEventFactory(func(messageType borealis.MessageType) any {
-		return new(T)
-	})
-	if err := msg.DecodeCBORWithMode(data, cborDecMode); err != nil {
-		return nil, fmt.Errorf("unable to decode CBOR borealis message: %w", err)
+	reader := bytes.NewReader(data)
+
+	var err error
+	var version byte
+	if version, err = reader.ReadByte(); err != nil {
+		return nil, err
 	}
-	return msg.PayloadPtr.(*T), nil
+
+	switch version {
+	case 1:
+		decoder := cborDecMode.NewDecoder(reader)
+		envelope := &BorealisEnvelope{}
+		if err := decoder.Decode(envelope); err != nil {
+			return nil, err
+		}
+		payload := new(T)
+		if err := decoder.Decode(payload); err != nil {
+			return nil, err
+		}
+		return payload, nil
+	default:
+		return nil, fmt.Errorf("unknown version of borealis-message: %v", version)
+	}
 }
