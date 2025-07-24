@@ -22,7 +22,7 @@ func Run(ctx context.Context, cfg *Config) error {
 		return fmt.Errorf("unsupported block format '%s', required 'aurora' or 'near'", cfg.BlocksFormat)
 	}
 
-	out, err := outputter.NewOutputter(cfg.Output, uint(len(cfg.Inputs)))
+	out, err := outputter.NewOutputter(cfg.Output, uint(len(cfg.Inputs)), formats.Active())
 	if err != nil {
 		return fmt.Errorf("unable to initialize outputter '%s': %w", cfg.Output.LogTag, err)
 	}

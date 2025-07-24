@@ -68,6 +68,9 @@ func StartBlockReader(ctx context.Context, options *Options) (*BlockReader, erro
 	if b.options.FinishCb == nil {
 		b.options.FinishCb = func(err error, isInterrupted bool) {}
 	}
+	if b.options.BlockFormat == nil {
+		b.options.BlockFormat = formats.Active()
+	}
 
 	b.workersWg.Add(1)
 	go b.runPublisher()
@@ -194,7 +197,7 @@ func (b *BlockReader) runDecoder() {
 		case <-b.lifecycle.Ctx().Done():
 			return
 		case job := <-b.decodingQueue:
-			job.blockMessage, job.decodingError = formats.Active().ParseMsg(job.msg)
+			job.blockMessage, job.decodingError = b.options.BlockFormat.ParseMsg(job.msg)
 			close(job.done)
 		}
 	}

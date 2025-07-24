@@ -27,6 +27,7 @@ type Outputter struct {
 	cfg         *Config
 	queue       chan *writeJob
 	queueQuota  chan struct{}
+	blockFormat *formats.Facade
 	headTracker atomic.Pointer[headtracker.HeadTracker]
 }
 
@@ -38,14 +39,18 @@ type writeJob struct {
 	head   *headtracker.HeadInfo
 }
 
-func NewOutputter(cfg *Config, numWriters uint) (*Outputter, error) {
+func NewOutputter(cfg *Config, numWriters uint, blockFormat *formats.Facade) (*Outputter, error) {
 	out := &Outputter{
 		logger: logrus.
 			WithField("component", "outputter").
 			WithField("tag", cfg.LogTag),
-		cfg:        cfg,
-		queue:      make(chan *writeJob, numWriters),
-		queueQuota: make(chan struct{}, numWriters),
+		cfg:         cfg,
+		queue:       make(chan *writeJob, numWriters),
+		queueQuota:  make(chan struct{}, numWriters),
+		blockFormat: blockFormat,
+	}
+	if out.blockFormat == nil {
+		out.blockFormat = formats.Active()
 	}
 	return out, nil
 }
@@ -84,7 +89,7 @@ func (out *Outputter) VerifyHeightAppend(height uint64) (status ResponseStatus, 
 		return LowBlock, head
 	}
 
-	if formats.Active().GetFormat() == formats.AuroraV2 && height-headBlock.GetHeight() > 1 {
+	if out.blockFormat.GetFormat() == formats.AuroraV2 && height-headBlock.GetHeight() > 1 {
 		return HighBlock, head
 	}
 
@@ -100,7 +105,7 @@ func (out *Outputter) VerifyBlockAppend(block blocks.Block) (status ResponseStat
 	h1 := head.BlockOrNone().GetHash()
 	h2 := block.GetPrevHash()
 
-	if formats.Active().GetFormat() == formats.AuroraV2 {
+	if out.blockFormat.GetFormat() == formats.AuroraV2 {
 		h1 = strings.ToLower(h1)
 		h2 = strings.ToLower(h2)
 	}
@@ -134,7 +139,7 @@ func (out *Outputter) Run(ctx context.Context) {
 	}
 	defer sc.Disconnect()
 
-	headTracker, err := headtracker.StartHeadTracker(ctx, sc.Stream(), out.cfg.LogTag)
+	headTracker, err := headtracker.StartHeadTracker(ctx, sc.Stream(), out.cfg.LogTag, out.blockFormat)
 	if err != nil {
 		out.logger.Errorf("unable to start head-tracker: %v", err)
 		return

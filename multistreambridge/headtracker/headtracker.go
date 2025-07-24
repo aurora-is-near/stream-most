@@ -22,17 +22,22 @@ type HeadTracker struct {
 	logTag      string
 	headInfo    atomic.Pointer[HeadInfo]
 	blockReader *blockreader.BlockReader
+	blockFormat *formats.Facade
 }
 
-func StartHeadTracker(ctx context.Context, s *stream.Stream, logTag string) (*HeadTracker, error) {
+func StartHeadTracker(ctx context.Context, s *stream.Stream, logTag string, blockFormat *formats.Facade) (*HeadTracker, error) {
 	ht := &HeadTracker{
 		logger: logrus.
 			WithField("component", "headtracker").
 			WithField("stream", s.Name()).
 			WithField("tag", logTag),
-		lifecycle: lifecycle.NewLifecycle(ctx, fmt.Errorf("head-tracker interrupted")),
-		stream:    s,
-		logTag:    logTag,
+		lifecycle:   lifecycle.NewLifecycle(ctx, fmt.Errorf("head-tracker interrupted")),
+		stream:      s,
+		logTag:      logTag,
+		blockFormat: blockFormat,
+	}
+	if ht.blockFormat == nil {
+		ht.blockFormat = formats.Active()
 	}
 
 	if err := ht.fetchHead(); err != nil {
@@ -143,7 +148,7 @@ func (ht *HeadTracker) fetchHead() error {
 		return fmt.Errorf("can't fetch head block at seq %d: %w", streamInfo.State.LastSeq, err)
 	}
 
-	block, err := formats.Active().ParseBlock(msg.GetData())
+	block, err := ht.blockFormat.ParseBlock(msg.GetData())
 	if err != nil {
 		return fmt.Errorf("can't parse head block at seq %d: %w", streamInfo.State.LastSeq, err)
 	}
@@ -195,6 +200,7 @@ func (ht *HeadTracker) startHeadReader() error {
 			ht.lifecycle.SendStop(errMsg, false)
 			ht.logger.Errorf("%v, stopping...", errMsg)
 		},
+		BlockFormat: ht.blockFormat,
 	})
 
 	return err

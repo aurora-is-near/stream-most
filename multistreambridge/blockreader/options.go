@@ -3,6 +3,7 @@ package blockreader
 import (
 	"context"
 
+	"github.com/aurora-is-near/stream-most/domain/formats"
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/aurora-is-near/stream-most/stream"
 )
@@ -17,4 +18,5 @@ type Options struct {
 	BlockCb             func(ctx context.Context, blockMsg *messages.BlockMessage) (err error)
 	CorruptedBlockCb    func(ctx context.Context, msg messages.NatsMessage, decodingError error) (err error)
 	FinishCb            func(err error, isInterrupted bool)
+	BlockFormat         *formats.Facade
 }
