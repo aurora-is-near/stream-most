@@ -74,6 +74,9 @@ func (out *Outputter) VerifyHeightAppend(height uint64) (status ResponseStatus, 
 	}
 
 	if !head.HasBlock() {
+		if out.cfg.StartHeight == 0 {
+			return OK, head
+		}
 		if height < out.cfg.StartHeight {
 			return LowBlock, head
 		}
