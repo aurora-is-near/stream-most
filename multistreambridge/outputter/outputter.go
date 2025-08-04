@@ -29,6 +29,7 @@ type Outputter struct {
 	queueQuota  chan struct{}
 	blockFormat *formats.Facade
 	headTracker atomic.Pointer[headtracker.HeadTracker]
+	subject     string
 }
 
 type writeJob struct {
@@ -142,6 +143,19 @@ func (out *Outputter) Run(ctx context.Context) {
 	}
 	defer sc.Disconnect()
 
+	if out.cfg.Subject != "" {
+		out.subject = out.cfg.Subject
+	} else {
+		configSubjects, err := sc.Stream().GetConfigSubjects(ctx)
+		if err != nil {
+			out.logger.Errorf("unable to fetch config subjects: %v", err)
+			return
+		}
+		if len(configSubjects) > 0 {
+			out.subject = configSubjects[0]
+		}
+	}
+
 	headTracker, err := headtracker.StartHeadTracker(ctx, sc.Stream(), out.cfg.LogTag, out.blockFormat)
 	if err != nil {
 		out.logger.Errorf("unable to start head-tracker: %v", err)
@@ -209,7 +223,7 @@ func (out *Outputter) handleWrite(ctx context.Context, s *stream.Stream, ht *hea
 	ack, err := s.Write(
 		ctx,
 		&nats.Msg{
-			Subject: out.cfg.Subject,
+			Subject: out.subject,
 			Data:    j.data,
 		},
 		jetstream.WithExpectLastSequence(j.head.Sequence()),
