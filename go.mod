@@ -1,6 +1,6 @@
 module github.com/aurora-is-near/stream-most
 
-go 1.23
+go 1.23.0
 
 require (
 	github.com/aurora-is-near/borealis-prototypes v0.10.2-0.20230726063017-c0a473f96ffe
@@ -35,9 +35,9 @@ require (
 	github.com/prometheus/procfs v0.11.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	golang.org/x/crypto v0.18.0 // indirect
-	golang.org/x/sys v0.16.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/crypto v0.35.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
