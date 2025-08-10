@@ -135,6 +135,7 @@ func (out *Outputter) Run(ctx context.Context) {
 			RequestWait: time.Second * 10,
 			WriteWait:   time.Second * 10,
 			LogTag:      out.cfg.LogTag,
+			AutoCreate:  out.cfg.AutoCreate,
 		},
 	})
 	if err != nil {

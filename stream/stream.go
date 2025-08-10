@@ -2,7 +2,10 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/aurora-is-near/stream-most/domain/messages"
 	"github.com/nats-io/nats.go"
@@ -41,13 +44,70 @@ func ConnectWithContext(ctx context.Context, cfg *Config, js jetstream.JetStream
 
 	var err error
 	s.stream, err = s.js.Stream(streamRequestCtx, cfg.Name)
-	if err != nil {
+	if err == nil {
+		s.logger.Infof("Stream connected")
+		return s, nil
+	}
+	if !(errors.Is(err, jetstream.ErrStreamNotFound) && cfg.AutoCreate != nil) {
 		err = fmt.Errorf("unable to connect to stream: %w", err)
 		s.logger.Errorf("%v", err)
 		return nil, err
 	}
-	s.logger.Infof("Stream connected")
 
+	s.logger.Infof("Creating stream '%s'", cfg.Name)
+	streamCreateCtx, cancelStreamCreate := context.WithTimeout(ctx, s.cfg.WriteWait)
+	defer cancelStreamCreate()
+
+	jsCfg := jetstream.StreamConfig{
+		Name:              cfg.Name,
+		Subjects:          cfg.AutoCreate.Subjects,
+		Retention:         jetstream.LimitsPolicy,
+		MaxConsumers:      -1,
+		MaxMsgs:           cfg.AutoCreate.MsgLimit,
+		MaxBytes:          cfg.AutoCreate.BytesLimit,
+		Discard:           jetstream.DiscardOld,
+		Storage:           jetstream.FileStorage,
+		MaxMsgsPerSubject: -1,
+		MaxMsgSize:        -1,
+		Replicas:          max(cfg.AutoCreate.Replicas, 1),
+		Duplicates:        max(cfg.AutoCreate.DedupWindow, time.Millisecond*100),
+		AllowDirect:       true,
+		DenyDelete:        true,
+		DenyPurge:         true,
+		AllowRollup:       false,
+	}
+	if len(jsCfg.Subjects) == 0 {
+		jsCfg.Subjects = []string{strings.ReplaceAll(cfg.Name, "_", ".")}
+	}
+	if jsCfg.MaxMsgs < 1 {
+		jsCfg.MaxMsgs = -1
+	}
+	if jsCfg.MaxBytes < 1 {
+		jsCfg.MaxBytes = -1
+	}
+
+	s.stream, err = s.js.CreateStream(streamCreateCtx, jsCfg)
+	if err == nil {
+		s.logger.Infof("Stream created")
+		return s, nil
+	}
+	if !errors.Is(err, jetstream.ErrStreamNameAlreadyInUse) {
+		err = fmt.Errorf("unable to create stream: %w", err)
+		s.logger.Errorf("%v", err)
+		return nil, err
+	}
+
+	streamRerequestCtx, cancelStreamRerequest := context.WithTimeout(ctx, s.cfg.RequestWait)
+	defer cancelStreamRerequest()
+
+	s.stream, err = s.js.Stream(streamRerequestCtx, cfg.Name)
+	if err != nil {
+		err = fmt.Errorf("unable to connect to stream even after creation attempt: %w", err)
+		s.logger.Errorf("%v", err)
+		return nil, err
+	}
+
+	s.logger.Infof("Stream connected")
 	return s, nil
 }
 

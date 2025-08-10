@@ -9,6 +9,15 @@ type Config struct {
 	RequestWait time.Duration
 	WriteWait   time.Duration
 	LogTag      string
+	AutoCreate  *AutoCreateConfig
+}
+
+type AutoCreateConfig struct {
+	Subjects    []string
+	MsgLimit    int64
+	BytesLimit  int64
+	Replicas    int
+	DedupWindow time.Duration
 }
 
 func (cfg Config) WithDefaults() *Config {
