@@ -1,17 +1,24 @@
-name: Build docker images
+name: Docker Image
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag'
+        required: true
+  release:
+    types: [created]
 
 env:
   REGISTRY: ghcr.io
+  VERSION: ${{ github.event.inputs.tag || github.event.release.tag_name || '' }}
 
 jobs:
-  build-and-push-image:
+  build-and-push:
     runs-on: ubuntu-latest
-    
+
     strategy:
-      fail-fast: false  # if one job in the matrix fails, the rest will NOT be cancelled
+      fail-fast: false
       matrix:
         include:
           - image: streamcopier
@@ -28,6 +35,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -39,40 +48,40 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Check if VERSION follows the x.x.x format
+        run: |
+          if [[ "${{ env.VERSION }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "LATEST_TAG_ENABLED=true" >> $GITHUB_ENV
+          else
+            echo "LATEST_TAG_ENABLED=false" >> $GITHUB_ENV
+          fi
+
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/aurora-is-near/${{ matrix.image }}
           tags: |
-            type=ref,event=branch  # Tag the image based on the branch name
-            type=sha  # Tag the image with the commit SHA
-            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}  # Tag as 'latest' if the branch is 'main'
+            type=sha
+            type=semver,pattern={{version}},value=${{ env.VERSION }}
+            type=raw,value=latest,enable=${{ env.LATEST_TAG_ENABLED == 'true' }}
+            type=raw,value=testnet
+          flavor: |
+            latest=false
 
-      - name: Setup ssh-agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: |
-            ${{ secrets.SSH_BOREALIS_GO }}
-            ${{ secrets.SSH_BOREALIS_SPEC }}
-
-      - name: Collect Git and SSH config files in a directory that is part of the Docker build context
-        run: |
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
-          mkdir root-config
-          cp -r ~/.gitconfig ~/.ssh root-config/
-
-      - name: Build and push docker image
+      - name: Build and push Docker image
         id: push
         uses: docker/build-push-action@v5
         with:
           context: .
           file: template.Dockerfile
-          build-args: APP=${{ matrix.app }}
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          ssh: default=${{ env.SSH_AUTH_SOCK }}
+          build-args: |
+            APP=${{ matrix.app }}
+          secrets: |
+            GIT_AUTH_TOKEN=${{ secrets.GH_PAT }}
