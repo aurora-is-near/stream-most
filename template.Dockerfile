@@ -1,15 +1,9 @@
 FROM golang:1.26-alpine AS builder
-ENV GOPRIVATE=github.com/aurora-is-near/*
-
-RUN apk add --no-cache git
 
 WORKDIR /build
 
 COPY go.mod go.sum ./
-RUN --mount=type=secret,id=GIT_AUTH_TOKEN \
-    GIT_AUTH_TOKEN=$(cat /run/secrets/GIT_AUTH_TOKEN) && \
-    git config --global url."https://${GIT_AUTH_TOKEN}@github.com/".insteadOf "https://github.com/" && \
-    go mod download
+RUN go mod download
 
 COPY . .
 ARG APP
