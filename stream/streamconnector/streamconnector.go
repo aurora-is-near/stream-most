@@ -37,6 +37,15 @@ func Connect(cfg *Config) (*StreamConnector, error) {
 		return nil, err
 	}
 
+	select {
+	case <-sc.nc.EverConnected():
+	default:
+		err = fmt.Errorf("can't proceed: NATS is not connected: %w", err)
+		sc.logger.Errorf("%v", err)
+		sc.nc.Drain()
+		return nil, err
+	}
+
 	sc.logger.Infof("Connecting to JetStream...")
 	sc.js, err = jetstream.New(sc.nc.Conn())
 	if err != nil {

@@ -2,6 +2,7 @@ package transport
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/sirupsen/logrus"
 
@@ -14,8 +15,11 @@ type NatsConnection struct {
 
 	config     *NATSConfig
 	connection *nats.Conn
-	closeErr   error
-	closed     chan struct{}
+
+	everConnected     chan struct{}
+	everConnectedOnce sync.Once
+	closeErr          error
+	closed            chan struct{}
 }
 
 func (c *NatsConnection) connect() error {
@@ -33,16 +37,27 @@ func (c *NatsConnection) connect() error {
 	}
 
 	natsOptsList, err := natsCtx.NATSOptions(
+		nats.ConnectHandler(func(nc *nats.Conn) {
+			c.logger.Infof("Connected [%v]", nc.ConnectedUrl())
+			c.everConnectedOnce.Do(func() {
+				close(c.everConnected)
+			})
+		}),
 		nats.ErrorHandler(func(nc *nats.Conn, sub *nats.Subscription, err error) {
 			c.logger.Error(err)
 		}),
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
 			if err != nil {
-				c.logger.Warnf("Disconnected due to: %v, will try reconnecting", err)
+				c.logger.Warnf("Disconnected due to: %v", err)
+			} else {
+				c.logger.Infof("Disconnected")
 			}
 		}),
 		nats.ReconnectHandler(func(nc *nats.Conn) {
 			c.logger.Infof("Reconnected [%v]", nc.ConnectedUrl())
+			c.everConnectedOnce.Do(func() {
+				close(c.everConnected)
+			})
 		}),
 		nats.ClosedHandler(func(nc *nats.Conn) {
 			c.closeErr = nc.LastError()
@@ -77,9 +92,10 @@ func ConnectNATS(config *NATSConfig) (*NatsConnection, error) {
 	}
 
 	conn := &NatsConnection{
-		logger: logger.WithField("component", "nats").WithField("nats", config.LogTag),
-		config: config,
-		closed: make(chan struct{}),
+		logger:        logger.WithField("component", "nats").WithField("nats", config.LogTag),
+		config:        config,
+		everConnected: make(chan struct{}),
+		closed:        make(chan struct{}),
 	}
 
 	conn.logger.Info("Connecting to NATS...")
@@ -88,7 +104,7 @@ func ConnectNATS(config *NATSConfig) (*NatsConnection, error) {
 		return nil, err
 	}
 
-	conn.logger.Info("Connected successfully")
+	conn.logger.Infof("Connection status: %s", conn.connection.Status().String())
 	return conn, nil
 }
 
@@ -101,6 +117,10 @@ func (c *NatsConnection) Drain() error {
 
 func (c *NatsConnection) Conn() *nats.Conn {
 	return c.connection
+}
+
+func (c *NatsConnection) EverConnected() <-chan struct{} {
+	return c.everConnected
 }
 
 func (c *NatsConnection) CloseError() error {
