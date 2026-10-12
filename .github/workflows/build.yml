@@ -48,7 +48,7 @@ jobs:
 
       - name: Check if VERSION follows the x.x.x format
         run: |
-          if [[ "${{ env.VERSION }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          if [[ "${{ env.VERSION }}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "LATEST_TAG_ENABLED=true" >> $GITHUB_ENV
           else
             echo "LATEST_TAG_ENABLED=false" >> $GITHUB_ENV
