@@ -92,7 +92,17 @@ func (r *Reader) finish(err error) {
 
 func (r *Reader) run() {
 	defer r.wg.Done()
+
+	// Apparently handler can be called concurrently
+	handlerLock := make(chan struct{}, 1)
+	unlockHandler := func() {
+		handlerLock <- struct{}{}
+	}
+	unlockHandler()
+
 	defer func() {
+		// If there's still any inflight handler - wait for it to finish, then lock forever.
+		<-handlerLock
 		r.receiver.HandleFinish(r.err)
 	}()
 
@@ -103,13 +113,6 @@ func (r *Reader) run() {
 	}
 
 	var lastConsumedSeq, lastFiredSeq atomic.Uint64
-
-	// Apparently handler can be called concurrently
-	handlerLock := make(chan struct{}, 1)
-	unlockHandler := func() {
-		handlerLock <- struct{}{}
-	}
-	unlockHandler()
 
 	consume, err := consumer.Consume(
 		func(msg jetstream.Msg) {

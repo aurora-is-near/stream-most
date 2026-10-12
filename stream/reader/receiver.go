@@ -10,12 +10,12 @@ type Receiver interface {
 	// Returning non-nil error would stop reader, final error would be given error wrapped with ErrInterrupted
 	HandleMsg(ctx context.Context, msg messages.NatsMessage) error
 
-	// Might be called concurrently
+	// Might be called concurrently.
 	// Returning non-nil error would stop reader, final error would be given error wrapped with ErrInterrupted
 	HandleNewKnownSeq(ctx context.Context, seq uint64) error
 
-	// It's guaranteed to be the very last callback which is only called once
-	// Provides final error
+	// It's guaranteed to be the very last callback which is only called once.
+	// Provides final error.
 	// If reader is stopped by Stop() method or by receiver callback, final error is always a subclass of ErrInterrupted
 	HandleFinish(err error)
 }
