@@ -40,7 +40,7 @@ func Connect(cfg *Config) (*StreamConnector, error) {
 	select {
 	case <-sc.nc.EverConnected():
 	default:
-		err = fmt.Errorf("can't proceed: NATS is not connected: %w", err)
+		err = fmt.Errorf("can't proceed: NATS is not connected")
 		sc.logger.Errorf("%v", err)
 		sc.nc.Drain()
 		return nil, err
