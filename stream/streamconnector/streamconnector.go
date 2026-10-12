@@ -1,7 +1,9 @@
 package streamconnector
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/transport"
@@ -29,6 +31,13 @@ func Connect(cfg *Config) (*StreamConnector, error) {
 		cfg: cfg,
 	}
 
+	connectTimeout := cfg.Nats.Options.Timeout
+	if connectTimeout == 0 {
+		connectTimeout = time.Second * 10
+	}
+	connectCtx, cancelConnect := context.WithTimeout(context.Background(), connectTimeout)
+	defer cancelConnect()
+
 	var err error
 	sc.nc, err = transport.ConnectNATS(cfg.Nats)
 	if err != nil {
@@ -40,10 +49,14 @@ func Connect(cfg *Config) (*StreamConnector, error) {
 	select {
 	case <-sc.nc.EverConnected():
 	default:
-		err = fmt.Errorf("can't proceed: NATS is not connected")
-		sc.logger.Errorf("%v", err)
-		sc.nc.Drain()
-		return nil, err
+		select {
+		case <-sc.nc.EverConnected():
+		case <-connectCtx.Done():
+			err = fmt.Errorf("can't proceed: NATS is not connected")
+			sc.logger.Errorf("%v", err)
+			sc.nc.Drain()
+			return nil, err
+		}
 	}
 
 	sc.logger.Infof("Connecting to JetStream...")
