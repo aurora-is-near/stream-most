@@ -3,7 +3,6 @@ package streamconnector
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/transport"
@@ -22,6 +21,10 @@ type StreamConnector struct {
 }
 
 func Connect(cfg *Config) (*StreamConnector, error) {
+	return ConnectWithContext(context.Background(), cfg)
+}
+
+func ConnectWithContext(ctx context.Context, cfg *Config) (*StreamConnector, error) {
 	sc := &StreamConnector{
 		logger: logrus.
 			WithField("component", "streamconnector").
@@ -31,15 +34,8 @@ func Connect(cfg *Config) (*StreamConnector, error) {
 		cfg: cfg,
 	}
 
-	connectTimeout := cfg.Nats.Options.Timeout
-	if connectTimeout == 0 {
-		connectTimeout = time.Second * 10
-	}
-	connectCtx, cancelConnect := context.WithTimeout(context.Background(), connectTimeout)
-	defer cancelConnect()
-
 	var err error
-	sc.nc, err = transport.ConnectNATS(cfg.Nats)
+	sc.nc, err = transport.ConnectNATSWithContext(ctx, cfg.Nats)
 	if err != nil {
 		err = fmt.Errorf("unable to connect to NATS: %w", err)
 		sc.logger.Errorf("%v", err)
@@ -49,6 +45,9 @@ func Connect(cfg *Config) (*StreamConnector, error) {
 	select {
 	case <-sc.nc.EverConnected():
 	default:
+		connectCtx, cancelConnectCtx := context.WithDeadline(ctx, sc.nc.ApproximateConnectionDeadline())
+		defer cancelConnectCtx()
+
 		select {
 		case <-sc.nc.EverConnected():
 		case <-connectCtx.Done():
@@ -69,7 +68,7 @@ func Connect(cfg *Config) (*StreamConnector, error) {
 	}
 	sc.logger.Infof("JetStream connected")
 
-	sc.stream, err = stream.Connect(cfg.Stream, sc.js)
+	sc.stream, err = stream.ConnectWithContext(ctx, cfg.Stream, sc.js)
 	if err != nil {
 		err = fmt.Errorf("unable to connect stream: %w", err)
 		sc.logger.Errorf("%v", err)

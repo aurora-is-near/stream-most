@@ -1,8 +1,10 @@
 package transport
 
 import (
+	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -13,8 +15,10 @@ import (
 type NatsConnection struct {
 	logger *logrus.Entry
 
-	config     *NATSConfig
-	connection *nats.Conn
+	config                *NATSConfig
+	dialer                *ctxDialer
+	apxConnectionDeadline time.Time
+	connection            *nats.Conn
 
 	everConnected     chan struct{}
 	everConnectedOnce sync.Once
@@ -22,7 +26,7 @@ type NatsConnection struct {
 	closed            chan struct{}
 }
 
-func (c *NatsConnection) connect() error {
+func (c *NatsConnection) connect(ctx context.Context) error {
 	ctxOptions := []natscontext.Option{}
 	if c.config.ServerURL != "" {
 		ctxOptions = append(ctxOptions, natscontext.WithServerURL(c.config.ServerURL))
@@ -81,11 +85,38 @@ func (c *NatsConnection) connect() error {
 		return err
 	}
 
-	c.connection, err = optsCopy.Connect()
-	return err
+	c.apxConnectionDeadline = time.Now().Add(calculateApproximateConnectionTimeout(&optsCopy))
+
+	c.dialer = newCtxDialer(getUnderlyingDialer(&optsCopy))
+	c.dialer.attachContext(ctx)
+	defer c.dialer.detachAllContexts()
+	optsCopy.CustomDialer = c.dialer
+
+	if c.connection, err = optsCopy.Connect(); err != nil {
+		defer c.dialer.cancel()
+		if ctx.Err() != nil {
+			return fmt.Errorf("%w: %v", ctx.Err(), err)
+		}
+		return err
+	}
+
+	if !c.dialer.detachAllContexts() || c.dialer.ctx.Err() != nil {
+		c.Drain()
+		if ctx.Err() == nil {
+			// Should actually never happen
+			return c.dialer.ctx.Err()
+		}
+		return ctx.Err()
+	}
+
+	return nil
 }
 
 func ConnectNATS(config *NATSConfig) (*NatsConnection, error) {
+	return ConnectNATSWithContext(context.Background(), config)
+}
+
+func ConnectNATSWithContext(ctx context.Context, config *NATSConfig) (*NatsConnection, error) {
 	logger := logrus.StandardLogger()
 	if config.OverrideLogger != nil {
 		logger = config.OverrideLogger
@@ -99,7 +130,7 @@ func ConnectNATS(config *NATSConfig) (*NatsConnection, error) {
 	}
 
 	conn.logger.Info("Connecting to NATS...")
-	if err := conn.connect(); err != nil {
+	if err := conn.connect(ctx); err != nil {
 		conn.logger.Errorf("Unable to connect to NATS: %v", err)
 		return nil, err
 	}
@@ -109,6 +140,7 @@ func ConnectNATS(config *NATSConfig) (*NatsConnection, error) {
 }
 
 func (c *NatsConnection) Drain() error {
+	defer c.dialer.cancel()
 	c.logger.Info("Draining NATS connection...")
 	c.connection.Drain()
 	<-c.closed
@@ -117,6 +149,10 @@ func (c *NatsConnection) Drain() error {
 
 func (c *NatsConnection) Conn() *nats.Conn {
 	return c.connection
+}
+
+func (c *NatsConnection) ApproximateConnectionDeadline() time.Time {
+	return c.apxConnectionDeadline
 }
 
 func (c *NatsConnection) EverConnected() <-chan struct{} {
