@@ -22,6 +22,16 @@ type StreamConnector struct {
 }
 
 func Connect(cfg *Config) (*StreamConnector, error) {
+	return ConnectWithContext(context.Background(), cfg)
+}
+
+func ConnectWithContext(ctx context.Context, cfg *Config) (*StreamConnector, error) {
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		connectCtx, cancelConnect := context.WithTimeout(ctx, time.Minute)
+		defer cancelConnect()
+		return ConnectWithContext(connectCtx, cfg)
+	}
+
 	sc := &StreamConnector{
 		logger: logrus.
 			WithField("component", "streamconnector").
@@ -30,13 +40,6 @@ func Connect(cfg *Config) (*StreamConnector, error) {
 
 		cfg: cfg,
 	}
-
-	connectTimeout := cfg.Nats.Options.Timeout
-	if connectTimeout == 0 {
-		connectTimeout = time.Second * 10
-	}
-	connectCtx, cancelConnect := context.WithTimeout(context.Background(), connectTimeout)
-	defer cancelConnect()
 
 	var err error
 	sc.nc, err = transport.ConnectNATS(cfg.Nats)
@@ -51,7 +54,7 @@ func Connect(cfg *Config) (*StreamConnector, error) {
 	default:
 		select {
 		case <-sc.nc.EverConnected():
-		case <-connectCtx.Done():
+		case <-ctx.Done():
 			err = fmt.Errorf("can't proceed: NATS is not connected")
 			sc.logger.Errorf("%v", err)
 			sc.nc.Drain()
@@ -69,7 +72,7 @@ func Connect(cfg *Config) (*StreamConnector, error) {
 	}
 	sc.logger.Infof("JetStream connected")
 
-	sc.stream, err = stream.Connect(cfg.Stream, sc.js)
+	sc.stream, err = stream.ConnectWithContext(ctx, cfg.Stream, sc.js)
 	if err != nil {
 		err = fmt.Errorf("unable to connect stream: %w", err)
 		sc.logger.Errorf("%v", err)

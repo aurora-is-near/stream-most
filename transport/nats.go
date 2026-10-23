@@ -1,6 +1,8 @@
 package transport
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -14,6 +16,7 @@ type NatsConnection struct {
 	logger *logrus.Entry
 
 	config     *NATSConfig
+	dialer     *ctxDialer
 	connection *nats.Conn
 
 	everConnected     chan struct{}
@@ -22,7 +25,7 @@ type NatsConnection struct {
 	closed            chan struct{}
 }
 
-func (c *NatsConnection) connect() error {
+func (c *NatsConnection) connect(ctx context.Context) error {
 	ctxOptions := []natscontext.Option{}
 	if c.config.ServerURL != "" {
 		ctxOptions = append(ctxOptions, natscontext.WithServerURL(c.config.ServerURL))
@@ -81,11 +84,31 @@ func (c *NatsConnection) connect() error {
 		return err
 	}
 
+	c.dialer = newCtxDialer(getUnderlyingDialer(&optsCopy))
+	c.dialer.attachContext(ctx)
+	defer c.dialer.detachAllContexts()
+	optsCopy.CustomDialer = c.dialer
+
 	c.connection, err = optsCopy.Connect()
-	return err
+	if err != nil {
+		return err
+	}
+
+	c.dialer.detachAllContexts()
+	if c.dialer.ctx.Err() != nil {
+		defer c.connection.Drain()
+		<-c.closed
+		return context.Cause(c.dialer.ctx)
+	}
+
+	return nil
 }
 
 func ConnectNATS(config *NATSConfig) (*NatsConnection, error) {
+	return ConnectNATSWithContext(context.Background(), config)
+}
+
+func ConnectNATSWithContext(ctx context.Context, config *NATSConfig) (*NatsConnection, error) {
 	logger := logrus.StandardLogger()
 	if config.OverrideLogger != nil {
 		logger = config.OverrideLogger
@@ -99,7 +122,7 @@ func ConnectNATS(config *NATSConfig) (*NatsConnection, error) {
 	}
 
 	conn.logger.Info("Connecting to NATS...")
-	if err := conn.connect(); err != nil {
+	if err := conn.connect(ctx); err != nil {
 		conn.logger.Errorf("Unable to connect to NATS: %v", err)
 		return nil, err
 	}
@@ -109,6 +132,7 @@ func ConnectNATS(config *NATSConfig) (*NatsConnection, error) {
 }
 
 func (c *NatsConnection) Drain() error {
+	defer c.dialer.cancel(errors.New("nats connection is draining"))
 	c.logger.Info("Draining NATS connection...")
 	c.connection.Drain()
 	<-c.closed
