@@ -29,5 +29,8 @@ func getUnderlyingDialer(opts *nats.Options) underlyingDialer {
 	if opts.Dialer != nil {
 		return opts.Dialer
 	}
-	return &net.Dialer{Timeout: opts.Timeout}
+	if opts.Timeout != 0 {
+		return &net.Dialer{Timeout: opts.Timeout}
+	}
+	return &net.Dialer{Timeout: nats.DefaultTimeout}
 }
