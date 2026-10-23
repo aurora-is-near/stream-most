@@ -93,8 +93,9 @@ func (c *NatsConnection) connect(ctx context.Context) error {
 	optsCopy.CustomDialer = c.dialer
 
 	if c.connection, err = optsCopy.Connect(); err != nil {
+		defer c.dialer.cancel()
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return fmt.Errorf("%w: %v", ctx.Err(), err)
 		}
 		return err
 	}
