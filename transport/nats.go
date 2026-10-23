@@ -100,8 +100,7 @@ func (c *NatsConnection) connect(ctx context.Context) error {
 		return err
 	}
 
-	c.dialer.detachAllContexts()
-	if c.dialer.ctx.Err() != nil {
+	if !c.dialer.detachAllContexts() || c.dialer.ctx.Err() != nil {
 		c.Drain()
 		if ctx.Err() == nil {
 			// Should actually never happen

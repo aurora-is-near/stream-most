@@ -6,6 +6,16 @@ import (
 	"sync"
 )
 
+type ctxConn struct {
+	net.Conn
+	detachContext func() bool
+}
+
+func (cc *ctxConn) Close() error {
+	cc.detachContext()
+	return cc.Conn.Close()
+}
+
 type underlyingDialer interface {
 	DialContext(ctx context.Context, network, address string) (net.Conn, error)
 }
@@ -15,9 +25,8 @@ type ctxDialer struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	mtx          sync.Mutex
-	attachmentWg sync.WaitGroup
-	detach       chan struct{}
+	mtx    sync.Mutex
+	detach []func() bool
 }
 
 func newCtxDialer(d underlyingDialer) *ctxDialer {
@@ -27,33 +36,34 @@ func newCtxDialer(d underlyingDialer) *ctxDialer {
 }
 
 func (cd *ctxDialer) Dial(network, address string) (net.Conn, error) {
-	return cd.d.DialContext(cd.ctx, network, address)
+	conn, err := cd.d.DialContext(cd.ctx, network, address)
+	if err != nil {
+		return nil, err
+	}
+	return &ctxConn{
+		Conn: conn,
+		detachContext: context.AfterFunc(cd.ctx, func() {
+			conn.Close()
+		}),
+	}, nil
 }
 
 func (cd *ctxDialer) attachContext(ctx context.Context) {
 	cd.mtx.Lock()
 	defer cd.mtx.Unlock()
 
-	if cd.detach == nil {
-		cd.detach = make(chan struct{})
-	}
-
-	cd.attachmentWg.Go(func() {
-		select {
-		case <-ctx.Done():
-			cd.cancel()
-		case <-cd.detach:
-		}
-	})
+	cd.detach = append(cd.detach, context.AfterFunc(ctx, cd.cancel))
 }
 
-func (cd *ctxDialer) detachAllContexts() {
+func (cd *ctxDialer) detachAllContexts() bool {
 	cd.mtx.Lock()
 	defer cd.mtx.Unlock()
 
-	if cd.detach != nil {
-		close(cd.detach)
+	ok := true
+	for _, detach := range cd.detach {
+		ok = detach() && ok
 	}
-	cd.attachmentWg.Wait()
 	cd.detach = nil
+
+	return ok
 }
