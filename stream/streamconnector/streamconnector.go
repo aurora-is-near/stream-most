@@ -42,7 +42,7 @@ func ConnectWithContext(ctx context.Context, cfg *Config) (*StreamConnector, err
 	}
 
 	var err error
-	sc.nc, err = transport.ConnectNATS(cfg.Nats)
+	sc.nc, err = transport.ConnectNATSWithContext(ctx, cfg.Nats)
 	if err != nil {
 		err = fmt.Errorf("unable to connect to NATS: %w", err)
 		sc.logger.Errorf("%v", err)
