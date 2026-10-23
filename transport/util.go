@@ -3,7 +3,6 @@ package transport
 import (
 	"net"
 	"strings"
-	"time"
 
 	"github.com/nats-io/nats.go"
 )
@@ -29,19 +28,10 @@ func getUnderlyingDialer(opts *nats.Options) underlyingDialer {
 		}
 	}
 	if opts.Dialer != nil {
-		copyDialer := *opts.Dialer
-		copyDialer.Timeout = perHostTimeout(copyDialer.Timeout, len(opts.Servers))
-		return &copyDialer
+		return opts.Dialer
 	}
 	if opts.Timeout != 0 {
-		return &net.Dialer{Timeout: perHostTimeout(opts.Timeout, len(opts.Servers))}
+		return &net.Dialer{Timeout: opts.Timeout}
 	}
-	return &net.Dialer{Timeout: perHostTimeout(nats.DefaultTimeout, len(opts.Servers))}
-}
-
-func perHostTimeout(timeout time.Duration, hostsCount int) time.Duration {
-	if hostsCount > 0 {
-		return timeout / time.Duration(hostsCount)
-	}
-	return timeout
+	return &net.Dialer{Timeout: nats.DefaultTimeout}
 }
