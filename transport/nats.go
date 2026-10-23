@@ -89,15 +89,13 @@ func (c *NatsConnection) connect(ctx context.Context) error {
 	defer c.dialer.detachAllContexts()
 	optsCopy.CustomDialer = c.dialer
 
-	c.connection, err = optsCopy.Connect()
-	if err != nil {
+	if c.connection, err = optsCopy.Connect(); err != nil {
 		return err
 	}
 
 	c.dialer.detachAllContexts()
 	if c.dialer.ctx.Err() != nil {
-		defer c.connection.Drain()
-		<-c.closed
+		c.Drain()
 		return context.Cause(c.dialer.ctx)
 	}
 
