@@ -13,7 +13,7 @@ type underlyingDialer interface {
 type ctxDialer struct {
 	d      underlyingDialer
 	ctx    context.Context
-	cancel context.CancelCauseFunc
+	cancel context.CancelFunc
 
 	mtx          sync.Mutex
 	attachmentWg sync.WaitGroup
@@ -22,7 +22,7 @@ type ctxDialer struct {
 
 func newCtxDialer(d underlyingDialer) *ctxDialer {
 	cd := &ctxDialer{d: d}
-	cd.ctx, cd.cancel = context.WithCancelCause(context.Background())
+	cd.ctx, cd.cancel = context.WithCancel(context.Background())
 	return cd
 }
 
@@ -41,7 +41,7 @@ func (cd *ctxDialer) attachContext(ctx context.Context) {
 	cd.attachmentWg.Go(func() {
 		select {
 		case <-ctx.Done():
-			cd.cancel(ctx.Err())
+			cd.cancel()
 		case <-cd.detach:
 		}
 	})

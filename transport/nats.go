@@ -2,7 +2,6 @@ package transport
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -99,7 +98,11 @@ func (c *NatsConnection) connect(ctx context.Context) error {
 	c.dialer.detachAllContexts()
 	if c.dialer.ctx.Err() != nil {
 		c.Drain()
-		return context.Cause(c.dialer.ctx)
+		if ctx.Err() == nil {
+			// Should actually never happen
+			return c.dialer.ctx.Err()
+		}
+		return ctx.Err()
 	}
 
 	return nil
@@ -133,7 +136,7 @@ func ConnectNATSWithContext(ctx context.Context, config *NATSConfig) (*NatsConne
 }
 
 func (c *NatsConnection) Drain() error {
-	defer c.dialer.cancel(errors.New("nats connection is draining"))
+	defer c.dialer.cancel()
 	c.logger.Info("Draining NATS connection...")
 	c.connection.Drain()
 	<-c.closed
