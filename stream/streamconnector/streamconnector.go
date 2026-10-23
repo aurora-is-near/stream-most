@@ -3,7 +3,6 @@ package streamconnector
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/aurora-is-near/stream-most/stream"
 	"github.com/aurora-is-near/stream-most/transport"
@@ -26,12 +25,6 @@ func Connect(cfg *Config) (*StreamConnector, error) {
 }
 
 func ConnectWithContext(ctx context.Context, cfg *Config) (*StreamConnector, error) {
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		connectCtx, cancelConnect := context.WithTimeout(ctx, time.Minute)
-		defer cancelConnect()
-		return ConnectWithContext(connectCtx, cfg)
-	}
-
 	sc := &StreamConnector{
 		logger: logrus.
 			WithField("component", "streamconnector").
@@ -52,9 +45,12 @@ func ConnectWithContext(ctx context.Context, cfg *Config) (*StreamConnector, err
 	select {
 	case <-sc.nc.EverConnected():
 	default:
+		connectCtx, cancelConnectCtx := context.WithDeadline(ctx, sc.nc.ApproximateConnectionDeadline())
+		defer cancelConnectCtx()
+
 		select {
 		case <-sc.nc.EverConnected():
-		case <-ctx.Done():
+		case <-connectCtx.Done():
 			err = fmt.Errorf("can't proceed: NATS is not connected")
 			sc.logger.Errorf("%v", err)
 			sc.nc.Drain()

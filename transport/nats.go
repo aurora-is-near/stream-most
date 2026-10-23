@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -14,9 +15,10 @@ import (
 type NatsConnection struct {
 	logger *logrus.Entry
 
-	config     *NATSConfig
-	dialer     *ctxDialer
-	connection *nats.Conn
+	config                *NATSConfig
+	dialer                *ctxDialer
+	apxConnectionDeadline time.Time
+	connection            *nats.Conn
 
 	everConnected     chan struct{}
 	everConnectedOnce sync.Once
@@ -83,6 +85,8 @@ func (c *NatsConnection) connect(ctx context.Context) error {
 		return err
 	}
 
+	c.apxConnectionDeadline = time.Now().Add(calculateApproximateConnectionTimeout(&optsCopy))
+
 	c.dialer = newCtxDialer(getUnderlyingDialer(&optsCopy))
 	c.dialer.attachContext(ctx)
 	defer c.dialer.detachAllContexts()
@@ -145,6 +149,10 @@ func (c *NatsConnection) Drain() error {
 
 func (c *NatsConnection) Conn() *nats.Conn {
 	return c.connection
+}
+
+func (c *NatsConnection) ApproximateConnectionDeadline() time.Time {
+	return c.apxConnectionDeadline
 }
 
 func (c *NatsConnection) EverConnected() <-chan struct{} {
